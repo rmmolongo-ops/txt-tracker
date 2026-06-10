@@ -73,6 +73,9 @@ export default function App({ user, onSignOut }) {
   const [expandedDay, setExpandedDay] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [expandedDayDashboard, setExpandedDayDashboard] = useState(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [adminData, setAdminData] = useState([])
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
@@ -85,9 +88,22 @@ export default function App({ user, onSignOut }) {
     if (m) setMesures(m)
     if (s) setSeances(s)
     if (p) { setProfil(p); setProfilEdit(p) }
-    else {
+    else { 
       const { data: newP } = await supabase.from('profils').insert({ user_id: user.id, ...DEFAULT_PROFIL }).select().single()
       if (newP) { setProfil(newP); setProfilEdit(newP) }
+    }
+    // Vérifier si admin
+    const { data: adminCheck } = await supabase.from('admins').select('user_id').eq('user_id', user.id).single()
+    if (adminCheck) {
+      setIsAdmin(true)
+      const { data: allProfils } = await supabase.rpc('get_admin_dashboard').catch(() => ({ data: null }))
+      if (!allProfils) {
+        // Fallback : récupérer juste les profils
+        const { data: profils } = await supabase.from('profils').select('*')
+        if (profils) setAdminData(profils)
+      } else {
+        setAdminData(allProfils)
+      }
     }
     setLoading(false)
   }, [user.id])
@@ -248,15 +264,47 @@ export default function App({ user, onSignOut }) {
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Programme du jour</div>
             {SESSIONS.filter(s => dayMap[s.day] === todayDow).map(s => {
               const done = isSeanceDone(s.day)
+              const expanded = expandedDayDashboard === s.day
               return (
-                <div key={s.day} onClick={() => toggleSeance(s.day)}
-                  style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : C.card, borderRadius: 14, padding: '14px 16px', marginBottom: 10, border: '1px solid ' + (done ? C.green + '60' : C.border), display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                  <div style={{ fontSize: 24 }}>{s.icon}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{s.label}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{s.duration}</div>
+                <div key={s.day} style={{ marginBottom: 10, borderRadius: 14, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
+                  <div onClick={() => setExpandedDayDashboard(expanded ? null : s.day)}
+                    style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '15' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                    <div style={{ fontSize: 24 }}>{s.icon}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{s.label}</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{s.duration} • {s.blocs.length} blocs</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
+                    </div>
                   </div>
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: done ? C.green : C.surface, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>{done ? '✓' : '○'}</div>
+                  {expanded && (
+                    <div style={{ background: C.card, padding: '0 16px 16px' }}>
+                      <div style={{ background: s.color + '15', borderRadius: 10, padding: '8px 12px', margin: '12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 14 }}>🎯</span>
+                        <span style={{ fontSize: 13, color: s.color, fontWeight: 700 }}>Objectif : {s.objectif}</span>
+                      </div>
+                      {s.blocs.map((bloc, bi) => (
+                        <div key={bi} style={{ marginBottom: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700 }}>{bloc.titre}</div>
+                            <div style={{ fontSize: 11, color: s.color, background: s.color + '20', padding: '2px 8px', borderRadius: 8, fontWeight: 600 }}>{bloc.duree}</div>
+                          </div>
+                          {bloc.exercices.map((ex, ei) => (
+                            <div key={ei} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+                              <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, marginTop: 6, flexShrink: 0 }} />
+                              <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.4 }}>{ex}</div>
+                            </div>
+                          ))}
+                          {bi < s.blocs.length - 1 && <div style={{ height: 1, background: C.border, marginTop: 12 }} />}
+                        </div>
+                      ))}
+                      <button onClick={(e) => { e.stopPropagation(); toggleSeance(s.day) }}
+                        style={{ width: '100%', padding: 12, borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, marginTop: 4, background: done ? C.surface : 'linear-gradient(135deg, ' + s.color + ', ' + s.color + 'cc)', color: done ? C.muted : '#fff' }}>
+                        {done ? '✓ Séance validée' : 'Valider cette séance'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -423,6 +471,46 @@ export default function App({ user, onSignOut }) {
           </div>
         )}
 
+        {/* ADMIN */}
+        {tab === 'admin' && isAdmin && (
+          <div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Tableau de bord coach</div>
+            {adminData.length === 0 ? (
+              <div style={{ background: C.card, borderRadius: 14, padding: 20, textAlign: 'center', color: C.muted }}>Aucun joueur inscrit pour l'instant</div>
+            ) : adminData.map((j, i) => (
+              <div key={i} style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 12, border: '1px solid ' + C.border }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                  <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+                    {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15 }}>{j.prenom || '—'} {j.nom || ''} <span style={{ color: C.gold }}>"{j.surnom || 'TxT'}"</span></div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{j.poste1 || '—'} • {j.club || '—'}</div>
+                  </div>
+                  <div style={{ background: C.accent + '20', borderRadius: 8, padding: '4px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.accent }}>{j.division || '—'}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 11, color: C.muted }}>MESURES</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: C.green }}>{j.nb_mesures || 0}</div>
+                  </div>
+                  <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 11, color: C.muted }}>SÉANCES</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: C.accent }}>{j.nb_seances || 0}</div>
+                  </div>
+                </div>
+                {j.derniere_seance && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: C.muted, textAlign: 'right' }}>
+                    Dernière séance : {new Date(j.derniere_seance).toLocaleDateString('fr-FR')}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* PROFIL */}
         {tab === 'profil' && (
           <div>
@@ -512,6 +600,7 @@ export default function App({ user, onSignOut }) {
           { id: 'kpi', icon: '📊', label: 'Mesures' },
           { id: 'stats', icon: '📈', label: 'Stats' },
           { id: 'profil', icon: '👤', label: 'Profil' },
+          ...(isAdmin ? [{ id: 'admin', icon: '🛡️', label: 'Admin' }] : []),
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, opacity: tab === t.id ? 1 : 0.4 }}>
