@@ -85,33 +85,37 @@ export default function App({ user, onSignOut }) {
   const loadAdminData = async () => {
     setAdminLoading(true)
     setAdminError(null)
-    const [
-      { data: allProfils, error: errP },
-      { data: allMesures, error: errM },
-      { data: allSeances, error: errS },
-    ] = await Promise.all([
-      supabase.from('profils').select('*'),
-      supabase.from('mesures').select('user_id, kpi_id, valeur, date'),
-      supabase.from('seances').select('user_id, date, jour'),
-    ])
-    if (errP) {
-      setAdminError('Erreur lecture profils : ' + errP.message + ' — Vérifiez les policies RLS dans Supabase.')
-      setAdminLoading(false)
-      return
-    }
-    const enriched = (allProfils || []).map(p => {
-      const mes = (allMesures || []).filter(m => m.user_id === p.user_id)
-      const sea = (allSeances || []).filter(s => s.user_id === p.user_id)
-      const derniereSeance = sea.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
-      const derniereMesure = mes.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
-      const kpis = {}
-      KPI_CONFIG.forEach(k => {
-        const arr = mes.filter(m => m.kpi_id === k.id).sort((a, b) => a.date.localeCompare(b.date))
-        kpis[k.id] = arr.length > 0 ? arr[arr.length - 1].valeur : null
+    try {
+      const [
+        { data: allProfils, error: errP },
+        { data: allMesures },
+        { data: allSeances },
+      ] = await Promise.all([
+        supabase.from('profils').select('*'),
+        supabase.from('mesures').select('user_id, kpi_id, valeur, date'),
+        supabase.from('seances').select('user_id, date, jour'),
+      ])
+      if (errP) {
+        setAdminError('Erreur lecture profils : ' + errP.message)
+        setAdminLoading(false)
+        return
+      }
+      const enriched = (allProfils || []).map(p => {
+        const mes = (allMesures || []).filter(m => m.user_id === p.user_id)
+        const sea = (allSeances || []).filter(s => s.user_id === p.user_id)
+        const derniereSeance = sea.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
+        const derniereMesure = mes.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
+        const kpis = {}
+        KPI_CONFIG.forEach(k => {
+          const arr = mes.filter(m => m.kpi_id === k.id).sort((a, b) => a.date.localeCompare(b.date))
+          kpis[k.id] = arr.length > 0 ? arr[arr.length - 1].valeur : null
+        })
+        return { ...p, nb_mesures: mes.length, nb_seances: sea.length, derniere_seance: derniereSeance, derniere_mesure: derniereMesure, kpis }
       })
-      return { ...p, nb_mesures: mes.length, nb_seances: sea.length, derniere_seance: derniereSeance, derniere_mesure: derniereMesure, kpis }
-    })
-    setAdminData(enriched)
+      setAdminData(enriched)
+    } catch (e) {
+      setAdminError('Erreur inattendue : ' + e.message)
+    }
     setAdminLoading(false)
   }
 
@@ -128,11 +132,15 @@ export default function App({ user, onSignOut }) {
       const { data: newP } = await supabase.from('profils').insert({ user_id: user.id, ...DEFAULT_PROFIL }).select().single()
       if (newP) { setProfil(newP); setProfilEdit(newP) }
     }
-    // Vérifier si admin
-    const { data: adminCheck } = await supabase.from('admins').select('user_id').eq('user_id', user.id).single()
-    if (adminCheck) {
-      setIsAdmin(true)
-      await loadAdminData()
+    // Vérifier si admin — sans planter si erreur
+    try {
+      const { data: adminCheck } = await supabase.from('admins').select('user_id').eq('user_id', user.id).single()
+      if (adminCheck) {
+        setIsAdmin(true)
+        await loadAdminData()
+      }
+    } catch (e) {
+      // Pas admin ou erreur RLS — on ignore silencieusement
     }
     setLoading(false)
   }, [user.id])
@@ -195,7 +203,6 @@ export default function App({ user, onSignOut }) {
     setUploadingPhoto(false)
   }
 
-  // Helpers
   const getMesuresForKpi = (kpiId) => mesures.filter(m => m.kpi_id === kpiId).sort((a, b) => a.date.localeCompare(b.date))
   const getLatest = (kpiId) => { const arr = getMesuresForKpi(kpiId); return arr.length > 0 ? arr[arr.length - 1].valeur : null }
   const getProgress = (kpiId) => {
@@ -330,9 +337,7 @@ export default function App({ user, onSignOut }) {
                       <div style={{ fontWeight: 700, fontSize: 14 }}>{s.label}</div>
                       <div style={{ fontSize: 12, color: C.muted }}>{s.duration} • {s.blocs.length} blocs</div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
-                    </div>
+                    <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
                   </div>
                   {expanded && (
                     <div style={{ background: C.card, padding: '0 16px 16px' }}>
@@ -542,36 +547,20 @@ export default function App({ user, onSignOut }) {
             </div>
             {adminError && (
               <div style={{ background: C.red + '15', border: '1px solid ' + C.red + '40', borderRadius: 12, padding: '12px 14px', marginBottom: 14, fontSize: 12, color: C.red, lineHeight: 1.5 }}>
-                <div style={{ fontWeight: 700, marginBottom: 4 }}>Problème de permissions Supabase</div>
-                <div style={{ marginBottom: 8 }}>{adminError}</div>
-                <div style={{ color: C.muted }}>Lance le SQL suivant dans Supabase → SQL Editor :</div>
-                <div style={{ background: '#0a0e1a', borderRadius: 8, padding: '8px 10px', marginTop: 6, fontFamily: 'monospace', fontSize: 11, color: '#94a3b8', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{`CREATE POLICY "Admin lit tous les profils" ON profils
-  FOR SELECT USING (
-    auth.uid() = user_id OR
-    EXISTS (SELECT 1 FROM admins WHERE admins.user_id = auth.uid())
-  );
-
-CREATE POLICY "Admin lit toutes les mesures" ON mesures
-  FOR SELECT USING (
-    auth.uid() = user_id OR
-    EXISTS (SELECT 1 FROM admins WHERE admins.user_id = auth.uid())
-  );
-
-CREATE POLICY "Admin lit toutes les séances" ON seances
-  FOR SELECT USING (
-    auth.uid() = user_id OR
-    EXISTS (SELECT 1 FROM admins WHERE admins.user_id = auth.uid())
-  );`}</div>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>Erreur de chargement</div>
+                <div>{adminError}</div>
               </div>
             )}
             {!adminError && adminData.length === 0 && !adminLoading && (
               <div style={{ background: C.card, borderRadius: 14, padding: 20, textAlign: 'center', color: C.muted }}>Aucun joueur inscrit pour l'instant</div>
             )}
+            {adminLoading && (
+              <div style={{ background: C.card, borderRadius: 14, padding: 20, textAlign: 'center', color: C.muted }}>Chargement...</div>
+            )}
             {adminData.map((j, i) => {
               const expanded = expandedAdmin === i
               return (
                 <div key={i} style={{ background: C.card, borderRadius: 16, marginBottom: 10, border: '1px solid ' + (expanded ? C.accent + '60' : C.border), overflow: 'hidden' }}>
-                  {/* En-tête joueur */}
                   <div onClick={() => setExpandedAdmin(expanded ? null : i)} style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
                     <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
                       {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
@@ -588,11 +577,8 @@ CREATE POLICY "Admin lit toutes les séances" ON seances
                     </div>
                     <div style={{ fontSize: 16, color: C.muted, marginLeft: 4, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
                   </div>
-
-                  {/* Détail expandable */}
                   {expanded && (
                     <div style={{ borderTop: '1px solid ' + C.border, padding: '14px 16px' }}>
-                      {/* Activité */}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
                         <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
                           <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>DERNIÈRE SÉANCE</div>
@@ -607,7 +593,6 @@ CREATE POLICY "Admin lit toutes les séances" ON seances
                           </div>
                         </div>
                       </div>
-                      {/* KPIs */}
                       <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Performances</div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
                         {KPI_CONFIG.map(kpi => (
@@ -633,7 +618,6 @@ CREATE POLICY "Admin lit toutes les séances" ON seances
         {tab === 'profil' && (
           <div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24, paddingTop: 8 }}>
-              {/* Avatar avec upload */}
               <div style={{ position: 'relative', marginBottom: 12 }}>
                 <div style={{ width: 90, height: 90, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, boxShadow: '0 0 30px rgba(59,130,246,0.4)' }}>
                   {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
@@ -651,7 +635,6 @@ CREATE POLICY "Admin lit toutes les séances" ON seances
                 </div>
               )}
             </div>
-
             {!editMode ? (
               <div>
                 {[
