@@ -76,6 +76,7 @@ export default function App({ user, onSignOut }) {
   const [expandedDayDashboard, setExpandedDayDashboard] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminData, setAdminData] = useState([])
+  const [expandedAdmin, setExpandedAdmin] = useState(null)
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
@@ -97,8 +98,26 @@ export default function App({ user, onSignOut }) {
       const { data: adminCheck } = await supabase.from('admins').select('user_id').eq('user_id', user.id).single()
       if (adminCheck) {
         setIsAdmin(true)
-        const { data: profils } = await supabase.from('profils').select('*')
-        if (profils) setAdminData(profils)
+        const [{ data: allProfils }, { data: allMesures }, { data: allSeances }] = await Promise.all([
+          supabase.from('profils').select('*'),
+          supabase.from('mesures').select('user_id, kpi_id, valeur, date'),
+          supabase.from('seances').select('user_id, date, jour'),
+        ])
+        if (allProfils) {
+          const enriched = allProfils.map(p => {
+            const mes = (allMesures || []).filter(m => m.user_id === p.user_id)
+            const sea = (allSeances || []).filter(s => s.user_id === p.user_id)
+            const derniereSeance = sea.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
+            const derniereMesure = mes.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
+            const kpis = {}
+            KPI_CONFIG.forEach(k => {
+              const arr = mes.filter(m => m.kpi_id === k.id).sort((a, b) => a.date.localeCompare(b.date))
+              kpis[k.id] = arr.length > 0 ? arr[arr.length - 1].valeur : null
+            })
+            return { ...p, nb_mesures: mes.length, nb_seances: sea.length, derniere_seance: derniereSeance, derniere_mesure: derniereMesure, kpis }
+          })
+          setAdminData(enriched)
+        }
       }
     } catch (e) {
       // Pas admin ou erreur — on ignore
@@ -499,40 +518,71 @@ export default function App({ user, onSignOut }) {
         {/* ADMIN */}
         {tab === 'admin' && isAdmin && (
           <div>
-            <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Tableau de bord coach</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Tableau de bord coach</div>
+              <div style={{ background: C.accent + '20', borderRadius: 8, padding: '4px 10px', fontSize: 13, fontWeight: 700, color: C.accent }}>{adminData.length} joueur{adminData.length > 1 ? 's' : ''}</div>
+            </div>
             {adminData.length === 0 ? (
               <div style={{ background: C.card, borderRadius: 14, padding: 20, textAlign: 'center', color: C.muted }}>Aucun joueur inscrit pour l'instant</div>
-            ) : adminData.map((j, i) => (
-              <div key={i} style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 12, border: '1px solid ' + C.border }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                  <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
-                    {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+            ) : adminData.map((j, i) => {
+              const expanded = expandedAdmin === i
+              return (
+                <div key={i} style={{ background: C.card, borderRadius: 16, marginBottom: 10, border: '1px solid ' + (expanded ? C.accent + '60' : C.border), overflow: 'hidden' }}>
+                  {/* En-tête joueur */}
+                  <div onClick={() => setExpandedAdmin(expanded ? null : i)} style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                    <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+                      {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 800, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {j.prenom || '—'} {j.nom || ''} <span style={{ color: C.gold }}>"{j.surnom || 'TxT'}"</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{j.poste1 || '—'} • {j.club || '—'} • {j.division || '—'}</div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                      <div style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>{j.nb_seances || 0} séances</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>{j.nb_mesures || 0} mesures</div>
+                    </div>
+                    <div style={{ fontSize: 16, color: C.muted, marginLeft: 4, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: 15 }}>{j.prenom || '—'} {j.nom || ''} <span style={{ color: C.gold }}>"{j.surnom || 'TxT'}"</span></div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{j.poste1 || '—'} • {j.club || '—'}</div>
-                  </div>
-                  <div style={{ background: C.accent + '20', borderRadius: 8, padding: '4px 10px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: C.accent }}>{j.division || '—'}</div>
-                  </div>
+
+                  {/* Détail expandable */}
+                  {expanded && (
+                    <div style={{ borderTop: '1px solid ' + C.border, padding: '14px 16px' }}>
+                      {/* Activité */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+                        <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
+                          <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>DERNIÈRE SÉANCE</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: j.derniere_seance ? C.green : C.muted }}>
+                            {j.derniere_seance ? new Date(j.derniere_seance).toLocaleDateString('fr-FR') : '—'}
+                          </div>
+                        </div>
+                        <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
+                          <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>DERNIÈRE MESURE</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: j.derniere_mesure ? C.accent : C.muted }}>
+                            {j.derniere_mesure ? new Date(j.derniere_mesure).toLocaleDateString('fr-FR') : '—'}
+                          </div>
+                        </div>
+                      </div>
+                      {/* KPIs */}
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Performances</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                        {KPI_CONFIG.map(kpi => (
+                          <div key={kpi.id} style={{ background: C.bg, borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                            <div style={{ fontSize: 14, marginBottom: 2 }}>{kpi.icon}</div>
+                            <div style={{ fontSize: 9, color: C.muted, marginBottom: 2, lineHeight: 1.2 }}>{kpi.label}</div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: j.kpis?.[kpi.id] != null ? kpi.color : C.muted }}>
+                              {j.kpis?.[kpi.id] != null ? j.kpis[kpi.id] : '—'}
+                            </div>
+                            {j.kpis?.[kpi.id] != null && <div style={{ fontSize: 9, color: C.muted }}>{kpi.unit}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 11, color: C.muted }}>MESURES</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: C.green }}>{j.nb_mesures || 0}</div>
-                  </div>
-                  <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 11, color: C.muted }}>SÉANCES</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: C.accent }}>{j.nb_seances || 0}</div>
-                  </div>
-                </div>
-                {j.derniere_seance && (
-                  <div style={{ marginTop: 8, fontSize: 12, color: C.muted, textAlign: 'right' }}>
-                    Dernière séance : {new Date(j.derniere_seance).toLocaleDateString('fr-FR')}
-                  </div>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
