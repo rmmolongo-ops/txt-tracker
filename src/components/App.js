@@ -80,33 +80,30 @@ export default function App({ user, onSignOut }) {
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
   const loadAll = useCallback(async () => {
+    const [{ data: m }, { data: s }, { data: p }] = await Promise.all([
+      supabase.from('mesures').select('*').eq('user_id', user.id).order('date', { ascending: true }),
+      supabase.from('seances').select('*').eq('user_id', user.id),
+      supabase.from('profils').select('*').eq('user_id', user.id).single(),
+    ])
+    if (m) setMesures(m)
+    if (s) setSeances(s)
+    if (p) { setProfil(p); setProfilEdit(p) }
+    else {
+      const { data: newP } = await supabase.from('profils').insert({ user_id: user.id, ...DEFAULT_PROFIL }).select().single()
+      if (newP) { setProfil(newP); setProfilEdit(newP) }
+    }
+    // Vérifier si admin
     try {
-      const [{ data: m }, { data: s }, { data: p }] = await Promise.all([
-        supabase.from('mesures').select('*').eq('user_id', user.id).order('date', { ascending: true }),
-        supabase.from('seances').select('*').eq('user_id', user.id),
-        supabase.from('profils').select('*').eq('user_id', user.id).single(),
-      ])
-      if (m) setMesures(m)
-      if (s) setSeances(s)
-      if (p) { setProfil(p); setProfilEdit(p) }
-      else {
-        const { data: newP } = await supabase.from('profils').insert({ user_id: user.id, ...DEFAULT_PROFIL }).select().single()
-        if (newP) { setProfil(newP); setProfilEdit(newP) }
-      }
       const { data: adminCheck } = await supabase.from('admins').select('user_id').eq('user_id', user.id).single()
       if (adminCheck) {
         setIsAdmin(true)
-        const { data: allProfils } = await supabase.rpc('get_admin_dashboard').catch(() => ({ data: null }))
-        if (!allProfils) {
-          const { data: profils } = await supabase.from('profils').select('*')
-          if (profils) setAdminData(profils)
-        } else {
-          setAdminData(allProfils)
-        }
+        const { data: profils } = await supabase.from('profils').select('*')
+        if (profils) setAdminData(profils)
       }
-    } finally {
-      setLoading(false)
+    } catch (e) {
+      // Pas admin ou erreur — on ignore
     }
+    setLoading(false)
   }, [user.id])
 
   useEffect(() => { loadAll() }, [loadAll])
