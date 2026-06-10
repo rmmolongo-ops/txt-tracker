@@ -103,7 +103,7 @@ export default function Auth() {
         </button>
       </div>
       <div style={{ marginTop: 20, fontSize: 12, color: C.muted, textAlign: 'center' }}>
-        Application réservée aux joueurs suivis par Ralph 🎯
+        Application réservée aux joueurs suivis par Coach Ralph 🎯
       </div>
     </div>
   )
