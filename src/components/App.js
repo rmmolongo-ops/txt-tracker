@@ -59,7 +59,7 @@ const SESSIONS = [
 const DEFAULT_PROFIL = { nom: '', prenom: '', surnom: 'TxT', club: '', division: '', poste1: '', poste2: '', photo_url: '' }
 
 export default function App({ user, onSignOut }) {
-  const [tab, setTab] = useState('dashboard')
+  const [tab, setTab] = useState(() => localStorage.getItem('txt_tab') || 'dashboard')
   const [mesures, setMesures] = useState([])
   const [seances, setSeances] = useState([])
   const [profil, setProfil] = useState(DEFAULT_PROFIL)
@@ -81,6 +81,11 @@ export default function App({ user, onSignOut }) {
   const [adminLoading, setAdminLoading] = useState(false)
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
+
+  const changeTab = (newTab) => {
+    localStorage.setItem('txt_tab', newTab)
+    setTab(newTab)
+  }
 
   const loadAdminData = async () => {
     setAdminLoading(true)
@@ -244,7 +249,7 @@ export default function App({ user, onSignOut }) {
       {/* Header */}
       <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)', padding: '20px 20px 16px', borderBottom: '1px solid ' + C.border }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div onClick={() => setTab('dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+          <div onClick={() => changeTab('dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
             <div style={{ width: 44, height: 44, borderRadius: 12, overflow: 'hidden', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, boxShadow: '0 0 20px rgba(59,130,246,0.4)', flexShrink: 0 }}>
               {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
             </div>
@@ -286,7 +291,7 @@ export default function App({ user, onSignOut }) {
               {KPI_CONFIG.filter(k => ['sprint30', 'jonglerie_g', 'precision', 'scan'].includes(k.id)).map(kpi => {
                 const val = getLatest(kpi.id); const prog = getProgress(kpi.id)
                 return (
-                  <div key={kpi.id} onClick={() => { setSelectedKpi(kpi.id); setTab('stats') }}
+                  <div key={kpi.id} onClick={() => { setSelectedKpi(kpi.id); changeTab('stats') }}
                     style={{ background: C.card, borderRadius: 14, padding: 14, border: '1px solid ' + C.border, cursor: 'pointer' }}>
                     <div style={{ fontSize: 20, marginBottom: 6 }}>{kpi.icon}</div>
                     <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{kpi.label}</div>
@@ -703,7 +708,7 @@ export default function App({ user, onSignOut }) {
           { id: 'profil', icon: '👤', label: 'Profil' },
           ...(isAdmin ? [{ id: 'admin', icon: '🛡️', label: 'Admin' }] : []),
         ].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
+          <button key={t.id} onClick={() => changeTab(t.id)}
             style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, opacity: tab === t.id ? 1 : 0.4 }}>
             <span style={{ fontSize: 20 }}>{t.icon}</span>
             <span style={{ fontSize: 10, color: tab === t.id ? C.accent : C.muted, fontWeight: tab === t.id ? 700 : 400 }}>{t.label}</span>
