@@ -95,16 +95,20 @@ export default function App({ user, onSignOut }) {
         { data: allProfils, error: errP },
         { data: allMesures },
         { data: allSeances },
+        { data: allEmails },
       ] = await Promise.all([
         supabase.from('profils').select('*'),
         supabase.from('mesures').select('user_id, kpi_id, valeur, date'),
         supabase.from('seances').select('user_id, date, jour'),
+        supabase.rpc('get_user_emails_for_admins'),
       ])
       if (errP) {
         setAdminError('Erreur lecture profils : ' + errP.message)
         setAdminLoading(false)
         return
       }
+      const emailMap = {}
+      ;(allEmails || []).forEach(e => { emailMap[e.user_id] = e.email })
       const enriched = (allProfils || []).map(p => {
         const mes = (allMesures || []).filter(m => m.user_id === p.user_id)
         const sea = (allSeances || []).filter(s => s.user_id === p.user_id)
@@ -115,7 +119,7 @@ export default function App({ user, onSignOut }) {
           const arr = mes.filter(m => m.kpi_id === k.id).sort((a, b) => a.date.localeCompare(b.date))
           kpis[k.id] = arr.length > 0 ? arr[arr.length - 1].valeur : null
         })
-        return { ...p, nb_mesures: mes.length, nb_seances: sea.length, derniere_seance: derniereSeance, derniere_mesure: derniereMesure, kpis }
+        return { ...p, email: emailMap[p.user_id] || null, nb_mesures: mes.length, nb_seances: sea.length, derniere_seance: derniereSeance, derniere_mesure: derniereMesure, kpis }
       })
       setAdminData(enriched)
     } catch (e) {
@@ -584,6 +588,15 @@ export default function App({ user, onSignOut }) {
                   </div>
                   {expanded && (
                     <div style={{ borderTop: '1px solid ' + C.border, padding: '14px 16px' }}>
+                      {j.email && (
+                        <div style={{ background: C.surface, borderRadius: 10, padding: '8px 12px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 13 }}>✉️</span>
+                          <div>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 1 }}>EMAIL</div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{j.email}</div>
+                          </div>
+                        </div>
+                      )}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
                         <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
                           <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>DERNIÈRE SÉANCE</div>
