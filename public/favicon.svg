@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Fond blanc du ballon -->
+  <circle cx="50" cy="50" r="46" fill="#f0f0f0" stroke="#1a1a1a" stroke-width="3"/>
+  <!-- Pentagone central noir -->
+  <polygon points="50,24 63,33 58,48 42,48 37,33" fill="#1a1a1a"/>
+  <!-- Pentagones noirs périphériques -->
+  <polygon points="50,24 37,33 22,28 22,12 40,8" fill="#1a1a1a"/>
+  <polygon points="50,24 63,33 78,28 78,12 60,8" fill="#1a1a1a"/>
+  <polygon points="63,33 78,28 88,42 80,56 66,52" fill="#1a1a1a"/>
+  <polygon points="37,33 22,28 12,42 20,56 34,52" fill="#1a1a1a"/>
+  <polygon points="58,48 66,52 68,68 54,76 42,68" fill="#1a1a1a"/>
+  <polygon points="42,48 34,52 32,68 46,76 58,76" fill="#1a1a1a"/>
+  <!-- Contour du ballon -->
+  <circle cx="50" cy="50" r="46" fill="none" stroke="#1a1a1a" stroke-width="3"/>
+</svg>
