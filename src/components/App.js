@@ -86,6 +86,8 @@ export default function App({ user, onSignOut }) {
   const [teamFilter, setTeamFilter] = useState('all')
   const [newTeamName, setNewTeamName] = useState('')
   const [creatingTeam, setCreatingTeam] = useState(false)
+  const [availableTeams, setAvailableTeams] = useState([])
+  const [adminChartKpi, setAdminChartKpi] = useState('sprint30')
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
@@ -111,11 +113,7 @@ export default function App({ user, onSignOut }) {
         supabase.rpc('get_user_emails_for_admins'),
         supabase.from('teams').select('*').order('created_at'),
       ])
-      if (errP) {
-        setAdminError('Erreur lecture profils : ' + errP.message)
-        setAdminLoading(false)
-        return
-      }
+      if (errP) { setAdminError('Erreur lecture profils : ' + errP.message); setAdminLoading(false); return }
       setTeams(allTeams || [])
       const emailMap = {}
       ;(allEmails || []).forEach(e => { emailMap[e.user_id] = e.email })
@@ -131,23 +129,23 @@ export default function App({ user, onSignOut }) {
           const arr = mes.filter(m => m.kpi_id === k.id).sort((a, b) => a.date.localeCompare(b.date))
           kpis[k.id] = arr.length > 0 ? arr[arr.length - 1].valeur : null
         })
-        return { ...p, email: emailMap[p.user_id] || null, team: teamMap[p.team_id] || null, nb_mesures: mes.length, nb_seances: sea.length, derniere_seance: derniereSeance, derniere_mesure: derniereMesure, kpis }
+        return { ...p, email: emailMap[p.user_id] || null, team: teamMap[p.team_id] || null, mesuresData: mes, nb_mesures: mes.length, nb_seances: sea.length, derniere_seance: derniereSeance, derniere_mesure: derniereMesure, kpis }
       })
       setAdminData(enriched)
-    } catch (e) {
-      setAdminError('Erreur inattendue : ' + e.message)
-    }
+    } catch (e) { setAdminError('Erreur inattendue : ' + e.message) }
     setAdminLoading(false)
   }
 
   const loadAll = useCallback(async () => {
-    const [{ data: m }, { data: s }, { data: p }] = await Promise.all([
+    const [{ data: m }, { data: s }, { data: p }, { data: t }] = await Promise.all([
       supabase.from('mesures').select('*').eq('user_id', user.id).order('date', { ascending: true }),
       supabase.from('seances').select('*').eq('user_id', user.id),
       supabase.from('profils').select('*').eq('user_id', user.id).single(),
+      supabase.from('teams').select('id, name, color, photo_url').order('created_at'),
     ])
     if (m) setMesures(m)
     if (s) setSeances(s)
+    if (t) setAvailableTeams(t)
     if (p) { setProfil(p); setProfilEdit(p) }
     else {
       const { data: newP } = await supabase.from('profils').insert({ user_id: user.id, ...DEFAULT_PROFIL }).select().single()
@@ -201,6 +199,15 @@ export default function App({ user, onSignOut }) {
     showToast('✅ Profil mis à jour !')
   }
 
+  const saveProfilTeam = async (teamId) => {
+    const value = teamId || null
+    await supabase.from('profils').update({ team_id: value }).eq('user_id', user.id)
+    setProfil(p => ({ ...p, team_id: value }))
+    setProfilEdit(p => ({ ...p, team_id: value }))
+    const team = availableTeams.find(t => t.id === teamId)
+    showToast(team ? `✅ Équipe "${team.name}" sélectionnée !` : '✅ Équipe retirée')
+  }
+
   const uploadPhoto = async (file) => {
     setUploadingPhoto(true)
     try {
@@ -208,8 +215,7 @@ export default function App({ user, onSignOut }) {
       const canvas = document.createElement('canvas')
       const MAX = 300
       const ratio = Math.min(MAX / img.width, MAX / img.height)
-      canvas.width = img.width * ratio
-      canvas.height = img.height * ratio
+      canvas.width = img.width * ratio; canvas.height = img.height * ratio
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
       const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.8))
       const path = `${user.id}/avatar.jpg`
@@ -224,12 +230,31 @@ export default function App({ user, onSignOut }) {
     setUploadingPhoto(false)
   }
 
+  const uploadTeamPhoto = async (teamId, file) => {
+    try {
+      const img = await createImageBitmap(file)
+      const canvas = document.createElement('canvas')
+      const MAX = 200
+      const ratio = Math.min(MAX / img.width, MAX / img.height)
+      canvas.width = img.width * ratio; canvas.height = img.height * ratio
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.8))
+      const path = `teams/${teamId}/photo.jpg`
+      await supabase.storage.from('photos').upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
+      const { data: { publicUrl } } = supabase.storage.from('photos').getPublicUrl(path)
+      const url = publicUrl + '?t=' + Date.now()
+      await supabase.from('teams').update({ photo_url: url }).eq('id', teamId)
+      setTeams(prev => prev.map(t => t.id === teamId ? { ...t, photo_url: url } : t))
+      showToast('📷 Photo d\'équipe mise à jour !')
+    } catch (e) { showToast('❌ Erreur upload photo') }
+  }
+
   const createTeam = async () => {
     if (!newTeamName.trim()) return
     setCreatingTeam(true)
     const color = TEAM_COLORS[teams.length % TEAM_COLORS.length]
     const { data, error } = await supabase.from('teams').insert({ name: newTeamName.trim(), admin_id: user.id, color }).select().single()
-    if (data) { setTeams(prev => [...prev, data]); setNewTeamName(''); showToast('✅ Équipe créée !') }
+    if (data) { setTeams(prev => [...prev, data]); setAvailableTeams(prev => [...prev, data]); setNewTeamName(''); showToast('✅ Équipe créée !') }
     else if (error) showToast('❌ ' + error.message)
     setCreatingTeam(false)
   }
@@ -237,6 +262,7 @@ export default function App({ user, onSignOut }) {
   const deleteTeam = async (teamId) => {
     await supabase.from('teams').delete().eq('id', teamId)
     setTeams(prev => prev.filter(t => t.id !== teamId))
+    setAvailableTeams(prev => prev.filter(t => t.id !== teamId))
     setAdminData(prev => prev.map(p => p.team_id === teamId ? { ...p, team_id: null, team: null } : p))
     if (teamFilter === teamId) setTeamFilter('all')
     showToast('🗑️ Équipe supprimée')
@@ -323,7 +349,7 @@ export default function App({ user, onSignOut }) {
   const tabContent = (
     <div style={{ paddingBottom: isMobile ? 80 : 24 }}>
 
-      {/* DASHBOARD */}
+      {/* ── DASHBOARD ── */}
       {tab === 'dashboard' && (
         <div>
           <div style={{ background: 'linear-gradient(135deg, #1e3a5f, #0f2a4a)', borderRadius: 16, padding: 16, marginBottom: 16, border: '1px solid ' + C.accent + '30' }}>
@@ -409,7 +435,7 @@ export default function App({ user, onSignOut }) {
         </div>
       )}
 
-      {/* SEANCES */}
+      {/* ── SEANCES ── */}
       {tab === 'seances' && (
         <div>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Programme de la semaine</div>
@@ -433,7 +459,7 @@ export default function App({ user, onSignOut }) {
         </div>
       )}
 
-      {/* MESURES KPI */}
+      {/* ── KPI ── */}
       {tab === 'kpi' && (
         <div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }}>
@@ -470,7 +496,7 @@ export default function App({ user, onSignOut }) {
         </div>
       )}
 
-      {/* STATS */}
+      {/* ── STATS ── */}
       {tab === 'stats' && (
         <div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }}>
@@ -542,7 +568,7 @@ export default function App({ user, onSignOut }) {
         </div>
       )}
 
-      {/* ADMIN */}
+      {/* ── ADMIN ── */}
       {tab === 'admin' && isAdmin && (
         <div>
           {/* En-tête */}
@@ -557,48 +583,88 @@ export default function App({ user, onSignOut }) {
             </div>
           </div>
 
-          {/* Gestion des équipes */}
+          {/* ── Gestion des équipes ── */}
           <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 16, border: '1px solid ' + C.border }}>
-            <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Équipes</div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              <input
-                type="text"
-                placeholder="Nom de l'équipe..."
-                value={newTeamName}
+            <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Gestion des équipes</div>
+
+            {/* Créer une équipe */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: teams.length > 0 ? 14 : 0 }}>
+              <input type="text" placeholder="Nom de la nouvelle équipe..." value={newTeamName}
                 onChange={e => setNewTeamName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && createTeam()}
-                style={{ flex: 1, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '9px 12px', color: C.text, fontSize: 14, outline: 'none' }}
-              />
+                style={{ flex: 1, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '9px 12px', color: C.text, fontSize: 14, outline: 'none' }} />
               <button onClick={createTeam} disabled={creatingTeam || !newTeamName.trim()}
                 style={{ padding: '9px 16px', background: newTeamName.trim() ? C.accent : C.surface, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap', opacity: creatingTeam ? 0.6 : 1 }}>
                 + Créer
               </button>
             </div>
-            {teams.length === 0 ? (
-              <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', padding: '8px 0' }}>Aucune équipe — créez-en une pour organiser vos joueurs</div>
-            ) : (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                <button onClick={() => setTeamFilter('all')}
-                  style={{ padding: '5px 14px', borderRadius: 20, border: '2px solid ' + (teamFilter === 'all' ? C.accent : C.border), background: teamFilter === 'all' ? C.accent + '20' : 'transparent', color: teamFilter === 'all' ? C.accent : C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-                  Tous ({adminData.length})
-                </button>
+
+            {/* Liste des équipes avec photo */}
+            {teams.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {teams.map(team => (
-                  <div key={team.id} style={{ display: 'flex', alignItems: 'center', gap: 0, borderRadius: 20, border: '2px solid ' + (teamFilter === team.id ? team.color : C.border), overflow: 'hidden' }}>
-                    <button onClick={() => setTeamFilter(teamFilter === team.id ? 'all' : team.id)}
-                      style={{ padding: '5px 12px', background: teamFilter === team.id ? team.color + '25' : 'transparent', color: teamFilter === team.id ? team.color : C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer', border: 'none' }}>
-                      <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: team.color, marginRight: 6 }} />
-                      {team.name} ({adminData.filter(j => j.team_id === team.id).length})
-                    </button>
+                  <div key={team.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.surface, borderRadius: 12, padding: '10px 12px', border: '1px solid ' + C.border }}>
+                    {/* Photo de l'équipe */}
+                    <label style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 10, background: team.color + '30', border: '2px solid ' + team.color + '60', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {team.photo_url
+                          ? <img src={team.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : <span style={{ fontSize: 20 }}>🏟️</span>}
+                      </div>
+                      <div style={{ position: 'absolute', bottom: -2, right: -2, width: 18, height: 18, borderRadius: '50%', background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>📷</div>
+                      <input type="file" accept="image/*" style={{ display: 'none' }}
+                        onChange={e => e.target.files[0] && uploadTeamPhoto(team.id, e.target.files[0])} />
+                    </label>
+
+                    {/* Infos équipe */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: team.color, display: 'inline-block', flexShrink: 0 }} />
+                        <span style={{ fontWeight: 700, fontSize: 14, color: C.text }}>{team.name}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                        {adminData.filter(j => j.team_id === team.id).length} joueur{adminData.filter(j => j.team_id === team.id).length > 1 ? 's' : ''}
+                      </div>
+                    </div>
+
+                    {/* Bouton supprimer */}
                     <button onClick={() => deleteTeam(team.id)}
-                      style={{ padding: '5px 8px', background: 'transparent', color: C.muted, border: 'none', cursor: 'pointer', fontSize: 12, opacity: 0.6 }}>×</button>
+                      style={{ width: 32, height: 32, borderRadius: 8, background: C.red + '15', border: '1px solid ' + C.red + '30', color: C.red, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      ✕
+                    </button>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {teams.length === 0 && (
+              <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', padding: '8px 0' }}>
+                Aucune équipe — créez-en une pour organiser vos joueurs
+              </div>
+            )}
+
+            {/* Filtre par équipe */}
+            {teams.length > 0 && (
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid ' + C.border }}>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600 }}>FILTRER PAR ÉQUIPE</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <button onClick={() => setTeamFilter('all')}
+                    style={{ padding: '4px 12px', borderRadius: 16, border: '2px solid ' + (teamFilter === 'all' ? C.accent : C.border), background: teamFilter === 'all' ? C.accent + '20' : 'transparent', color: teamFilter === 'all' ? C.accent : C.muted, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                    Tous ({adminData.length})
+                  </button>
+                  {teams.map(team => (
+                    <button key={team.id} onClick={() => setTeamFilter(teamFilter === team.id ? 'all' : team.id)}
+                      style={{ padding: '4px 12px', borderRadius: 16, border: '2px solid ' + (teamFilter === team.id ? team.color : C.border), background: teamFilter === team.id ? team.color + '20' : 'transparent', color: teamFilter === team.id ? team.color : C.muted, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                      {team.name} ({adminData.filter(j => j.team_id === team.id).length})
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
 
           {adminError && (
-            <div style={{ background: C.red + '15', border: '1px solid ' + C.red + '40', borderRadius: 12, padding: '12px 14px', marginBottom: 14, fontSize: 12, color: C.red, lineHeight: 1.5 }}>
+            <div style={{ background: C.red + '15', border: '1px solid ' + C.red + '40', borderRadius: 12, padding: '12px 14px', marginBottom: 14, fontSize: 12, color: C.red }}>
               <div style={{ fontWeight: 700, marginBottom: 4 }}>Erreur de chargement</div>
               <div>{adminError}</div>
             </div>
@@ -616,6 +682,7 @@ export default function App({ user, onSignOut }) {
               const expanded = expandedAdmin === i
               return (
                 <div key={i} style={{ background: C.card, borderRadius: 16, border: '1px solid ' + (expanded ? C.accent + '60' : C.border), overflow: 'hidden' }}>
+                  {/* Ligne résumé */}
                   <div onClick={() => setExpandedAdmin(expanded ? null : i)} style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
                     <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
                       {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
@@ -639,11 +706,15 @@ export default function App({ user, onSignOut }) {
                     </div>
                     <div style={{ fontSize: 16, color: C.muted, marginLeft: 4, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
                   </div>
+
+                  {/* Détails dépliés */}
                   {expanded && (
                     <div style={{ borderTop: '1px solid ' + C.border, padding: '14px 16px' }}>
+
+                      {/* Email */}
                       {j.email && (
                         <div style={{ background: C.surface, borderRadius: 10, padding: '8px 12px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 13 }}>✉️</span>
+                          <span>✉️</span>
                           <div>
                             <div style={{ fontSize: 10, color: C.muted, marginBottom: 1 }}>EMAIL</div>
                             <div style={{ fontSize: 13, fontWeight: 600 }}>{j.email}</div>
@@ -653,21 +724,18 @@ export default function App({ user, onSignOut }) {
 
                       {/* Sélecteur d'équipe */}
                       <div style={{ background: C.surface, borderRadius: 10, padding: '8px 12px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 13 }}>🏟️</span>
+                        <span>🏟️</span>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ÉQUIPE</div>
-                          <select
-                            value={j.team_id || ''}
-                            onChange={e => assignPlayerToTeam(j.user_id, e.target.value || null)}
+                          <select value={j.team_id || ''} onChange={e => assignPlayerToTeam(j.user_id, e.target.value || null)}
                             style={{ width: '100%', background: C.bg, border: '1px solid ' + C.border, borderRadius: 8, padding: '6px 10px', color: C.text, fontSize: 13, outline: 'none', cursor: 'pointer' }}>
                             <option value="">— Aucune équipe —</option>
-                            {teams.map(team => (
-                              <option key={team.id} value={team.id}>{team.name}</option>
-                            ))}
+                            {teams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
                           </select>
                         </div>
                       </div>
 
+                      {/* Dates */}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
                         <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
                           <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>DERNIÈRE SÉANCE</div>
@@ -682,10 +750,13 @@ export default function App({ user, onSignOut }) {
                           </div>
                         </div>
                       </div>
+
+                      {/* KPI Grid */}
                       <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Performances</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 16 }}>
                         {KPI_CONFIG.map(kpi => (
-                          <div key={kpi.id} style={{ background: C.bg, borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                          <div key={kpi.id} onClick={() => setAdminChartKpi(kpi.id)}
+                            style={{ background: adminChartKpi === kpi.id ? kpi.color + '20' : C.bg, borderRadius: 8, padding: '8px 10px', textAlign: 'center', cursor: 'pointer', border: '1px solid ' + (adminChartKpi === kpi.id ? kpi.color + '60' : 'transparent'), transition: 'all 0.15s' }}>
                             <div style={{ fontSize: 14, marginBottom: 2 }}>{kpi.icon}</div>
                             <div style={{ fontSize: 9, color: C.muted, marginBottom: 2, lineHeight: 1.2 }}>{kpi.label}</div>
                             <div style={{ fontSize: 14, fontWeight: 800, color: j.kpis?.[kpi.id] != null ? kpi.color : C.muted }}>
@@ -694,6 +765,39 @@ export default function App({ user, onSignOut }) {
                             {j.kpis?.[kpi.id] != null && <div style={{ fontSize: 9, color: C.muted }}>{kpi.unit}</div>}
                           </div>
                         ))}
+                      </div>
+
+                      {/* Graphique KPI du joueur */}
+                      <div style={{ borderTop: '1px solid ' + C.border, paddingTop: 14 }}>
+                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>
+                          Graphique — {KPI_CONFIG.find(k => k.id === adminChartKpi)?.label}
+                        </div>
+                        {(() => {
+                          const kpi = KPI_CONFIG.find(k => k.id === adminChartKpi)
+                          const arr = (j.mesuresData || [])
+                            .filter(m => m.kpi_id === adminChartKpi)
+                            .sort((a, b) => a.date.localeCompare(b.date))
+                          const chartData = arr.slice(-12).map(d => ({ date: d.date.slice(5), val: d.valeur }))
+                          if (chartData.length < 2) return (
+                            <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.surface, borderRadius: 10, color: C.muted, fontSize: 12 }}>
+                              Moins de 2 mesures pour ce KPI
+                            </div>
+                          )
+                          return (
+                            <ResponsiveContainer width="100%" height={160}>
+                              <LineChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                                <XAxis dataKey="date" tick={{ fontSize: 9, fill: C.muted }} />
+                                <YAxis tick={{ fontSize: 9, fill: C.muted }} />
+                                <Tooltip contentStyle={{ background: C.card, border: '1px solid ' + C.border, borderRadius: 8, color: C.text, fontSize: 11 }} />
+                                <Line type="monotone" dataKey="val" stroke={kpi.color} strokeWidth={2} dot={{ fill: kpi.color, r: 3 }} activeDot={{ r: 5 }} />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          )
+                        })()}
+                        <div style={{ fontSize: 10, color: C.muted, textAlign: 'center', marginTop: 6 }}>
+                          Cliquez sur un KPI pour changer le graphique
+                        </div>
                       </div>
                     </div>
                   )}
@@ -709,7 +813,7 @@ export default function App({ user, onSignOut }) {
         </div>
       )}
 
-      {/* PROFIL */}
+      {/* ── PROFIL ── */}
       {tab === 'profil' && (
         <div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24, paddingTop: 8 }}>
@@ -730,6 +834,7 @@ export default function App({ user, onSignOut }) {
               </div>
             )}
           </div>
+
           {!editMode ? (
             <div style={{ maxWidth: isMobile ? '100%' : 480, margin: '0 auto' }}>
               {[
@@ -749,6 +854,35 @@ export default function App({ user, onSignOut }) {
                   </div>
                 </div>
               ))}
+
+              {/* Sélecteur d'équipe pour l'utilisateur */}
+              {availableTeams.length > 0 && (
+                <div style={{ background: C.card, borderRadius: 12, padding: '12px 16px', marginBottom: 8, border: '1px solid ' + C.border }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                    <span style={{ fontSize: 18 }}>🏟️</span>
+                    <div style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>MON ÉQUIPE</div>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    <button onClick={() => saveProfilTeam(null)}
+                      style={{ padding: '6px 14px', borderRadius: 16, border: '2px solid ' + (!profil.team_id ? C.accent : C.border), background: !profil.team_id ? C.accent + '20' : 'transparent', color: !profil.team_id ? C.accent : C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                      Aucune
+                    </button>
+                    {availableTeams.map(team => {
+                      const selected = profil.team_id === team.id
+                      return (
+                        <button key={team.id} onClick={() => saveProfilTeam(team.id)}
+                          style={{ padding: '6px 14px', borderRadius: 16, border: '2px solid ' + (selected ? team.color : C.border), background: selected ? team.color + '25' : 'transparent', color: selected ? team.color : C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {team.photo_url
+                            ? <img src={team.photo_url} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover' }} />
+                            : <span style={{ width: 8, height: 8, borderRadius: '50%', background: team.color, display: 'inline-block' }} />}
+                          {team.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               <button onClick={() => setEditMode(true)}
                 style={{ width: '100%', padding: 14, borderRadius: 14, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 15, background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', marginTop: 8 }}>
                 ✏️ Modifier le profil
@@ -800,7 +934,7 @@ export default function App({ user, onSignOut }) {
 
       {/* Header */}
       <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)', padding: '16px 20px', borderBottom: '1px solid ' + C.border, position: 'sticky', top: 0, zIndex: 50 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, maxWidth: isMobile ? '100%' : 1400, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div onClick={() => changeTab('dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
             <div style={{ width: 44, height: 44, borderRadius: 12, overflow: 'hidden', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, boxShadow: '0 0 20px rgba(59,130,246,0.4)', flexShrink: 0 }}>
               {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
@@ -818,11 +952,8 @@ export default function App({ user, onSignOut }) {
       </div>
 
       {isMobile ? (
-        /* ── MOBILE : layout colonne + bottom nav ── */
         <>
-          <div style={{ padding: '16px 16px 0' }}>
-            {tabContent}
-          </div>
+          <div style={{ padding: '16px 16px 0' }}>{tabContent}</div>
           <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.card, borderTop: '1px solid ' + C.border, display: 'flex', padding: '8px 0 12px', zIndex: 50 }}>
             {NAV_ITEMS.map(t => (
               <button key={t.id} onClick={() => changeTab(t.id)}
@@ -834,7 +965,6 @@ export default function App({ user, onSignOut }) {
           </nav>
         </>
       ) : (
-        /* ── DESKTOP : sidebar gauche + contenu ── */
         <div style={{ display: 'flex', minHeight: 'calc(100vh - 77px)' }}>
           <nav style={{ width: 220, flexShrink: 0, background: C.card, borderRight: '1px solid ' + C.border, position: 'sticky', top: 77, height: 'calc(100vh - 77px)', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
             <div style={{ padding: '16px 12px', flex: 1 }}>
@@ -854,11 +984,8 @@ export default function App({ user, onSignOut }) {
               </button>
             </div>
           </nav>
-
           <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
-            <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-              {tabContent}
-            </div>
+            <div style={{ maxWidth: 1100, margin: '0 auto' }}>{tabContent}</div>
           </div>
         </div>
       )}
