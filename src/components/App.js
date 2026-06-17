@@ -88,6 +88,7 @@ export default function App({ user, onSignOut }) {
   const [creatingTeam, setCreatingTeam] = useState(false)
   const [availableTeams, setAvailableTeams] = useState([])
   const [adminChartKpi, setAdminChartKpi] = useState('sprint30')
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
@@ -276,6 +277,18 @@ export default function App({ user, onSignOut }) {
       const team = teams.find(t => t.id === teamId) || null
       return { ...p, team_id: value, team }
     }))
+  }
+
+  const deleteUserAccount = async (userId) => {
+    const { error } = await supabase.rpc('delete_user_as_admin', { target_user_id: userId })
+    if (error) {
+      showToast('❌ Erreur : ' + error.message)
+    } else {
+      setAdminData(prev => prev.filter(p => p.user_id !== userId))
+      setExpandedAdmin(null)
+      setDeleteConfirm(null)
+      showToast('🗑️ Compte supprimé définitivement')
+    }
   }
 
   const getMesuresForKpi = (kpiId) => mesures.filter(m => m.kpi_id === kpiId).sort((a, b) => a.date.localeCompare(b.date))
@@ -798,6 +811,60 @@ export default function App({ user, onSignOut }) {
                         <div style={{ fontSize: 10, color: C.muted, textAlign: 'center', marginTop: 6 }}>
                           Cliquez sur un KPI pour changer le graphique
                         </div>
+                      </div>
+
+                      {/* ── Suppression du compte ── */}
+                      <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid ' + C.border }}>
+                        {deleteConfirm?.userId === j.user_id ? (
+                          deleteConfirm.step === 1 ? (
+                            /* Étape 1 : première alerte */
+                            <div style={{ background: C.red + '12', border: '1px solid ' + C.red + '40', borderRadius: 12, padding: '12px 14px' }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 4 }}>
+                                Supprimer le compte de {j.prenom || '—'} {j.nom || ''} ?
+                              </div>
+                              <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
+                                Toutes ses séances et performances seront supprimées.
+                              </div>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => setDeleteConfirm(null)}
+                                  style={{ flex: 1, padding: '8px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface, color: C.muted, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+                                  Annuler
+                                </button>
+                                <button onClick={() => setDeleteConfirm({ userId: j.user_id, step: 2 })}
+                                  style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', background: C.red + '25', color: C.red, fontSize: 13, cursor: 'pointer', fontWeight: 700 }}>
+                                  Continuer →
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            /* Étape 2 : confirmation finale */
+                            <div style={{ background: C.red + '20', border: '2px solid ' + C.red + '70', borderRadius: 12, padding: '14px' }}>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: C.red, marginBottom: 6 }}>
+                                ⚠️ Action irréversible
+                              </div>
+                              <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.6 }}>
+                                Le compte de <strong style={{ color: C.text }}>{j.prenom} {j.nom}</strong> et <strong style={{ color: C.text }}>toutes ses données</strong> seront définitivement supprimés.<br />
+                                Cette action est <strong style={{ color: C.red }}>impossible à annuler</strong>.
+                              </div>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => setDeleteConfirm(null)}
+                                  style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface, color: C.muted, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+                                  Annuler
+                                </button>
+                                <button onClick={() => deleteUserAccount(j.user_id)}
+                                  style={{ flex: 2, padding: '10px', borderRadius: 8, border: 'none', background: C.red, color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 800 }}>
+                                  🗑️ Supprimer définitivement
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        ) : (
+                          /* Bouton initial */
+                          <button onClick={() => setDeleteConfirm({ userId: j.user_id, step: 1 })}
+                            style={{ width: '100%', padding: '9px', borderRadius: 10, border: '1px solid ' + C.red + '35', background: 'transparent', color: C.red, fontSize: 12, cursor: 'pointer', fontWeight: 600, opacity: 0.75 }}>
+                            Supprimer ce compte
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
