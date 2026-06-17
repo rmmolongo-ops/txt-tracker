@@ -86,6 +86,7 @@ export default function App({ user, onSignOut }) {
   const [teamFilter, setTeamFilter] = useState('all')
   const [newTeamName, setNewTeamName] = useState('')
   const [creatingTeam, setCreatingTeam] = useState(false)
+  const [uploadingTeamPhoto, setUploadingTeamPhoto] = useState(null)
   const [availableTeams, setAvailableTeams] = useState([])
   const [adminChartKpi, setAdminChartKpi] = useState('sprint30')
   const [deleteConfirm, setDeleteConfirm] = useState(null)
@@ -232,6 +233,7 @@ export default function App({ user, onSignOut }) {
   }
 
   const uploadTeamPhoto = async (teamId, file) => {
+    setUploadingTeamPhoto(teamId)
     try {
       const img = await createImageBitmap(file)
       const canvas = document.createElement('canvas')
@@ -241,13 +243,16 @@ export default function App({ user, onSignOut }) {
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
       const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.8))
       const path = `teams/${teamId}/photo.jpg`
-      await supabase.storage.from('photos').upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
+      const { error: uploadError } = await supabase.storage.from('photos').upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
+      if (uploadError) throw uploadError
       const { data: { publicUrl } } = supabase.storage.from('photos').getPublicUrl(path)
       const url = publicUrl + '?t=' + Date.now()
-      await supabase.from('teams').update({ photo_url: url }).eq('id', teamId)
+      const { error: updateError } = await supabase.from('teams').update({ photo_url: url }).eq('id', teamId)
+      if (updateError) throw updateError
       setTeams(prev => prev.map(t => t.id === teamId ? { ...t, photo_url: url } : t))
       showToast('📷 Photo d\'équipe mise à jour !')
-    } catch (e) { showToast('❌ Erreur upload photo') }
+    } catch (e) { showToast('❌ Erreur : ' + e.message) }
+    finally { setUploadingTeamPhoto(null) }
   }
 
   const createTeam = async () => {
@@ -618,14 +623,16 @@ export default function App({ user, onSignOut }) {
                 {teams.map(team => (
                   <div key={team.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.surface, borderRadius: 12, padding: '10px 12px', border: '1px solid ' + C.border }}>
                     {/* Photo de l'équipe */}
-                    <label style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
-                      <div style={{ width: 44, height: 44, borderRadius: 10, background: team.color + '30', border: '2px solid ' + team.color + '60', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {team.photo_url
-                          ? <img src={team.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          : <span style={{ fontSize: 20 }}>🏟️</span>}
+                    <label style={{ position: 'relative', cursor: uploadingTeamPhoto === team.id ? 'wait' : 'pointer', flexShrink: 0 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 10, background: team.color + '30', border: '2px solid ' + team.color + '60', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: uploadingTeamPhoto === team.id ? 0.6 : 1 }}>
+                        {uploadingTeamPhoto === team.id
+                          ? <span style={{ fontSize: 16 }}>⏳</span>
+                          : team.photo_url
+                            ? <img src={team.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : <span style={{ fontSize: 20 }}>🏟️</span>}
                       </div>
                       <div style={{ position: 'absolute', bottom: -2, right: -2, width: 18, height: 18, borderRadius: '50%', background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>📷</div>
-                      <input type="file" accept="image/*" style={{ display: 'none' }}
+                      <input type="file" accept="image/*" style={{ display: 'none' }} disabled={uploadingTeamPhoto !== null}
                         onChange={e => e.target.files[0] && uploadTeamPhoto(team.id, e.target.files[0])} />
                     </label>
 
