@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
 const C = {
   bg: '#0a0e1a', card: '#111827', border: '#1e293b',
@@ -92,6 +92,12 @@ export default function App({ user, onSignOut }) {
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [adminView, setAdminView] = useState('overview')
   const [selectedAdminTeam, setSelectedAdminTeam] = useState(null)
+  const [equipeTab, setEquipeTab] = useState('perf')
+  const [equipeTeamId, setEquipeTeamId] = useState(null)
+  const [equipeKpi, setEquipeKpi] = useState('sprint30')
+  const [teamPrograms, setTeamPrograms] = useState({})
+  const [editingProg, setEditingProg] = useState(false)
+  const [progDraft, setProgDraft] = useState(null)
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
@@ -121,6 +127,9 @@ export default function App({ user, onSignOut }) {
       ])
       if (errP) { setAdminError('Erreur lecture profils : ' + errP.message); setAdminLoading(false); return }
       setTeams(allTeams || [])
+      const programs = {}
+      ;(allTeams || []).forEach(t => { if (t.program) programs[t.id] = t.program })
+      setTeamPrograms(programs)
       const emailMap = {}
       ;(allEmails || []).forEach(e => { emailMap[e.user_id] = e.email })
       const teamMap = {}
@@ -288,6 +297,7 @@ export default function App({ user, onSignOut }) {
     setAdminData(prev => prev.map(p => ({ ...p, teams: (p.teams || []).filter(t => t.id !== teamId) })))
     setMyTeamIds(prev => { const next = new Set(prev); next.delete(teamId); return next })
     if (selectedAdminTeam?.id === teamId) { setSelectedAdminTeam(null); setAdminView('overview') }
+    if (equipeTeamId === teamId) setEquipeTeamId(null)
     showToast('🗑️ Équipe supprimée')
   }
 
@@ -302,6 +312,18 @@ export default function App({ user, onSignOut }) {
       const team = teams.find(t => t.id === teamId)
       setAdminData(prev => prev.map(p => p.user_id !== playerUserId ? p : { ...p, teams: [...(p.teams || []), team] }))
     }
+  }
+
+  const getTeamProgram = (teamId) => teamPrograms[teamId] || SESSIONS
+
+  const saveTeamProgram = async (teamId, program) => {
+    const clean = program.map(s => ({ ...s, blocs: s.blocs.map(b => ({ ...b, exercices: b.exercices.filter(e => e.trim() !== '') })) }))
+    const { error } = await supabase.from('teams').update({ program: clean }).eq('id', teamId)
+    if (error) { showToast('❌ ' + error.message); return }
+    setTeamPrograms(prev => ({ ...prev, [teamId]: clean }))
+    setEditingProg(false)
+    setProgDraft(null)
+    showToast('✅ Programme sauvegardé !')
   }
 
   const deleteUserAccount = async (userId) => {
@@ -351,8 +373,13 @@ export default function App({ user, onSignOut }) {
     { id: 'kpi', icon: '📊', label: 'Mesures' },
     { id: 'stats', icon: '📈', label: 'Stats' },
     { id: 'profil', icon: '👤', label: 'Profil' },
-    ...(isAdmin ? [{ id: 'admin', icon: '🛡️', label: 'Admin' }] : []),
+    ...(isAdmin ? [
+      { id: 'equipe', icon: '⚽', label: 'Équipe' },
+      { id: 'admin', icon: '🛡️', label: 'Admin' },
+    ] : []),
   ]
+
+  const PLAYER_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#14b8a6','#ec4899']
 
   const renderSessionBlocs = (s, expanded, done, onToggle) => expanded && (
     <div style={{ background: C.card, padding: '0 16px 16px' }}>
@@ -750,6 +777,299 @@ export default function App({ user, onSignOut }) {
               </div>
             )
           })()}
+        </div>
+      )}
+
+      {/* ── ÉQUIPE (ADMIN) ── */}
+      {tab === 'equipe' && isAdmin && (
+        <div>
+          {/* Sélecteur d'équipe */}
+          {teams.length === 0 ? (
+            <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
+              <div style={{ fontSize: 36, marginBottom: 10 }}>🏟️</div>
+              <div style={{ fontWeight: 700 }}>Aucune équipe créée</div>
+              <div style={{ fontSize: 13, marginTop: 6 }}>Créez des équipes depuis l'onglet Admin</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+                {teams.map(team => {
+                  const sel = equipeTeamId === team.id
+                  return (
+                    <button key={team.id} onClick={() => { setEquipeTeamId(team.id); setEditingProg(false); setProgDraft(null) }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 14, cursor: 'pointer' }}>
+                      {team.photo_url
+                        ? <img src={team.photo_url} alt="" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
+                        : <span style={{ width: 10, height: 10, borderRadius: '50%', background: team.color, display: 'inline-block' }} />}
+                      {team.name}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {!equipeTeamId && (
+                <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
+                  Sélectionne une équipe ci-dessus
+                </div>
+              )}
+
+              {equipeTeamId && (() => {
+                const team = teams.find(t => t.id === equipeTeamId)
+                const teamPlayers = adminData.filter(j => (j.teams || []).some(t => t.id === equipeTeamId))
+                return (
+                  <>
+                    {/* Sub-tabs */}
+                    <div style={{ display: 'flex', background: C.surface, borderRadius: 12, padding: 4, marginBottom: 20, gap: 2 }}>
+                      {[{ id: 'perf', icon: '📊', label: 'Performances' }, { id: 'programme', icon: '📋', label: 'Programme' }].map(t => (
+                        <button key={t.id} onClick={() => { setEquipeTab(t.id); setEditingProg(false); setProgDraft(null) }}
+                          style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 14, background: equipeTab === t.id ? C.accent : 'transparent', color: equipeTab === t.id ? '#fff' : C.muted, transition: 'all 0.2s' }}>
+                          {t.icon} {t.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* ── PERFORMANCES ── */}
+                    {equipeTab === 'perf' && (
+                      <div>
+                        {teamPlayers.length === 0 ? (
+                          <div style={{ background: C.card, borderRadius: 14, padding: 32, textAlign: 'center', color: C.muted }}>
+                            <div style={{ fontSize: 32, marginBottom: 10 }}>👥</div>
+                            Aucun joueur dans cette équipe
+                          </div>
+                        ) : (
+                          <>
+                            {/* KPI selector */}
+                            <div style={{ display: 'flex', gap: 6, marginBottom: 20, overflowX: 'auto', paddingBottom: 4 }}>
+                              {KPI_CONFIG.map(kpi => (
+                                <button key={kpi.id} onClick={() => setEquipeKpi(kpi.id)}
+                                  style={{ padding: '6px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', background: equipeKpi === kpi.id ? kpi.color : C.surface, color: '#fff', opacity: equipeKpi === kpi.id ? 1 : 0.55, flexShrink: 0 }}>
+                                  {kpi.icon} {kpi.label.split(' ')[0]}
+                                </button>
+                              ))}
+                            </div>
+
+                            {(() => {
+                              const kpi = KPI_CONFIG.find(k => k.id === equipeKpi)
+
+                              /* Graphique comparatif en barres — valeurs actuelles */
+                              const barData = teamPlayers
+                                .filter(j => j.kpis?.[equipeKpi] != null)
+                                .map((j, idx) => ({
+                                  name: (j.prenom || '?') + ' ' + (j.nom?.[0] || '') + '.',
+                                  val: j.kpis[equipeKpi],
+                                  color: PLAYER_COLORS[idx % PLAYER_COLORS.length],
+                                }))
+                                .sort((a, b) => kpi.lower ? a.val - b.val : b.val - a.val)
+
+                              /* Données timeline pour chaque joueur */
+                              const playerCharts = teamPlayers.map((j, idx) => {
+                                const arr = (j.mesuresData || [])
+                                  .filter(m => m.kpi_id === equipeKpi)
+                                  .sort((a, b) => a.date.localeCompare(b.date))
+                                return {
+                                  player: j,
+                                  color: PLAYER_COLORS[idx % PLAYER_COLORS.length],
+                                  chartData: arr.slice(-10).map(d => ({ date: d.date.slice(5), val: d.valeur })),
+                                  latest: arr.length > 0 ? arr[arr.length - 1].valeur : null,
+                                  prog: arr.length >= 2 ? (kpi.lower
+                                    ? ((arr[0].valeur - arr[arr.length-1].valeur) / arr[0].valeur * 100).toFixed(1)
+                                    : ((arr[arr.length-1].valeur - arr[0].valeur) / arr[0].valeur * 100).toFixed(1)
+                                  ) : null,
+                                }
+                              })
+
+                              return (
+                                <>
+                                  {/* Podium - vue comparative */}
+                                  {barData.length > 0 && (
+                                    <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
+                                      <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
+                                        Comparaison — {kpi.label} {kpi.lower ? '(moins = mieux)' : ''}
+                                      </div>
+                                      <ResponsiveContainer width="100%" height={180}>
+                                        <BarChart data={barData} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
+                                          <XAxis type="number" tick={{ fontSize: 10, fill: C.muted }} />
+                                          <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: C.text }} width={70} />
+                                          <Tooltip
+                                            contentStyle={{ background: C.card, border: '1px solid ' + C.border, borderRadius: 8, color: C.text, fontSize: 12 }}
+                                            formatter={v => [v + ' ' + kpi.unit, kpi.label]} />
+                                          <Bar dataKey="val" radius={[0, 6, 6, 0]}>
+                                            {barData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                                          </Bar>
+                                        </BarChart>
+                                      </ResponsiveContainer>
+                                    </div>
+                                  )}
+
+                                  {/* Graphiques individuels */}
+                                  <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
+                                    Courbe de progression par joueur
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
+                                    {playerCharts.map(({ player: j, color, chartData, latest, prog }) => (
+                                      <div key={j.user_id} style={{ background: C.card, borderRadius: 14, border: '1px solid ' + C.border, overflow: 'hidden' }}>
+                                        <div style={{ height: 3, background: color }} />
+                                        <div style={{ padding: '12px 14px 8px' }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
+                                              {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+                                            </div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                              <div style={{ fontWeight: 700, fontSize: 13 }}>{j.prenom} {j.nom}</div>
+                                              <div style={{ fontSize: 11, color: C.muted }}>{j.poste1 || '—'}</div>
+                                            </div>
+                                            <div style={{ textAlign: 'right' }}>
+                                              <div style={{ fontSize: 20, fontWeight: 900, color: latest != null ? kpi.color : C.muted }}>
+                                                {latest != null ? latest : '—'}
+                                                <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}> {kpi.unit}</span>
+                                              </div>
+                                              {prog != null && (
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: parseFloat(prog) >= 0 ? C.green : C.red }}>
+                                                  {parseFloat(prog) >= 0 ? '▲' : '▼'} {Math.abs(prog)}%
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                          {chartData.length >= 2 ? (
+                                            <ResponsiveContainer width="100%" height={100}>
+                                              <LineChart data={chartData}>
+                                                <XAxis dataKey="date" tick={{ fontSize: 9, fill: C.muted }} />
+                                                <YAxis tick={{ fontSize: 9, fill: C.muted }} width={28} />
+                                                <Tooltip contentStyle={{ background: C.card, border: '1px solid ' + C.border, borderRadius: 6, color: C.text, fontSize: 11 }} formatter={v => [v + ' ' + kpi.unit]} />
+                                                <Line type="monotone" dataKey="val" stroke={color} strokeWidth={2} dot={{ fill: color, r: 3 }} activeDot={{ r: 5 }} />
+                                              </LineChart>
+                                            </ResponsiveContainer>
+                                          ) : (
+                                            <div style={{ height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 12 }}>
+                                              Pas assez de données
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </>
+                              )
+                            })()}
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── PROGRAMME ── */}
+                    {equipeTab === 'programme' && (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 15 }}>Programme hebdomadaire</div>
+                            <div style={{ fontSize: 12, color: teamPrograms[equipeTeamId] ? C.green : C.muted, marginTop: 2 }}>
+                              {teamPrograms[equipeTeamId] ? '✓ Programme personnalisé' : 'Programme par défaut'}
+                            </div>
+                          </div>
+                          {!editingProg ? (
+                            <button onClick={() => { setProgDraft(JSON.parse(JSON.stringify(getTeamProgram(equipeTeamId)))); setEditingProg(true) }}
+                              style={{ padding: '9px 18px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                              ✏️ Modifier
+                            </button>
+                          ) : (
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button onClick={() => { setEditingProg(false); setProgDraft(null) }}
+                                style={{ padding: '9px 14px', background: C.surface, color: C.muted, border: '1px solid ' + C.border, borderRadius: 10, fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
+                                Annuler
+                              </button>
+                              <button onClick={() => saveTeamProgram(equipeTeamId, progDraft)}
+                                style={{ padding: '9px 18px', background: C.green, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                                ✓ Sauvegarder
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {(editingProg ? progDraft : getTeamProgram(equipeTeamId)).map((s, si) => (
+                          <div key={s.day} style={{ background: C.card, borderRadius: 16, marginBottom: 12, border: '1px solid ' + (editingProg ? s.color + '50' : C.border), overflow: 'hidden' }}>
+                            {/* En-tête du jour */}
+                            <div style={{ background: s.color + '18', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <span style={{ fontSize: 24, flexShrink: 0 }}>{s.icon}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 12, color: s.color, fontWeight: 700 }}>{s.day}</div>
+                                {editingProg ? (
+                                  <input value={progDraft[si].label}
+                                    onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d[si].label = e.target.value; setProgDraft(d) }}
+                                    style={{ background: 'transparent', border: 'none', borderBottom: '1px solid ' + s.color + '60', color: C.text, fontSize: 15, fontWeight: 700, outline: 'none', width: '100%' }} />
+                                ) : (
+                                  <div style={{ fontSize: 15, fontWeight: 700 }}>{s.label}</div>
+                                )}
+                              </div>
+                              {editingProg ? (
+                                <input value={progDraft[si].duration}
+                                  onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d[si].duration = e.target.value; setProgDraft(d) }}
+                                  style={{ background: 'transparent', border: '1px solid ' + s.color + '50', borderRadius: 6, color: s.color, fontSize: 12, padding: '4px 8px', outline: 'none', width: 65, textAlign: 'center', fontWeight: 700 }} />
+                              ) : (
+                                <div style={{ fontSize: 12, color: s.color, background: s.color + '20', padding: '3px 10px', borderRadius: 8, fontWeight: 600, flexShrink: 0 }}>{s.duration}</div>
+                              )}
+                            </div>
+
+                            {/* Objectif */}
+                            <div style={{ padding: '10px 16px 0' }}>
+                              {editingProg ? (
+                                <input value={progDraft[si].objectif}
+                                  onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d[si].objectif = e.target.value; setProgDraft(d) }}
+                                  style={{ width: '100%', background: s.color + '10', border: '1px solid ' + s.color + '30', borderRadius: 8, padding: '7px 12px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 12 }}
+                                  placeholder="Objectif de la séance..." />
+                              ) : (
+                                <div style={{ background: s.color + '15', borderRadius: 8, padding: '6px 12px', marginBottom: 12, fontSize: 13, color: s.color, fontWeight: 600 }}>
+                                  🎯 {s.objectif}
+                                </div>
+                              )}
+
+                              {/* Blocs */}
+                              {s.blocs.map((bloc, bi) => (
+                                <div key={bi} style={{ marginBottom: 14 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                    {editingProg ? (
+                                      <input value={progDraft[si].blocs[bi].titre}
+                                        onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d[si].blocs[bi].titre = e.target.value; setProgDraft(d) }}
+                                        style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid ' + C.border, color: C.text, fontSize: 13, fontWeight: 700, outline: 'none', marginRight: 10 }} />
+                                    ) : (
+                                      <div style={{ fontSize: 13, fontWeight: 700 }}>{bloc.titre}</div>
+                                    )}
+                                    {editingProg ? (
+                                      <input value={progDraft[si].blocs[bi].duree}
+                                        onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d[si].blocs[bi].duree = e.target.value; setProgDraft(d) }}
+                                        style={{ background: 'transparent', border: '1px solid ' + s.color + '40', borderRadius: 6, color: s.color, fontSize: 11, padding: '2px 6px', outline: 'none', width: 70, textAlign: 'center' }} />
+                                    ) : (
+                                      <div style={{ fontSize: 11, color: s.color, background: s.color + '20', padding: '2px 8px', borderRadius: 8, fontWeight: 600, flexShrink: 0 }}>{bloc.duree}</div>
+                                    )}
+                                  </div>
+
+                                  {editingProg ? (
+                                    <textarea value={progDraft[si].blocs[bi].exercices.join('\n')}
+                                      onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d[si].blocs[bi].exercices = e.target.value.split('\n'); setProgDraft(d) }}
+                                      rows={Math.max(3, progDraft[si].blocs[bi].exercices.length + 1)}
+                                      style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.7, boxSizing: 'border-box' }} />
+                                  ) : (
+                                    bloc.exercices.map((ex, ei) => (
+                                      <div key={ei} style={{ display: 'flex', gap: 8, marginBottom: 5, alignItems: 'flex-start' }}>
+                                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, marginTop: 6, flexShrink: 0 }} />
+                                        <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.4 }}>{ex}</div>
+                                      </div>
+                                    ))
+                                  )}
+                                  {bi < s.blocs.length - 1 && !editingProg && (
+                                    <div style={{ height: 1, background: C.border, marginTop: 10 }} />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
+            </>
+          )}
         </div>
       )}
 
