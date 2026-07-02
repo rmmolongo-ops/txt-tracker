@@ -11,6 +11,10 @@ const C = {
 
 const TEAM_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#14b8a6','#ec4899']
 
+const DAY_ORDER = ['LUN','MAR','MER','JEU','VEN','SAM','DIM']
+const toDateStr = (d) => { const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${day}` }
+const getMonday = (d) => { const date = new Date(d); const dow = date.getDay(); date.setDate(date.getDate() - dow + (dow === 0 ? -6 : 1)); date.setHours(0, 0, 0, 0); return date }
+
 const KPI_CONFIG = [
   { id: 'sprint30', label: 'Sprint 30m', unit: 'sec', icon: '⚡', color: '#f59e0b', lower: true, category: 'physique' },
   { id: 'sprint10', label: 'Sprint 10m', unit: 'sec', icon: '💥', color: '#ef4444', lower: true, category: 'physique' },
@@ -95,9 +99,12 @@ export default function App({ user, onSignOut }) {
   const [equipeTab, setEquipeTab] = useState('perf')
   const [equipeTeamId, setEquipeTeamId] = useState(null)
   const [equipeKpi, setEquipeKpi] = useState('sprint30')
-  const [teamPrograms, setTeamPrograms] = useState({})
+  const [programsCatalog, setProgramsCatalog] = useState([])
   const [editingProg, setEditingProg] = useState(false)
   const [progDraft, setProgDraft] = useState(null)
+  const [editingProgramId, setEditingProgramId] = useState(null)
+  const [seancesTeamId, setSeancesTeamId] = useState(null)
+  const [seancesWeekOffset, setSeancesWeekOffset] = useState(0)
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
@@ -127,9 +134,6 @@ export default function App({ user, onSignOut }) {
       ])
       if (errP) { setAdminError('Erreur lecture profils : ' + errP.message); setAdminLoading(false); return }
       setTeams(allTeams || [])
-      const programs = {}
-      ;(allTeams || []).forEach(t => { if (t.program) programs[t.id] = t.program })
-      setTeamPrograms(programs)
       const emailMap = {}
       ;(allEmails || []).forEach(e => { emailMap[e.user_id] = e.email })
       const teamMap = {}
@@ -157,17 +161,19 @@ export default function App({ user, onSignOut }) {
   }
 
   const loadAll = useCallback(async () => {
-    const [{ data: m }, { data: s }, { data: p }, { data: t }, { data: myMemberships }] = await Promise.all([
+    const [{ data: m }, { data: s }, { data: p }, { data: t }, { data: myMemberships }, { data: progs }] = await Promise.all([
       supabase.from('mesures').select('*').eq('user_id', user.id).order('date', { ascending: true }),
       supabase.from('seances').select('*').eq('user_id', user.id),
       supabase.from('profils').select('*').eq('user_id', user.id).single(),
       supabase.from('teams').select('id, name, color, photo_url').order('created_at'),
       supabase.from('team_members').select('team_id').eq('user_id', user.id),
+      supabase.from('team_programs').select('*').order('start_date'),
     ])
     if (m) setMesures(m)
     if (s) setSeances(s)
     if (t) setAvailableTeams(t)
     if (myMemberships) setMyTeamIds(new Set(myMemberships.map(tm => tm.team_id)))
+    if (progs) setProgramsCatalog(progs)
     if (p) { setProfil(p); setProfilEdit(p) }
     else {
       const { data: newP } = await supabase.from('profils').insert({ user_id: user.id, ...DEFAULT_PROFIL }).select().single()
@@ -202,14 +208,14 @@ export default function App({ user, onSignOut }) {
     setConfirmDelete(null)
   }
 
-  const toggleSeance = async (day) => {
-    const today = new Date().toISOString().split('T')[0]
-    const existing = seances.find(s => s.jour === day && s.date === today)
+  const toggleSeance = async (day, dateStr) => {
+    const targetDate = dateStr || new Date().toISOString().split('T')[0]
+    const existing = seances.find(s => s.jour === day && s.date === targetDate)
     if (existing) {
       await supabase.from('seances').delete().eq('id', existing.id)
       setSeances(prev => prev.filter(s => s.id !== existing.id))
     } else {
-      const { data } = await supabase.from('seances').insert({ user_id: user.id, jour: day, date: today }).select().single()
+      const { data } = await supabase.from('seances').insert({ user_id: user.id, jour: day, date: targetDate }).select().single()
       if (data) { setSeances(prev => [...prev, data]); showToast('💪 Séance validée !') }
     }
   }
@@ -314,16 +320,42 @@ export default function App({ user, onSignOut }) {
     }
   }
 
-  const getTeamProgram = (teamId) => teamPrograms[teamId] || SESSIONS
+  const getProgramsForTeam = (teamId) => programsCatalog.filter(p => p.team_id === teamId).sort((a, b) => a.start_date.localeCompare(b.start_date))
 
-  const saveTeamProgram = async (teamId, program) => {
-    const clean = program.map(s => ({ ...s, blocs: s.blocs.map(b => ({ ...b, exercices: b.exercices.filter(e => e.trim() !== '') })) }))
-    const { error } = await supabase.from('teams').update({ program: clean }).eq('id', teamId)
-    if (error) { showToast('❌ ' + error.message); return }
-    setTeamPrograms(prev => ({ ...prev, [teamId]: clean }))
+  const getProgramForDate = (teamId, dateStr) => programsCatalog.find(p => p.team_id === teamId && dateStr >= p.start_date && dateStr <= p.end_date)
+
+  const saveProgram = async (teamId, draft, programId) => {
+    if (!draft.name.trim()) { showToast('❌ Donne un nom au programme'); return }
+    if (!draft.start_date || !draft.end_date) { showToast('❌ Renseigne les dates de début et de fin'); return }
+    if (draft.end_date < draft.start_date) { showToast('❌ La date de fin doit être après la date de début'); return }
+    const overlap = programsCatalog.some(p => p.team_id === teamId && p.id !== programId && draft.start_date <= p.end_date && draft.end_date >= p.start_date)
+    if (overlap) { showToast('❌ Ce programme chevauche un programme existant pour cette équipe'); return }
+    const clean = {
+      team_id: teamId,
+      name: draft.name.trim(),
+      start_date: draft.start_date,
+      end_date: draft.end_date,
+      sessions: draft.sessions.map(s => ({ ...s, blocs: s.blocs.map(b => ({ ...b, exercices: b.exercices.filter(e => e.trim() !== '') })) })),
+    }
+    if (programId) {
+      const { data, error } = await supabase.from('team_programs').update(clean).eq('id', programId).select().single()
+      if (error) { showToast('❌ ' + error.message); return }
+      setProgramsCatalog(prev => prev.map(p => p.id === programId ? data : p))
+    } else {
+      const { data, error } = await supabase.from('team_programs').insert(clean).select().single()
+      if (error) { showToast('❌ ' + error.message); return }
+      setProgramsCatalog(prev => [...prev, data])
+    }
     setEditingProg(false)
     setProgDraft(null)
+    setEditingProgramId(null)
     showToast('✅ Programme sauvegardé !')
+  }
+
+  const deleteProgram = async (programId) => {
+    await supabase.from('team_programs').delete().eq('id', programId)
+    setProgramsCatalog(prev => prev.filter(p => p.id !== programId))
+    showToast('🗑️ Programme supprimé')
   }
 
   const deleteUserAccount = async (userId) => {
@@ -347,7 +379,7 @@ export default function App({ user, onSignOut }) {
     const diff = cfg.lower ? ((arr[0].valeur - arr[arr.length-1].valeur) / arr[0].valeur) * 100 : ((arr[arr.length-1].valeur - arr[0].valeur) / arr[0].valeur) * 100
     return diff.toFixed(1)
   }
-  const isSeanceDone = (day) => { const today = new Date().toISOString().split('T')[0]; return seances.some(s => s.jour === day && s.date === today) }
+  const isSeanceDone = (day, dateStr) => { const targetDate = dateStr || new Date().toISOString().split('T')[0]; return seances.some(s => s.jour === day && s.date === targetDate) }
   const getWeekCompliance = () => {
     let done = 0, total = 0
     for (let i = 0; i < 7; i++) {
@@ -580,6 +612,35 @@ export default function App({ user, onSignOut }) {
             </div>
           </div>
 
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Mes équipes</div>
+          {(() => {
+            const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
+            if (myTeams.length === 0) return (
+              <div style={{ background: C.card, borderRadius: 14, padding: 16, textAlign: 'center', color: C.muted, fontSize: 13, marginBottom: 16, border: '1px solid ' + C.border }}>
+                Tu n'as pas encore rejoint d'équipe. Rends-toi dans l'onglet Profil pour en rejoindre une.
+              </div>
+            )
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
+                {myTeams.map(team => (
+                  <div key={team.id} style={{ background: C.card, borderRadius: 14, border: '1px solid ' + team.color + '40', overflow: 'hidden' }}>
+                    <div style={{ height: 3, background: team.color }} />
+                    <div style={{ padding: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: team.color + '20', border: '1px solid ' + team.color + '50', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {team.photo_url ? <img src={team.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 18 }}>🏟️</span>}
+                        </div>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: team.color, background: team.color + '20', padding: '2px 8px', borderRadius: 8, letterSpacing: 0.5, whiteSpace: 'nowrap' }}>ÉQUIPE</span>
+                      </div>
+                      <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.name}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>⚽ Football</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
+
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Performances clés</div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
             {KPI_CONFIG.filter(k => ['sprint30', 'jonglerie_g', 'precision', 'scan'].includes(k.id)).map(kpi => {
@@ -648,28 +709,117 @@ export default function App({ user, onSignOut }) {
       )}
 
       {/* ── SEANCES ── */}
-      {tab === 'seances' && (
-        <div>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Programme de la semaine</div>
-          {SESSIONS.map(s => {
-            const done = isSeanceDone(s.day); const expanded = expandedDay === s.day
-            return (
-              <div key={s.day} style={{ marginBottom: 10, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
-                <div onClick={() => setExpandedDay(expanded ? null : s.day)}
-                  style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '18' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                  <div style={{ width: 42, height: 42, borderRadius: 12, background: done ? C.green + '30' : s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{s.day} — {s.label}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{s.duration} • {s.blocs.length} blocs</div>
+      {tab === 'seances' && (() => {
+        const myTeamsWithProgram = availableTeams.filter(t => myTeamIds.has(t.id) && getProgramsForTeam(t.id).length > 0)
+
+        if (myTeamsWithProgram.length === 0) {
+          return (
+            <div>
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Programme de la semaine</div>
+              {SESSIONS.map(s => {
+                const done = isSeanceDone(s.day); const expanded = expandedDay === s.day
+                return (
+                  <div key={s.day} style={{ marginBottom: 10, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
+                    <div onClick={() => setExpandedDay(expanded ? null : s.day)}
+                      style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '18' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                      <div style={{ width: 42, height: 42, borderRadius: 12, background: done ? C.green + '30' : s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{s.day} — {s.label}</div>
+                        <div style={{ fontSize: 12, color: C.muted }}>{s.duration} • {s.blocs.length} blocs</div>
+                      </div>
+                      <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
+                    </div>
+                    {renderSessionBlocs(s, expanded, done, () => toggleSeance(s.day))}
                   </div>
-                  <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
-                </div>
-                {renderSessionBlocs(s, expanded, done, () => toggleSeance(s.day))}
+                )
+              })}
+            </div>
+          )
+        }
+
+        const effectiveTeamId = (seancesTeamId && myTeamsWithProgram.some(t => t.id === seancesTeamId)) ? seancesTeamId : myTeamsWithProgram[0].id
+        const teamProgs = getProgramsForTeam(effectiveTeamId)
+        const minDate = teamProgs[0].start_date
+        const maxDate = teamProgs.reduce((acc, p) => p.end_date > acc ? p.end_date : acc, teamProgs[0].end_date)
+
+        const weekMonday = getMonday(new Date())
+        weekMonday.setDate(weekMonday.getDate() + seancesWeekOffset * 7)
+        const weekDates = DAY_ORDER.map((day, i) => {
+          const d = new Date(weekMonday); d.setDate(d.getDate() + i)
+          return { day, date: d, dateStr: toDateStr(d) }
+        })
+
+        const firstWeekMondayStr = toDateStr(getMonday(new Date(minDate + 'T00:00:00')))
+        const lastWeekMondayStr = toDateStr(getMonday(new Date(maxDate + 'T00:00:00')))
+        const currentWeekMondayStr = toDateStr(weekMonday)
+        const canGoPrev = currentWeekMondayStr > firstWeekMondayStr
+        const canGoNext = currentWeekMondayStr < lastWeekMondayStr
+
+        return (
+          <div>
+            {myTeamsWithProgram.length > 1 && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+                {myTeamsWithProgram.map(team => {
+                  const sel = effectiveTeamId === team.id
+                  return (
+                    <button key={team.id} onClick={() => { setSeancesTeamId(team.id); setSeancesWeekOffset(0); setExpandedDay(null) }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 13, cursor: 'pointer' }}>
+                      {team.name}
+                    </button>
+                  )
+                })}
               </div>
-            )
-          })}
-        </div>
-      )}
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <button onClick={() => canGoPrev && setSeancesWeekOffset(o => o - 1)} disabled={!canGoPrev}
+                style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid ' + C.border, background: C.card, color: canGoPrev ? C.text : C.border, fontSize: 16, cursor: canGoPrev ? 'pointer' : 'default' }}>‹</button>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>
+                  {weekDates[0].date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} — {weekDates[6].date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                </div>
+                {seancesWeekOffset !== 0 && (
+                  <button onClick={() => setSeancesWeekOffset(0)} style={{ background: 'none', border: 'none', color: C.accent, fontSize: 11, cursor: 'pointer', padding: 0, marginTop: 2 }}>Revenir à aujourd'hui</button>
+                )}
+              </div>
+              <button onClick={() => canGoNext && setSeancesWeekOffset(o => o + 1)} disabled={!canGoNext}
+                style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid ' + C.border, background: C.card, color: canGoNext ? C.text : C.border, fontSize: 16, cursor: canGoNext ? 'pointer' : 'default' }}>›</button>
+            </div>
+
+            {weekDates.map(({ day, date, dateStr }) => {
+              const program = getProgramForDate(effectiveTeamId, dateStr)
+              const s = program?.sessions.find(x => x.day === day)
+              const dateLabel = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })
+              if (!s) {
+                return (
+                  <div key={dateStr} style={{ marginBottom: 10, borderRadius: 16, border: '1px dashed ' + C.border, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, opacity: 0.55 }}>
+                    <div style={{ fontSize: 20 }}>💤</div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13, textTransform: 'capitalize' }}>{dateLabel}</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Hors programme</div>
+                    </div>
+                  </div>
+                )
+              }
+              const done = isSeanceDone(day, dateStr); const expanded = expandedDay === dateStr
+              return (
+                <div key={dateStr} style={{ marginBottom: 10, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
+                  <div onClick={() => setExpandedDay(expanded ? null : dateStr)}
+                    style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '18' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 12, background: done ? C.green + '30' : s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, textTransform: 'capitalize' }}>{dateLabel} — {s.label}</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{s.duration} • {program.name}</div>
+                    </div>
+                    <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
+                  </div>
+                  {renderSessionBlocs(s, expanded, done, () => toggleSeance(day, dateStr))}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {/* ── KPI ── */}
       {tab === 'kpi' && (
@@ -796,7 +946,7 @@ export default function App({ user, onSignOut }) {
                 {teams.map(team => {
                   const sel = equipeTeamId === team.id
                   return (
-                    <button key={team.id} onClick={() => { setEquipeTeamId(team.id); setEditingProg(false); setProgDraft(null) }}
+                    <button key={team.id} onClick={() => { setEquipeTeamId(team.id); setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 14, cursor: 'pointer' }}>
                       {team.photo_url
                         ? <img src={team.photo_url} alt="" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
@@ -821,7 +971,7 @@ export default function App({ user, onSignOut }) {
                     {/* Sub-tabs */}
                     <div style={{ display: 'flex', background: C.surface, borderRadius: 12, padding: 4, marginBottom: 20, gap: 2 }}>
                       {[{ id: 'perf', icon: '📊', label: 'Performances' }, { id: 'programme', icon: '📋', label: 'Programme' }].map(t => (
-                        <button key={t.id} onClick={() => { setEquipeTab(t.id); setEditingProg(false); setProgDraft(null) }}
+                        <button key={t.id} onClick={() => { setEquipeTab(t.id); setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
                           style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 14, background: equipeTab === t.id ? C.accent : 'transparent', color: equipeTab === t.id ? '#fff' : C.muted, transition: 'all 0.2s' }}>
                           {t.icon} {t.label}
                         </button>
@@ -956,113 +1106,133 @@ export default function App({ user, onSignOut }) {
                       </div>
                     )}
 
-                    {/* ── PROGRAMME ── */}
+                    {/* ── PROGRAMME (CATALOGUE) ── */}
                     {equipeTab === 'programme' && (
                       <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                          <div>
-                            <div style={{ fontWeight: 700, fontSize: 15 }}>Programme hebdomadaire</div>
-                            <div style={{ fontSize: 12, color: teamPrograms[equipeTeamId] ? C.green : C.muted, marginTop: 2 }}>
-                              {teamPrograms[equipeTeamId] ? '✓ Programme personnalisé' : 'Programme par défaut'}
-                            </div>
-                          </div>
-                          {!editingProg ? (
-                            <button onClick={() => { setProgDraft(JSON.parse(JSON.stringify(getTeamProgram(equipeTeamId)))); setEditingProg(true) }}
-                              style={{ padding: '9px 18px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                              ✏️ Modifier
-                            </button>
-                          ) : (
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button onClick={() => { setEditingProg(false); setProgDraft(null) }}
-                                style={{ padding: '9px 14px', background: C.surface, color: C.muted, border: '1px solid ' + C.border, borderRadius: 10, fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
-                                Annuler
-                              </button>
-                              <button onClick={() => saveTeamProgram(equipeTeamId, progDraft)}
-                                style={{ padding: '9px 18px', background: C.green, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                                ✓ Sauvegarder
+                        {!editingProg ? (
+                          <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                              <div style={{ fontWeight: 700, fontSize: 15 }}>Catalogue de programmes</div>
+                              <button onClick={() => { setProgDraft({ name: '', start_date: '', end_date: '', sessions: JSON.parse(JSON.stringify(SESSIONS)) }); setEditingProgramId(null); setEditingProg(true) }}
+                                style={{ padding: '9px 16px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                                + Nouveau programme
                               </button>
                             </div>
-                          )}
-                        </div>
 
-                        {(editingProg ? progDraft : getTeamProgram(equipeTeamId)).map((s, si) => (
-                          <div key={s.day} style={{ background: C.card, borderRadius: 16, marginBottom: 12, border: '1px solid ' + (editingProg ? s.color + '50' : C.border), overflow: 'hidden' }}>
-                            {/* En-tête du jour */}
-                            <div style={{ background: s.color + '18', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                              <span style={{ fontSize: 24, flexShrink: 0 }}>{s.icon}</span>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 12, color: s.color, fontWeight: 700 }}>{s.day}</div>
-                                {editingProg ? (
-                                  <input value={progDraft[si].label}
-                                    onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d[si].label = e.target.value; setProgDraft(d) }}
-                                    style={{ background: 'transparent', border: 'none', borderBottom: '1px solid ' + s.color + '60', color: C.text, fontSize: 15, fontWeight: 700, outline: 'none', width: '100%' }} />
-                                ) : (
-                                  <div style={{ fontSize: 15, fontWeight: 700 }}>{s.label}</div>
-                                )}
+                            {getProgramsForTeam(equipeTeamId).length === 0 ? (
+                              <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
+                                <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
+                                Aucun programme planifié pour cette équipe
                               </div>
-                              {editingProg ? (
-                                <input value={progDraft[si].duration}
-                                  onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d[si].duration = e.target.value; setProgDraft(d) }}
-                                  style={{ background: 'transparent', border: '1px solid ' + s.color + '50', borderRadius: 6, color: s.color, fontSize: 12, padding: '4px 8px', outline: 'none', width: 65, textAlign: 'center', fontWeight: 700 }} />
-                              ) : (
-                                <div style={{ fontSize: 12, color: s.color, background: s.color + '20', padding: '3px 10px', borderRadius: 8, fontWeight: 600, flexShrink: 0 }}>{s.duration}</div>
-                              )}
-                            </div>
-
-                            {/* Objectif */}
-                            <div style={{ padding: '10px 16px 0' }}>
-                              {editingProg ? (
-                                <input value={progDraft[si].objectif}
-                                  onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d[si].objectif = e.target.value; setProgDraft(d) }}
-                                  style={{ width: '100%', background: s.color + '10', border: '1px solid ' + s.color + '30', borderRadius: 8, padding: '7px 12px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 12 }}
-                                  placeholder="Objectif de la séance..." />
-                              ) : (
-                                <div style={{ background: s.color + '15', borderRadius: 8, padding: '6px 12px', marginBottom: 12, fontSize: 13, color: s.color, fontWeight: 600 }}>
-                                  🎯 {s.objectif}
-                                </div>
-                              )}
-
-                              {/* Blocs */}
-                              {s.blocs.map((bloc, bi) => (
-                                <div key={bi} style={{ marginBottom: 14 }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                    {editingProg ? (
-                                      <input value={progDraft[si].blocs[bi].titre}
-                                        onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d[si].blocs[bi].titre = e.target.value; setProgDraft(d) }}
-                                        style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid ' + C.border, color: C.text, fontSize: 13, fontWeight: 700, outline: 'none', marginRight: 10 }} />
-                                    ) : (
-                                      <div style={{ fontSize: 13, fontWeight: 700 }}>{bloc.titre}</div>
-                                    )}
-                                    {editingProg ? (
-                                      <input value={progDraft[si].blocs[bi].duree}
-                                        onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d[si].blocs[bi].duree = e.target.value; setProgDraft(d) }}
-                                        style={{ background: 'transparent', border: '1px solid ' + s.color + '40', borderRadius: 6, color: s.color, fontSize: 11, padding: '2px 6px', outline: 'none', width: 70, textAlign: 'center' }} />
-                                    ) : (
-                                      <div style={{ fontSize: 11, color: s.color, background: s.color + '20', padding: '2px 8px', borderRadius: 8, fontWeight: 600, flexShrink: 0 }}>{bloc.duree}</div>
-                                    )}
-                                  </div>
-
-                                  {editingProg ? (
-                                    <textarea value={progDraft[si].blocs[bi].exercices.join('\n')}
-                                      onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d[si].blocs[bi].exercices = e.target.value.split('\n'); setProgDraft(d) }}
-                                      rows={Math.max(3, progDraft[si].blocs[bi].exercices.length + 1)}
-                                      style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.7, boxSizing: 'border-box' }} />
-                                  ) : (
-                                    bloc.exercices.map((ex, ei) => (
-                                      <div key={ei} style={{ display: 'flex', gap: 8, marginBottom: 5, alignItems: 'flex-start' }}>
-                                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, marginTop: 6, flexShrink: 0 }} />
-                                        <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.4 }}>{ex}</div>
+                            ) : (
+                              getProgramsForTeam(equipeTeamId).map(prog => {
+                                const today = toDateStr(new Date())
+                                const status = today < prog.start_date ? { label: 'À venir', color: C.gold } : today > prog.end_date ? { label: 'Terminé', color: C.muted } : { label: 'En cours', color: C.green }
+                                return (
+                                  <div key={prog.id} style={{ background: C.card, borderRadius: 14, padding: 16, marginBottom: 10, border: '1px solid ' + C.border }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                                          <div style={{ fontWeight: 800, fontSize: 15 }}>{prog.name}</div>
+                                          <span style={{ fontSize: 10, fontWeight: 700, color: status.color, background: status.color + '20', padding: '2px 8px', borderRadius: 8 }}>{status.label}</span>
+                                        </div>
+                                        <div style={{ fontSize: 12, color: C.muted }}>
+                                          Du {new Date(prog.start_date).toLocaleDateString('fr-FR')} au {new Date(prog.end_date).toLocaleDateString('fr-FR')}
+                                        </div>
                                       </div>
-                                    ))
-                                  )}
-                                  {bi < s.blocs.length - 1 && !editingProg && (
-                                    <div style={{ height: 1, background: C.border, marginTop: 10 }} />
-                                  )}
-                                </div>
-                              ))}
+                                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                                        <button onClick={() => { setProgDraft({ name: prog.name, start_date: prog.start_date, end_date: prog.end_date, sessions: JSON.parse(JSON.stringify(prog.sessions)) }); setEditingProgramId(prog.id); setEditingProg(true) }}
+                                          style={{ padding: '7px 10px', background: C.surface, color: C.text, border: '1px solid ' + C.border, borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>✏️</button>
+                                        <button onClick={() => deleteProgram(prog.id)}
+                                          style={{ padding: '7px 10px', background: 'transparent', color: C.red, border: '1px solid ' + C.red + '40', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>🗑️</button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              })
+                            )}
+                          </>
+                        ) : (
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+                              <div style={{ fontWeight: 700, fontSize: 15 }}>{editingProgramId ? 'Modifier le programme' : 'Nouveau programme'}</div>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => { setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
+                                  style={{ padding: '9px 14px', background: C.surface, color: C.muted, border: '1px solid ' + C.border, borderRadius: 10, fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
+                                  Annuler
+                                </button>
+                                <button onClick={() => saveProgram(equipeTeamId, progDraft, editingProgramId)}
+                                  style={{ padding: '9px 18px', background: C.green, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                                  ✓ Sauvegarder
+                                </button>
+                              </div>
                             </div>
+
+                            <div style={{ background: C.card, borderRadius: 14, padding: 16, marginBottom: 16, border: '1px solid ' + C.border }}>
+                              <div style={{ marginBottom: 12 }}>
+                                <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>NOM DU PROGRAMME</div>
+                                <input value={progDraft.name} onChange={e => setProgDraft(d => ({ ...d, name: e.target.value }))} placeholder="Ex : Reprise estivale"
+                                  style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                              </div>
+                              <div style={{ display: 'flex', gap: 12 }}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>DÉBUT</div>
+                                  <input type="date" value={progDraft.start_date} onChange={e => setProgDraft(d => ({ ...d, start_date: e.target.value }))}
+                                    style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>FIN</div>
+                                  <input type="date" value={progDraft.end_date} onChange={e => setProgDraft(d => ({ ...d, end_date: e.target.value }))}
+                                    style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Semaine type</div>
+                            {progDraft.sessions.map((s, si) => (
+                              <div key={s.day} style={{ background: C.card, borderRadius: 16, marginBottom: 12, border: '1px solid ' + s.color + '50', overflow: 'hidden' }}>
+                                {/* En-tête du jour */}
+                                <div style={{ background: s.color + '18', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                  <span style={{ fontSize: 24, flexShrink: 0 }}>{s.icon}</span>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, color: s.color, fontWeight: 700 }}>{s.day}</div>
+                                    <input value={s.label}
+                                      onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].label = e.target.value; setProgDraft(d) }}
+                                      style={{ background: 'transparent', border: 'none', borderBottom: '1px solid ' + s.color + '60', color: C.text, fontSize: 15, fontWeight: 700, outline: 'none', width: '100%' }} />
+                                  </div>
+                                  <input value={s.duration}
+                                    onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].duration = e.target.value; setProgDraft(d) }}
+                                    style={{ background: 'transparent', border: '1px solid ' + s.color + '50', borderRadius: 6, color: s.color, fontSize: 12, padding: '4px 8px', outline: 'none', width: 65, textAlign: 'center', fontWeight: 700 }} />
+                                </div>
+
+                                {/* Objectif + blocs */}
+                                <div style={{ padding: '10px 16px 16px' }}>
+                                  <input value={s.objectif}
+                                    onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].objectif = e.target.value; setProgDraft(d) }}
+                                    style={{ width: '100%', background: s.color + '10', border: '1px solid ' + s.color + '30', borderRadius: 8, padding: '7px 12px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 12 }}
+                                    placeholder="Objectif de la séance..." />
+
+                                  {s.blocs.map((bloc, bi) => (
+                                    <div key={bi} style={{ marginBottom: 14 }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                        <input value={bloc.titre}
+                                          onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].blocs[bi].titre = e.target.value; setProgDraft(d) }}
+                                          style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid ' + C.border, color: C.text, fontSize: 13, fontWeight: 700, outline: 'none', marginRight: 10 }} />
+                                        <input value={bloc.duree}
+                                          onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].blocs[bi].duree = e.target.value; setProgDraft(d) }}
+                                          style={{ background: 'transparent', border: '1px solid ' + s.color + '40', borderRadius: 6, color: s.color, fontSize: 11, padding: '2px 6px', outline: 'none', width: 70, textAlign: 'center' }} />
+                                      </div>
+                                      <textarea value={bloc.exercices.join('\n')}
+                                        onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].blocs[bi].exercices = e.target.value.split('\n'); setProgDraft(d) }}
+                                        rows={Math.max(3, bloc.exercices.length + 1)}
+                                        style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.7, boxSizing: 'border-box' }} />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
                       </div>
                     )}
                   </>
