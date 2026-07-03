@@ -101,6 +101,7 @@ export default function App({ user, onSignOut }) {
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [adminView, setAdminView] = useState('overview')
   const [selectedAdminTeam, setSelectedAdminTeam] = useState(null)
+  const [adminDetailTab, setAdminDetailTab] = useState('joueurs')
   const [equipeTab, setEquipeTab] = useState('perf')
   const [equipeTeamId, setEquipeTeamId] = useState(null)
   const [equipeKpi, setEquipeKpi] = useState('sprint30')
@@ -108,7 +109,6 @@ export default function App({ user, onSignOut }) {
   const [editingProg, setEditingProg] = useState(false)
   const [progDraft, setProgDraft] = useState(null)
   const [editingProgramId, setEditingProgramId] = useState(null)
-  const [seancesTeamId, setSeancesTeamId] = useState(null)
   const [seancesWeekOffset, setSeancesWeekOffset] = useState(0)
   const [canInstall, setCanInstall] = useState(!!getDeferredPrompt())
   const [isStandalone] = useState(() => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true)
@@ -468,7 +468,7 @@ export default function App({ user, onSignOut }) {
 
   const NAV_ITEMS = [
     { id: 'dashboard', icon: '🏠', label: 'Accueil' },
-    { id: 'seances', icon: '💪', label: 'Séances' },
+    { id: 'seances', icon: '💪', label: 'Programme' },
     { id: 'kpi', icon: '📊', label: 'Mesures' },
     { id: 'stats', icon: '📈', label: 'Stats' },
     ...(isAdmin ? [
@@ -656,6 +656,135 @@ export default function App({ user, onSignOut }) {
     )
   }
 
+  const renderProgrammeCatalog = (teamId) => (
+    <div>
+      {!editingProg ? (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Catalogue de programmes</div>
+            <button onClick={() => { setProgDraft({ name: '', start_date: '', end_date: '', sessions: JSON.parse(JSON.stringify(SESSIONS)) }); setEditingProgramId(null); setEditingProg(true) }}
+              style={{ padding: '9px 16px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+              + Nouveau programme
+            </button>
+          </div>
+
+          {getProgramsForTeam(teamId).length === 0 ? (
+            <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
+              Aucun programme planifié pour cette équipe
+            </div>
+          ) : (
+            getProgramsForTeam(teamId).map(prog => {
+              const today = toDateStr(new Date())
+              const status = today < prog.start_date ? { label: 'À venir', color: C.gold } : today > prog.end_date ? { label: 'Terminé', color: C.muted } : { label: 'En cours', color: C.green }
+              return (
+                <div key={prog.id} style={{ background: C.card, borderRadius: 14, padding: 16, marginBottom: 10, border: '1px solid ' + C.border }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                        <div style={{ fontWeight: 800, fontSize: 15 }}>{prog.name}</div>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: status.color, background: status.color + '20', padding: '2px 8px', borderRadius: 8 }}>{status.label}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: C.muted }}>
+                        Du {new Date(prog.start_date).toLocaleDateString('fr-FR')} au {new Date(prog.end_date).toLocaleDateString('fr-FR')}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => { setProgDraft({ name: prog.name, start_date: prog.start_date, end_date: prog.end_date, sessions: JSON.parse(JSON.stringify(prog.sessions)) }); setEditingProgramId(prog.id); setEditingProg(true) }}
+                        style={{ padding: '7px 10px', background: C.surface, color: C.text, border: '1px solid ' + C.border, borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>✏️</button>
+                      <button onClick={() => deleteProgram(prog.id)}
+                        style={{ padding: '7px 10px', background: 'transparent', color: C.red, border: '1px solid ' + C.red + '40', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>🗑️</button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </>
+      ) : (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{editingProgramId ? 'Modifier le programme' : 'Nouveau programme'}</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => { setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
+                style={{ padding: '9px 14px', background: C.surface, color: C.muted, border: '1px solid ' + C.border, borderRadius: 10, fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
+                Annuler
+              </button>
+              <button onClick={() => saveProgram(teamId, progDraft, editingProgramId)}
+                style={{ padding: '9px 18px', background: C.green, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                ✓ Sauvegarder
+              </button>
+            </div>
+          </div>
+
+          <div style={{ background: C.card, borderRadius: 14, padding: 16, marginBottom: 16, border: '1px solid ' + C.border }}>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>NOM DU PROGRAMME</div>
+              <input value={progDraft.name} onChange={e => setProgDraft(d => ({ ...d, name: e.target.value }))} placeholder="Ex : Reprise estivale"
+                style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>DÉBUT</div>
+                <input type="date" value={progDraft.start_date} onChange={e => setProgDraft(d => ({ ...d, start_date: e.target.value }))}
+                  style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>FIN</div>
+                <input type="date" value={progDraft.end_date} onChange={e => setProgDraft(d => ({ ...d, end_date: e.target.value }))}
+                  style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Semaine type</div>
+          {progDraft.sessions.map((s, si) => (
+            <div key={s.day} style={{ background: C.card, borderRadius: 16, marginBottom: 12, border: '1px solid ' + s.color + '50', overflow: 'hidden' }}>
+              {/* En-tête du jour */}
+              <div style={{ background: s.color + '18', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 24, flexShrink: 0 }}>{s.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, color: s.color, fontWeight: 700 }}>{s.day}</div>
+                  <input value={s.label}
+                    onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].label = e.target.value; setProgDraft(d) }}
+                    style={{ background: 'transparent', border: 'none', borderBottom: '1px solid ' + s.color + '60', color: C.text, fontSize: 15, fontWeight: 700, outline: 'none', width: '100%' }} />
+                </div>
+                <input value={s.duration}
+                  onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].duration = e.target.value; setProgDraft(d) }}
+                  style={{ background: 'transparent', border: '1px solid ' + s.color + '50', borderRadius: 6, color: s.color, fontSize: 12, padding: '4px 8px', outline: 'none', width: 65, textAlign: 'center', fontWeight: 700 }} />
+              </div>
+
+              {/* Objectif + blocs */}
+              <div style={{ padding: '10px 16px 16px' }}>
+                <input value={s.objectif}
+                  onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].objectif = e.target.value; setProgDraft(d) }}
+                  style={{ width: '100%', background: s.color + '10', border: '1px solid ' + s.color + '30', borderRadius: 8, padding: '7px 12px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 12 }}
+                  placeholder="Objectif de la séance..." />
+
+                {s.blocs.map((bloc, bi) => (
+                  <div key={bi} style={{ marginBottom: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <input value={bloc.titre}
+                        onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].blocs[bi].titre = e.target.value; setProgDraft(d) }}
+                        style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid ' + C.border, color: C.text, fontSize: 13, fontWeight: 700, outline: 'none', marginRight: 10 }} />
+                      <input value={bloc.duree}
+                        onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].blocs[bi].duree = e.target.value; setProgDraft(d) }}
+                        style={{ background: 'transparent', border: '1px solid ' + s.color + '40', borderRadius: 6, color: s.color, fontSize: 11, padding: '2px 6px', outline: 'none', width: 70, textAlign: 'center' }} />
+                    </div>
+                    <textarea value={bloc.exercices.join('\n')}
+                      onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].blocs[bi].exercices = e.target.value.split('\n'); setProgDraft(d) }}
+                      rows={Math.max(3, bloc.exercices.length + 1)}
+                      style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.7, boxSizing: 'border-box' }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
   const tabContent = (
     <div style={{ paddingBottom: isMobile ? 80 : 24 }}>
 
@@ -712,14 +841,22 @@ export default function App({ user, onSignOut }) {
             {KPI_CONFIG.filter(k => getDashboardKpiIds().includes(k.id)).map(kpi => {
               const val = getLatest(kpi.id); const prog = getProgress(kpi.id)
               return (
-                <div key={kpi.id} onClick={() => { setSelectedKpi(kpi.id); changeTab('stats') }}
-                  style={{ background: C.card, borderRadius: 14, padding: 14, border: '1px solid ' + C.border, cursor: 'pointer' }}>
-                  <div style={{ fontSize: 20, marginBottom: 6 }}>{kpi.icon}</div>
-                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{kpi.label}</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: kpi.color }}>
-                    {val !== null ? val : '—'}<span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}> {kpi.unit}</span>
+                <div key={kpi.id} style={{ background: C.card, borderRadius: 14, padding: 14, border: '1px solid ' + C.border }}>
+                  <div onClick={() => { setSelectedKpi(kpi.id); changeTab('stats') }} style={{ cursor: 'pointer' }}>
+                    <div style={{ fontSize: 20, marginBottom: 6 }}>{kpi.icon}</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{kpi.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: kpi.color }}>
+                      {val !== null ? val : '—'}<span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}> {kpi.unit}</span>
+                    </div>
+                    {prog !== null && <div style={{ fontSize: 11, color: parseFloat(prog) >= 0 ? C.green : C.red, marginTop: 4, fontWeight: 600 }}>{parseFloat(prog) >= 0 ? '▲' : '▼'} {Math.abs(prog)}%</div>}
                   </div>
-                  {prog !== null && <div style={{ fontSize: 11, color: parseFloat(prog) >= 0 ? C.green : C.red, marginTop: 4, fontWeight: 600 }}>{parseFloat(prog) >= 0 ? '▲' : '▼'} {Math.abs(prog)}%</div>}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                    <input type="number" placeholder={'Valeur en ' + kpi.unit} value={inputValues[kpi.id] || ''}
+                      onChange={e => setInputValues(v => ({ ...v, [kpi.id]: e.target.value }))}
+                      style={{ flex: 1, background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '7px 8px', color: C.text, fontSize: 14, outline: 'none', minWidth: 0 }} />
+                    <button onClick={() => inputValues[kpi.id] && saveMesure(kpi.id, inputValues[kpi.id])}
+                      style={{ padding: '7px 10px', background: inputValues[kpi.id] ? kpi.color : C.surface, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>✓</button>
+                  </div>
                 </div>
               )
             })}
@@ -803,10 +940,9 @@ export default function App({ user, onSignOut }) {
           )
         }
 
-        const effectiveTeamId = (seancesTeamId && myTeamsWithProgram.some(t => t.id === seancesTeamId)) ? seancesTeamId : myTeamsWithProgram[0].id
-        const teamProgs = getProgramsForTeam(effectiveTeamId)
-        const minDate = teamProgs[0].start_date
-        const maxDate = teamProgs.reduce((acc, p) => p.end_date > acc ? p.end_date : acc, teamProgs[0].end_date)
+        const allProgs = myTeamsWithProgram.flatMap(t => getProgramsForTeam(t.id))
+        const minDate = allProgs.reduce((acc, p) => p.start_date < acc ? p.start_date : acc, allProgs[0].start_date)
+        const maxDate = allProgs.reduce((acc, p) => p.end_date > acc ? p.end_date : acc, allProgs[0].end_date)
 
         const weekMonday = getMonday(new Date())
         weekMonday.setDate(weekMonday.getDate() + seancesWeekOffset * 7)
@@ -823,20 +959,6 @@ export default function App({ user, onSignOut }) {
 
         return (
           <div>
-            {myTeamsWithProgram.length > 1 && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-                {myTeamsWithProgram.map(team => {
-                  const sel = effectiveTeamId === team.id
-                  return (
-                    <button key={team.id} onClick={() => { setSeancesTeamId(team.id); setSeancesWeekOffset(0); setExpandedDay(null) }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 13, cursor: 'pointer' }}>
-                      {team.name}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <button onClick={() => canGoPrev && setSeancesWeekOffset(o => o - 1)} disabled={!canGoPrev}
                 style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid ' + C.border, background: C.card, color: canGoPrev ? C.text : C.border, fontSize: 16, cursor: canGoPrev ? 'pointer' : 'default' }}>‹</button>
@@ -853,10 +975,16 @@ export default function App({ user, onSignOut }) {
             </div>
 
             {weekDates.map(({ day, date, dateStr }) => {
-              const program = getProgramForDate(effectiveTeamId, dateStr)
-              const s = program?.sessions.find(x => x.day === day)
               const dateLabel = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })
-              if (!s) {
+              const entries = myTeamsWithProgram
+                .map(team => {
+                  const program = getProgramForDate(team.id, dateStr)
+                  const s = program?.sessions.find(x => x.day === day)
+                  return s ? { team, program, s } : null
+                })
+                .filter(Boolean)
+
+              if (entries.length === 0) {
                 return (
                   <div key={dateStr} style={{ marginBottom: 10, borderRadius: 16, border: '1px dashed ' + C.border, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, opacity: 0.55 }}>
                     <div style={{ fontSize: 20 }}>💤</div>
@@ -867,19 +995,34 @@ export default function App({ user, onSignOut }) {
                   </div>
                 )
               }
-              const done = isSeanceDone(day, dateStr); const expanded = expandedDay === dateStr
+
               return (
-                <div key={dateStr} style={{ marginBottom: 10, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
-                  <div onClick={() => setExpandedDay(expanded ? null : dateStr)}
-                    style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '18' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                    <div style={{ width: 42, height: 42, borderRadius: 12, background: done ? C.green + '30' : s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, textTransform: 'capitalize' }}>{dateLabel} — {s.label}</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>{s.duration} • {program.name}</div>
-                    </div>
-                    <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
-                  </div>
-                  {renderSessionBlocs(s, expanded, done, () => toggleSeance(day, dateStr))}
+                <div key={dateStr} style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 12, color: C.muted, fontWeight: 700, marginBottom: 6, textTransform: 'capitalize' }}>{dateLabel}</div>
+                  {entries.map(({ team, program, s }) => {
+                    const cardKey = dateStr + '_' + team.id
+                    const done = isSeanceDone(day, dateStr); const expanded = expandedDay === cardKey
+                    return (
+                      <div key={cardKey} style={{ marginBottom: 10, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
+                        <div onClick={() => setExpandedDay(expanded ? null : cardKey)}
+                          style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '18' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                          <div style={{ width: 42, height: 42, borderRadius: 12, background: done ? C.green + '30' : s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: 14 }}>{s.label}</div>
+                            <div style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                              <span>{s.duration}</span>
+                              <span>•</span>
+                              <span style={{ color: team.color, fontWeight: 700 }}>{team.name}</span>
+                              <span>•</span>
+                              <span>{program.name}</span>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
+                        </div>
+                        {renderSessionBlocs(s, expanded, done, () => toggleSeance(day, dateStr))}
+                      </div>
+                    )
+                  })}
                 </div>
               )
             })}
@@ -1173,134 +1316,7 @@ export default function App({ user, onSignOut }) {
                     )}
 
                     {/* ── PROGRAMME (CATALOGUE) ── */}
-                    {equipeTab === 'programme' && (
-                      <div>
-                        {!editingProg ? (
-                          <>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                              <div style={{ fontWeight: 700, fontSize: 15 }}>Catalogue de programmes</div>
-                              <button onClick={() => { setProgDraft({ name: '', start_date: '', end_date: '', sessions: JSON.parse(JSON.stringify(SESSIONS)) }); setEditingProgramId(null); setEditingProg(true) }}
-                                style={{ padding: '9px 16px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                                + Nouveau programme
-                              </button>
-                            </div>
-
-                            {getProgramsForTeam(equipeTeamId).length === 0 ? (
-                              <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
-                                <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
-                                Aucun programme planifié pour cette équipe
-                              </div>
-                            ) : (
-                              getProgramsForTeam(equipeTeamId).map(prog => {
-                                const today = toDateStr(new Date())
-                                const status = today < prog.start_date ? { label: 'À venir', color: C.gold } : today > prog.end_date ? { label: 'Terminé', color: C.muted } : { label: 'En cours', color: C.green }
-                                return (
-                                  <div key={prog.id} style={{ background: C.card, borderRadius: 14, padding: 16, marginBottom: 10, border: '1px solid ' + C.border }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-                                      <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                                          <div style={{ fontWeight: 800, fontSize: 15 }}>{prog.name}</div>
-                                          <span style={{ fontSize: 10, fontWeight: 700, color: status.color, background: status.color + '20', padding: '2px 8px', borderRadius: 8 }}>{status.label}</span>
-                                        </div>
-                                        <div style={{ fontSize: 12, color: C.muted }}>
-                                          Du {new Date(prog.start_date).toLocaleDateString('fr-FR')} au {new Date(prog.end_date).toLocaleDateString('fr-FR')}
-                                        </div>
-                                      </div>
-                                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                                        <button onClick={() => { setProgDraft({ name: prog.name, start_date: prog.start_date, end_date: prog.end_date, sessions: JSON.parse(JSON.stringify(prog.sessions)) }); setEditingProgramId(prog.id); setEditingProg(true) }}
-                                          style={{ padding: '7px 10px', background: C.surface, color: C.text, border: '1px solid ' + C.border, borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>✏️</button>
-                                        <button onClick={() => deleteProgram(prog.id)}
-                                          style={{ padding: '7px 10px', background: 'transparent', color: C.red, border: '1px solid ' + C.red + '40', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>🗑️</button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )
-                              })
-                            )}
-                          </>
-                        ) : (
-                          <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-                              <div style={{ fontWeight: 700, fontSize: 15 }}>{editingProgramId ? 'Modifier le programme' : 'Nouveau programme'}</div>
-                              <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={() => { setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
-                                  style={{ padding: '9px 14px', background: C.surface, color: C.muted, border: '1px solid ' + C.border, borderRadius: 10, fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
-                                  Annuler
-                                </button>
-                                <button onClick={() => saveProgram(equipeTeamId, progDraft, editingProgramId)}
-                                  style={{ padding: '9px 18px', background: C.green, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                                  ✓ Sauvegarder
-                                </button>
-                              </div>
-                            </div>
-
-                            <div style={{ background: C.card, borderRadius: 14, padding: 16, marginBottom: 16, border: '1px solid ' + C.border }}>
-                              <div style={{ marginBottom: 12 }}>
-                                <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>NOM DU PROGRAMME</div>
-                                <input value={progDraft.name} onChange={e => setProgDraft(d => ({ ...d, name: e.target.value }))} placeholder="Ex : Reprise estivale"
-                                  style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
-                              </div>
-                              <div style={{ display: 'flex', gap: 12 }}>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>DÉBUT</div>
-                                  <input type="date" value={progDraft.start_date} onChange={e => setProgDraft(d => ({ ...d, start_date: e.target.value }))}
-                                    style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>FIN</div>
-                                  <input type="date" value={progDraft.end_date} onChange={e => setProgDraft(d => ({ ...d, end_date: e.target.value }))}
-                                    style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
-                                </div>
-                              </div>
-                            </div>
-
-                            <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Semaine type</div>
-                            {progDraft.sessions.map((s, si) => (
-                              <div key={s.day} style={{ background: C.card, borderRadius: 16, marginBottom: 12, border: '1px solid ' + s.color + '50', overflow: 'hidden' }}>
-                                {/* En-tête du jour */}
-                                <div style={{ background: s.color + '18', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                                  <span style={{ fontSize: 24, flexShrink: 0 }}>{s.icon}</span>
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 12, color: s.color, fontWeight: 700 }}>{s.day}</div>
-                                    <input value={s.label}
-                                      onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].label = e.target.value; setProgDraft(d) }}
-                                      style={{ background: 'transparent', border: 'none', borderBottom: '1px solid ' + s.color + '60', color: C.text, fontSize: 15, fontWeight: 700, outline: 'none', width: '100%' }} />
-                                  </div>
-                                  <input value={s.duration}
-                                    onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].duration = e.target.value; setProgDraft(d) }}
-                                    style={{ background: 'transparent', border: '1px solid ' + s.color + '50', borderRadius: 6, color: s.color, fontSize: 12, padding: '4px 8px', outline: 'none', width: 65, textAlign: 'center', fontWeight: 700 }} />
-                                </div>
-
-                                {/* Objectif + blocs */}
-                                <div style={{ padding: '10px 16px 16px' }}>
-                                  <input value={s.objectif}
-                                    onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].objectif = e.target.value; setProgDraft(d) }}
-                                    style={{ width: '100%', background: s.color + '10', border: '1px solid ' + s.color + '30', borderRadius: 8, padding: '7px 12px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 12 }}
-                                    placeholder="Objectif de la séance..." />
-
-                                  {s.blocs.map((bloc, bi) => (
-                                    <div key={bi} style={{ marginBottom: 14 }}>
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                        <input value={bloc.titre}
-                                          onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].blocs[bi].titre = e.target.value; setProgDraft(d) }}
-                                          style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid ' + C.border, color: C.text, fontSize: 13, fontWeight: 700, outline: 'none', marginRight: 10 }} />
-                                        <input value={bloc.duree}
-                                          onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].blocs[bi].duree = e.target.value; setProgDraft(d) }}
-                                          style={{ background: 'transparent', border: '1px solid ' + s.color + '40', borderRadius: 6, color: s.color, fontSize: 11, padding: '2px 6px', outline: 'none', width: 70, textAlign: 'center' }} />
-                                      </div>
-                                      <textarea value={bloc.exercices.join('\n')}
-                                        onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].blocs[bi].exercices = e.target.value.split('\n'); setProgDraft(d) }}
-                                        rows={Math.max(3, bloc.exercices.length + 1)}
-                                        style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.7, boxSizing: 'border-box' }} />
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    {equipeTab === 'programme' && renderProgrammeCatalog(equipeTeamId)}
                   </>
                 )
               })()}
@@ -1383,7 +1399,7 @@ export default function App({ user, onSignOut }) {
                   }, null)
                   return (
                     <div key={team.id}
-                      onClick={() => { setSelectedAdminTeam(team); setAdminView('team_detail'); setExpandedAdmin(null) }}
+                      onClick={() => { setSelectedAdminTeam(team); setAdminView('team_detail'); setExpandedAdmin(null); setAdminDetailTab('joueurs'); setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
                       style={{ background: C.card, borderRadius: 16, border: '1px solid ' + team.color + '40', overflow: 'hidden', cursor: 'pointer' }}>
                       <div style={{ height: 4, background: 'linear-gradient(90deg, ' + team.color + ', ' + team.color + '50)' }} />
                       <div style={{ padding: '16px 16px 14px' }}>
@@ -1460,7 +1476,7 @@ export default function App({ user, onSignOut }) {
         <div>
           {/* Navigation */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-            <button onClick={() => { setAdminView('overview'); setSelectedAdminTeam(null); setExpandedAdmin(null) }}
+            <button onClick={() => { setAdminView('overview'); setSelectedAdminTeam(null); setExpandedAdmin(null); setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
               style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '8px 14px', color: C.muted, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
               ← Retour
             </button>
@@ -1506,46 +1522,62 @@ export default function App({ user, onSignOut }) {
             </div>
           </div>
 
-          {/* Ajouter des joueurs */}
-          {(() => {
-            const notInTeam = adminData.filter(j => !(j.teams || []).some(t => t.id === selectedAdminTeam.id))
-            if (notInTeam.length === 0) return null
-            return (
-              <div style={{ background: C.card, borderRadius: 16, padding: '14px 16px', marginBottom: 20, border: '1px solid ' + C.border }}>
-                <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Ajouter des joueurs</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {notInTeam.map(j => (
-                    <button key={j.user_id} onClick={() => togglePlayerTeam(j.user_id, selectedAdminTeam.id)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, border: '1px solid ' + C.border, background: C.surface, color: C.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                      <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, flexShrink: 0 }}>
-                        {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
-                      </div>
-                      + {j.prenom || '?'} {j.nom || ''}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )
-          })()}
+          {/* Sub-tabs */}
+          <div style={{ display: 'flex', background: C.surface, borderRadius: 12, padding: 4, marginBottom: 20, gap: 2 }}>
+            {[{ id: 'joueurs', icon: '👥', label: 'Joueurs' }, { id: 'programme', icon: '📋', label: 'Programme' }].map(t => (
+              <button key={t.id} onClick={() => { setAdminDetailTab(t.id); setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
+                style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 14, background: adminDetailTab === t.id ? C.accent : 'transparent', color: adminDetailTab === t.id ? '#fff' : C.muted, transition: 'all 0.2s' }}>
+                {t.icon} {t.label}
+              </button>
+            ))}
+          </div>
 
-          {/* Joueurs de l'équipe */}
-          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Joueurs de l'équipe</div>
-          {adminError && <div style={{ background: C.red + '15', border: '1px solid ' + C.red + '40', borderRadius: 12, padding: '12px 14px', marginBottom: 14, fontSize: 12, color: C.red }}>{adminError}</div>}
-          {(() => {
-            const teamPlayers = adminData.filter(j => (j.teams || []).some(t => t.id === selectedAdminTeam.id))
-            if (teamPlayers.length === 0) return (
-              <div style={{ background: C.card, borderRadius: 16, padding: 40, textAlign: 'center', color: C.muted }}>
-                <div style={{ fontSize: 36, marginBottom: 10 }}>👥</div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>Aucun joueur dans cette équipe</div>
-                <div style={{ fontSize: 12, marginTop: 6 }}>Ajoutez des joueurs depuis la section ci-dessus</div>
-              </div>
-            )
-            return (
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
-                {teamPlayers.map(j => renderPlayerCard(j, 'team_' + j.user_id))}
-              </div>
-            )
-          })()}
+          {adminDetailTab === 'joueurs' && (
+            <>
+              {/* Ajouter des joueurs */}
+              {(() => {
+                const notInTeam = adminData.filter(j => !(j.teams || []).some(t => t.id === selectedAdminTeam.id))
+                if (notInTeam.length === 0) return null
+                return (
+                  <div style={{ background: C.card, borderRadius: 16, padding: '14px 16px', marginBottom: 20, border: '1px solid ' + C.border }}>
+                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Ajouter des joueurs</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {notInTeam.map(j => (
+                        <button key={j.user_id} onClick={() => togglePlayerTeam(j.user_id, selectedAdminTeam.id)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, border: '1px solid ' + C.border, background: C.surface, color: C.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                          <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, flexShrink: 0 }}>
+                            {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+                          </div>
+                          + {j.prenom || '?'} {j.nom || ''}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Joueurs de l'équipe */}
+              <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Joueurs de l'équipe</div>
+              {adminError && <div style={{ background: C.red + '15', border: '1px solid ' + C.red + '40', borderRadius: 12, padding: '12px 14px', marginBottom: 14, fontSize: 12, color: C.red }}>{adminError}</div>}
+              {(() => {
+                const teamPlayers = adminData.filter(j => (j.teams || []).some(t => t.id === selectedAdminTeam.id))
+                if (teamPlayers.length === 0) return (
+                  <div style={{ background: C.card, borderRadius: 16, padding: 40, textAlign: 'center', color: C.muted }}>
+                    <div style={{ fontSize: 36, marginBottom: 10 }}>👥</div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>Aucun joueur dans cette équipe</div>
+                    <div style={{ fontSize: 12, marginTop: 6 }}>Ajoutez des joueurs depuis la section ci-dessus</div>
+                  </div>
+                )
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
+                    {teamPlayers.map(j => renderPlayerCard(j, 'team_' + j.user_id))}
+                  </div>
+                )
+              })()}
+            </>
+          )}
+
+          {adminDetailTab === 'programme' && renderProgrammeCatalog(selectedAdminTeam.id)}
         </div>
       )}
 
