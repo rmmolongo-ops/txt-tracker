@@ -242,14 +242,15 @@ export default function App({ user, onSignOut }) {
     setConfirmDelete(null)
   }
 
-  const toggleSeance = async (day, dateStr) => {
+  const toggleSeance = async (day, dateStr, teamId) => {
     const targetDate = dateStr || new Date().toISOString().split('T')[0]
-    const existing = seances.find(s => s.jour === day && s.date === targetDate)
+    const targetTeamId = teamId || null
+    const existing = seances.find(s => s.jour === day && s.date === targetDate && s.team_id === targetTeamId)
     if (existing) {
       await supabase.from('seances').delete().eq('id', existing.id)
       setSeances(prev => prev.filter(s => s.id !== existing.id))
     } else {
-      const { data } = await supabase.from('seances').insert({ user_id: user.id, jour: day, date: targetDate }).select().single()
+      const { data } = await supabase.from('seances').insert({ user_id: user.id, jour: day, date: targetDate, team_id: targetTeamId }).select().single()
       if (data) { setSeances(prev => [...prev, data]); showToast('💪 Séance validée !') }
     }
   }
@@ -446,13 +447,13 @@ export default function App({ user, onSignOut }) {
     const withConfig = myTeams.find(t => t.dashboard_kpis && t.dashboard_kpis.length > 0)
     return withConfig ? withConfig.dashboard_kpis : ['sprint30', 'jonglerie_g', 'precision', 'scan']
   }
-  const isSeanceDone = (day, dateStr) => { const targetDate = dateStr || new Date().toISOString().split('T')[0]; return seances.some(s => s.jour === day && s.date === targetDate) }
+  const isSeanceDone = (day, dateStr, teamId) => { const targetDate = dateStr || new Date().toISOString().split('T')[0]; const targetTeamId = teamId || null; return seances.some(s => s.jour === day && s.date === targetDate && s.team_id === targetTeamId) }
   const getWeekCompliance = () => {
     let done = 0, total = 0
     for (let i = 0; i < 7; i++) {
       const d = new Date(); d.setDate(d.getDate() - i)
       const dateStr = d.toISOString().split('T')[0]
-      SESSIONS.forEach(s => { total++; if (seances.some(x => x.jour === s.day && x.date === dateStr)) done++ })
+      SESSIONS.forEach(s => { total++; if (seances.some(x => x.jour === s.day && x.date === dateStr && x.team_id === null)) done++ })
     }
     return Math.round((done / total) * 100)
   }
@@ -1001,7 +1002,7 @@ export default function App({ user, onSignOut }) {
                   <div style={{ fontSize: 12, color: C.muted, fontWeight: 700, marginBottom: 6, textTransform: 'capitalize' }}>{dateLabel}</div>
                   {entries.map(({ team, program, s }) => {
                     const cardKey = dateStr + '_' + team.id
-                    const done = isSeanceDone(day, dateStr); const expanded = expandedDay === cardKey
+                    const done = isSeanceDone(day, dateStr, team.id); const expanded = expandedDay === cardKey
                     return (
                       <div key={cardKey} style={{ marginBottom: 10, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
                         <div onClick={() => setExpandedDay(expanded ? null : cardKey)}
@@ -1019,7 +1020,7 @@ export default function App({ user, onSignOut }) {
                           </div>
                           <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
                         </div>
-                        {renderSessionBlocs(s, expanded, done, () => toggleSeance(day, dateStr))}
+                        {renderSessionBlocs(s, expanded, done, () => toggleSeance(day, dateStr, team.id))}
                       </div>
                     )
                   })}
