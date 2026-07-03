@@ -21,6 +21,7 @@ const KPI_CONFIG = [
   { id: 'sprint10', label: 'Sprint 10m', unit: 'sec', icon: '💥', color: '#ef4444', lower: true, category: 'physique' },
   { id: 'jonglerie_g', label: 'Jonglerie Gauche', unit: 'touches', icon: '🦶', color: '#3b82f6', lower: false, category: 'technique' },
   { id: 'jonglerie_d', label: 'Jonglerie Droite', unit: 'touches', icon: '👟', color: '#8b5cf6', lower: false, category: 'technique' },
+  { id: 'jonglerie_alt', label: 'Jonglerie Alternée', unit: 'touches', icon: '🔀', color: '#0ea5e9', lower: false, category: 'technique' },
   { id: 'precision', label: 'Précision Frappe', unit: '/10', icon: '🎯', color: '#10b981', lower: false, category: 'technique' },
   { id: 'slalom', label: 'Slalom 20m', unit: 'sec', icon: '🔄', color: '#f97316', lower: true, category: 'technique' },
   { id: 'scan', label: 'Scan Ballon/Mvt', unit: '/10', icon: '👁️', color: '#14b8a6', lower: false, category: 'technique' },
@@ -190,7 +191,7 @@ export default function App({ user, onSignOut }) {
       supabase.from('mesures').select('*').eq('user_id', user.id).order('date', { ascending: true }),
       supabase.from('seances').select('*').eq('user_id', user.id),
       supabase.from('profils').select('*').eq('user_id', user.id).single(),
-      supabase.from('teams').select('id, name, color, photo_url').order('created_at'),
+      supabase.from('teams').select('id, name, color, photo_url, dashboard_kpis').order('created_at'),
       supabase.from('team_members').select('team_id').eq('user_id', user.id),
       supabase.from('team_programs').select('*').order('start_date'),
       supabase.from('clubs').select('*').order('name'),
@@ -439,6 +440,11 @@ export default function App({ user, onSignOut }) {
     const cfg = KPI_CONFIG.find(k => k.id === kpiId)
     const diff = cfg.lower ? ((arr[0].valeur - arr[arr.length-1].valeur) / arr[0].valeur) * 100 : ((arr[arr.length-1].valeur - arr[0].valeur) / arr[0].valeur) * 100
     return diff.toFixed(1)
+  }
+  const getDashboardKpiIds = () => {
+    const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
+    const withConfig = myTeams.find(t => t.dashboard_kpis && t.dashboard_kpis.length > 0)
+    return withConfig ? withConfig.dashboard_kpis : ['sprint30', 'jonglerie_g', 'precision', 'scan']
   }
   const isSeanceDone = (day, dateStr) => { const targetDate = dateStr || new Date().toISOString().split('T')[0]; return seances.some(s => s.jour === day && s.date === targetDate) }
   const getWeekCompliance = () => {
@@ -703,7 +709,7 @@ export default function App({ user, onSignOut }) {
 
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Performances clés</div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
-            {KPI_CONFIG.filter(k => ['sprint30', 'jonglerie_g', 'precision', 'scan'].includes(k.id)).map(kpi => {
+            {KPI_CONFIG.filter(k => getDashboardKpiIds().includes(k.id)).map(kpi => {
               const val = getLatest(kpi.id); const prog = getProgress(kpi.id)
               return (
                 <div key={kpi.id} onClick={() => { setSelectedKpi(kpi.id); changeTab('stats') }}
