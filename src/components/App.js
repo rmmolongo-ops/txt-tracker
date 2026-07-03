@@ -273,6 +273,19 @@ export default function App({ user, onSignOut }) {
     setUploadingPhoto(false)
   }
 
+  const deletePhoto = async () => {
+    setUploadingPhoto(true)
+    try {
+      const path = `${user.id}/avatar.jpg`
+      await supabase.storage.from('photos').remove([path])
+      await supabase.from('profils').update({ photo_url: '' }).eq('user_id', user.id)
+      setProfil(p => ({ ...p, photo_url: '' }))
+      setProfilEdit(p => ({ ...p, photo_url: '' }))
+      showToast('🗑️ Photo supprimée')
+    } catch (e) { showToast('❌ Erreur suppression photo') }
+    setUploadingPhoto(false)
+  }
+
   const uploadTeamPhoto = async (teamId, file) => {
     setUploadingTeamPhoto(teamId)
     try {
@@ -430,7 +443,6 @@ export default function App({ user, onSignOut }) {
     { id: 'seances', icon: '💪', label: 'Séances' },
     { id: 'kpi', icon: '📊', label: 'Mesures' },
     { id: 'stats', icon: '📈', label: 'Stats' },
-    { id: 'profil', icon: '👤', label: 'Profil' },
     ...(isAdmin ? [
       { id: 'equipe', icon: '⚽', label: 'Équipe' },
       { id: 'admin', icon: '🛡️', label: 'Admin' },
@@ -1521,6 +1533,12 @@ export default function App({ user, onSignOut }) {
                 {uploadingPhoto ? '⏳' : '📷'}
                 <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => e.target.files[0] && uploadPhoto(e.target.files[0])} />
               </label>
+              {profil.photo_url && (
+                <button onClick={deletePhoto} disabled={uploadingPhoto} title="Supprimer la photo"
+                  style={{ position: 'absolute', bottom: 0, left: 0, width: 30, height: 30, borderRadius: '50%', background: C.red, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: uploadingPhoto ? 'default' : 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', fontSize: 13, opacity: uploadingPhoto ? 0.6 : 1 }}>
+                  🗑️
+                </button>
+              )}
             </div>
             {!editMode && (
               <div style={{ textAlign: 'center' }}>
@@ -1646,9 +1664,24 @@ export default function App({ user, onSignOut }) {
               <div style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>{profil.prenom || 'Joueur'} • Talent × Travail × Temps</div>
             </div>
           </div>
-          <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-            <div style={{ fontSize: 11, color: C.muted }}>{todayStr}</div>
-            <div style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}>{profil.division || '—'} • {profil.club || '—'}</div>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div onClick={() => changeTab('profil')} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 11, color: C.muted }}>{todayStr}</div>
+                <div style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}>{profil.division || '—'} • {profil.club || '—'}</div>
+              </div>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0, border: '2px solid ' + C.border }}>
+                {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+              </div>
+            </div>
+            <button onClick={onSignOut} title="Se déconnecter"
+              style={{ width: 32, height: 32, borderRadius: 10, border: '1px solid ' + C.border, background: C.surface, color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+            </button>
           </div>
         </div>
       </div>
