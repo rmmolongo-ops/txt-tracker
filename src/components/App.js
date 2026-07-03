@@ -89,6 +89,9 @@ export default function App({ user, onSignOut }) {
   const [teams, setTeams] = useState([])
   const [newTeamName, setNewTeamName] = useState('')
   const [creatingTeam, setCreatingTeam] = useState(false)
+  const [clubs, setClubs] = useState([])
+  const [newClubName, setNewClubName] = useState('')
+  const [creatingClub, setCreatingClub] = useState(false)
   const [uploadingTeamPhoto, setUploadingTeamPhoto] = useState(null)
   const [availableTeams, setAvailableTeams] = useState([])
   const [myTeamIds, setMyTeamIds] = useState(new Set())
@@ -161,23 +164,31 @@ export default function App({ user, onSignOut }) {
   }
 
   const loadAll = useCallback(async () => {
-    const [{ data: m }, { data: s }, { data: p }, { data: t }, { data: myMemberships }, { data: progs }] = await Promise.all([
+    const [{ data: m }, { data: s }, { data: p }, { data: t }, { data: myMemberships }, { data: progs }, { data: cl }] = await Promise.all([
       supabase.from('mesures').select('*').eq('user_id', user.id).order('date', { ascending: true }),
       supabase.from('seances').select('*').eq('user_id', user.id),
       supabase.from('profils').select('*').eq('user_id', user.id).single(),
       supabase.from('teams').select('id, name, color, photo_url').order('created_at'),
       supabase.from('team_members').select('team_id').eq('user_id', user.id),
       supabase.from('team_programs').select('*').order('start_date'),
+      supabase.from('clubs').select('*').order('name'),
     ])
     if (m) setMesures(m)
     if (s) setSeances(s)
     if (t) setAvailableTeams(t)
     if (myMemberships) setMyTeamIds(new Set(myMemberships.map(tm => tm.team_id)))
     if (progs) setProgramsCatalog(progs)
+    if (cl) setClubs(cl)
     if (p) { setProfil(p); setProfilEdit(p) }
     else {
-      const { data: newP } = await supabase.from('profils').insert({ user_id: user.id, ...DEFAULT_PROFIL }).select().single()
+      const meta = user.user_metadata || {}
+      const initial = { ...DEFAULT_PROFIL, nom: meta.nom || '', prenom: meta.prenom || '', club: meta.club || '', poste1: meta.poste1 || '', poste2: meta.poste2 || '' }
+      const { data: newP } = await supabase.from('profils').insert({ user_id: user.id, ...initial }).select().single()
       if (newP) { setProfil(newP); setProfilEdit(newP) }
+      if (meta.equipe) {
+        const { error: joinError } = await supabase.from('team_members').insert({ user_id: user.id, team_id: meta.equipe })
+        if (!joinError) setMyTeamIds(prev => new Set([...prev, meta.equipe]))
+      }
     }
     try {
       const { data: adminCheck } = await supabase.from('admins').select('user_id').eq('user_id', user.id).single()
@@ -305,6 +316,21 @@ export default function App({ user, onSignOut }) {
     if (selectedAdminTeam?.id === teamId) { setSelectedAdminTeam(null); setAdminView('overview') }
     if (equipeTeamId === teamId) setEquipeTeamId(null)
     showToast('🗑️ Équipe supprimée')
+  }
+
+  const createClub = async () => {
+    if (!newClubName.trim()) return
+    setCreatingClub(true)
+    const { data, error } = await supabase.from('clubs').insert({ name: newClubName.trim() }).select().single()
+    if (data) { setClubs(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name))); setNewClubName(''); showToast('✅ Club ajouté !') }
+    else if (error) showToast('❌ ' + error.message)
+    setCreatingClub(false)
+  }
+
+  const deleteClub = async (clubId) => {
+    await supabase.from('clubs').delete().eq('id', clubId)
+    setClubs(prev => prev.filter(c => c.id !== clubId))
+    showToast('🗑️ Club supprimé')
   }
 
   const togglePlayerTeam = async (playerUserId, teamId) => {
@@ -1278,6 +1304,32 @@ export default function App({ user, onSignOut }) {
             </div>
           </div>
 
+          {/* Gérer les clubs (liste proposée à l'inscription) */}
+          <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
+            <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Clubs proposés à l'inscription</div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: clubs.length > 0 ? 12 : 0 }}>
+              <input type="text" placeholder="Nom du club..." value={newClubName}
+                onChange={e => setNewClubName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && createClub()}
+                style={{ flex: 1, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none' }} />
+              <button onClick={createClub} disabled={creatingClub || !newClubName.trim()}
+                style={{ padding: '10px 18px', background: newClubName.trim() ? C.accent : C.surface, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14, whiteSpace: 'nowrap', opacity: creatingClub ? 0.6 : 1 }}>
+                + Ajouter
+              </button>
+            </div>
+            {clubs.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {clubs.map(c => (
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 6px 6px 12px', borderRadius: 16, background: C.surface, border: '1px solid ' + C.border, fontSize: 13 }}>
+                    {c.name}
+                    <button onClick={() => deleteClub(c.id)}
+                      style={{ width: 20, height: 20, borderRadius: '50%', border: 'none', background: 'transparent', color: C.red, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Grille des équipes */}
           {teams.length > 0 && (
             <>
@@ -1546,9 +1598,18 @@ export default function App({ user, onSignOut }) {
               ].map(f => (
                 <div key={f.key} style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 12, color: C.muted, marginBottom: 6, fontWeight: 600 }}>{f.label.toUpperCase()}</div>
-                  <input type="text" placeholder={f.placeholder} value={profilEdit[f.key] || ''}
-                    onChange={e => setProfilEdit(p => ({ ...p, [f.key]: e.target.value }))}
-                    style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 14px', color: C.text, fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
+                  {f.key === 'club' ? (
+                    <select value={profilEdit.club || ''} onChange={e => setProfilEdit(p => ({ ...p, club: e.target.value }))}
+                      style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 14px', color: C.text, fontSize: 15, outline: 'none', boxSizing: 'border-box' }}>
+                      <option value="">Sélectionne un club...</option>
+                      {profilEdit.club && !clubs.some(c => c.name === profilEdit.club) && <option value={profilEdit.club}>{profilEdit.club}</option>}
+                      {clubs.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                  ) : (
+                    <input type="text" placeholder={f.placeholder} value={profilEdit[f.key] || ''}
+                      onChange={e => setProfilEdit(p => ({ ...p, [f.key]: e.target.value }))}
+                      style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 14px', color: C.text, fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
+                  )}
                 </div>
               ))}
               <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
