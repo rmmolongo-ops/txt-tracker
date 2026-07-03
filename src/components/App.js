@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { getDeferredPrompt, onPromptAvailable } from '../lib/installPrompt'
 import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
 const C = {
@@ -108,8 +109,29 @@ export default function App({ user, onSignOut }) {
   const [editingProgramId, setEditingProgramId] = useState(null)
   const [seancesTeamId, setSeancesTeamId] = useState(null)
   const [seancesWeekOffset, setSeancesWeekOffset] = useState(0)
+  const [canInstall, setCanInstall] = useState(!!getDeferredPrompt())
+  const [isStandalone] = useState(() => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true)
+  const [isIOS] = useState(() => /iphone|ipad|ipod/i.test(window.navigator.userAgent) && !window.MSStream)
 
-  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2500) }
+  const showToast = (msg, duration = 2500) => { setToast(msg); setTimeout(() => setToast(null), duration) }
+
+  useEffect(() => onPromptAvailable(() => setCanInstall(true)), [])
+
+  const handleInstall = async () => {
+    const prompt = getDeferredPrompt()
+    if (prompt) {
+      prompt.prompt()
+      const choice = await prompt.userChoice
+      if (choice.outcome === 'accepted') showToast('📲 Application installée !')
+      setCanInstall(false)
+      return
+    }
+    if (isIOS) {
+      showToast('📲 Appuie sur Partager, puis "Sur l\'écran d\'accueil"', 5000)
+    } else {
+      showToast('📲 Utilise le menu de ton navigateur pour ajouter la page à l\'écran d\'accueil', 5000)
+    }
+  }
 
   const changeTab = (newTab) => {
     localStorage.setItem('txt_tab', newTab)
@@ -1598,6 +1620,12 @@ export default function App({ user, onSignOut }) {
                 style={{ width: '100%', padding: 14, borderRadius: 14, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 15, background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', marginTop: 8 }}>
                 ✏️ Modifier le profil
               </button>
+              {!isStandalone && (
+                <button onClick={handleInstall}
+                  style={{ width: '100%', padding: 14, borderRadius: 14, border: '1px solid ' + C.accent + '50', cursor: 'pointer', fontWeight: 700, fontSize: 15, background: C.accent + '15', color: C.accentGlow, marginTop: 10 }}>
+                  📲 Installer l'application
+                </button>
+              )}
               <button onClick={onSignOut}
                 style={{ width: '100%', padding: 12, borderRadius: 14, border: '1px solid ' + C.border, cursor: 'pointer', fontWeight: 600, fontSize: 14, background: 'transparent', color: C.muted, marginTop: 10 }}>
                 Déconnexion
