@@ -921,21 +921,21 @@ export default function App({ user, onSignOut, inviteTeamId }) {
             {KPI_CONFIG.filter(k => getDashboardKpiIds().includes(k.id)).map(kpi => {
               const val = getLatest(kpi.id); const prog = getProgress(kpi.id)
               return (
-                <div key={kpi.id} style={{ background: C.card, borderRadius: 14, padding: 14, border: '1px solid ' + C.border }}>
+                <div key={kpi.id} style={{ background: C.card, borderRadius: 14, padding: 14, border: '1px solid ' + C.border, minWidth: 0, overflow: 'hidden' }}>
                   <div onClick={() => { setSelectedKpi(kpi.id); changeTab('stats') }} style={{ cursor: 'pointer' }}>
                     <div style={{ fontSize: 20, marginBottom: 6 }}>{kpi.icon}</div>
-                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{kpi.label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: kpi.color }}>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{kpi.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: kpi.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {val !== null ? val : '—'}<span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}> {kpi.unit}</span>
                     </div>
                     {prog !== null && <div style={{ fontSize: 11, color: parseFloat(prog) >= 0 ? C.green : C.red, marginTop: 4, fontWeight: 600 }}>{parseFloat(prog) >= 0 ? '▲' : '▼'} {Math.abs(prog)}%</div>}
                   </div>
-                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, minWidth: 0 }}>
                     <input type="number" placeholder={'Valeur en ' + kpi.unit} value={inputValues[kpi.id] || ''}
                       onChange={e => setInputValues(v => ({ ...v, [kpi.id]: e.target.value }))}
-                      style={{ flex: 1, background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '7px 8px', color: C.text, fontSize: 14, outline: 'none', minWidth: 0 }} />
+                      style={{ flex: 1, background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '7px 8px', color: C.text, fontSize: 14, outline: 'none', minWidth: 0, width: 0 }} />
                     <button onClick={() => inputValues[kpi.id] && saveMesure(kpi.id, inputValues[kpi.id])}
-                      style={{ padding: '7px 10px', background: inputValues[kpi.id] ? kpi.color : C.surface, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>✓</button>
+                      style={{ padding: '7px 10px', background: inputValues[kpi.id] ? kpi.color : C.surface, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 13, flexShrink: 0 }}>✓</button>
                   </div>
                 </div>
               )
@@ -947,7 +947,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
             {KPI_CONFIG.filter(k => ['motivation', 'sommeil'].includes(k.id)).map(kpi => {
               const val = getLatest(kpi.id)
               return (
-                <div key={kpi.id} style={{ background: C.card, borderRadius: 14, padding: 14, border: '1px solid ' + C.border }}>
+                <div key={kpi.id} style={{ background: C.card, borderRadius: 14, padding: 14, border: '1px solid ' + C.border, minWidth: 0, overflow: 'hidden' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                     <span style={{ fontSize: 18 }}>{kpi.icon}</span>
                     <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, lineHeight: 1.2 }}>{kpi.label}</div>
@@ -958,9 +958,9 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                   <div style={{ display: 'flex', gap: 6 }}>
                     <input type="number" min="0" max="10" placeholder="/10" value={inputValues[kpi.id] || ''}
                       onChange={e => setInputValues(v => ({ ...v, [kpi.id]: e.target.value }))}
-                      style={{ flex: 1, background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '7px 8px', color: C.text, fontSize: 14, outline: 'none', minWidth: 0 }} />
+                      style={{ flex: 1, background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '7px 8px', color: C.text, fontSize: 14, outline: 'none', minWidth: 0, width: 0 }} />
                     <button onClick={() => inputValues[kpi.id] && saveMesure(kpi.id, inputValues[kpi.id])}
-                      style={{ padding: '7px 10px', background: inputValues[kpi.id] ? kpi.color : C.surface, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>✓</button>
+                      style={{ padding: '7px 10px', background: inputValues[kpi.id] ? kpi.color : C.surface, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 13, flexShrink: 0 }}>✓</button>
                   </div>
                 </div>
               )
