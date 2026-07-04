@@ -14,8 +14,8 @@ const rules = [
   { id: 'special', label: '1 caractère spécial (!@#$...)', test: p => /[^A-Za-z0-9]/.test(p) },
 ]
 
-export default function Auth() {
-  const [mode, setMode] = useState('login')
+export default function Auth({ inviteTeamId }) {
+  const [mode, setMode] = useState(inviteTeamId ? 'register' : 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -25,12 +25,14 @@ export default function Auth() {
   const [nom, setNom] = useState('')
   const [prenom, setPrenom] = useState('')
   const [club, setClub] = useState('')
-  const [equipe, setEquipe] = useState('')
+  const [equipe, setEquipe] = useState(inviteTeamId || '')
   const [poste1, setPoste1] = useState('')
   const [poste2, setPoste2] = useState('')
   const [clubs, setClubs] = useState([])
   const [teams, setTeams] = useState([])
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
+
+  const inviteTeam = teams.find(t => t.id === inviteTeamId)
 
   useEffect(() => {
     supabase.from('clubs').select('*').order('name').then(({ data }) => { if (data) setClubs(data) })
@@ -99,6 +101,11 @@ export default function Auth() {
             </button>
           ))}
         </div>
+        {inviteTeam && (
+          <div style={{ background: C.accent + '15', border: '1px solid ' + C.accent + '40', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: C.text }}>
+            🎟️ Invitation à rejoindre l'équipe <strong>{inviteTeam.name}</strong>
+          </div>
+        )}
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 6, fontWeight: 600 }}>EMAIL</div>
           <input type="email" placeholder="ton@email.com" value={email} onChange={e => setEmail(e.target.value)}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { getDeferredPrompt, onPromptAvailable } from '../lib/installPrompt'
 import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
@@ -66,7 +66,7 @@ const SESSIONS = [
 
 const DEFAULT_PROFIL = { nom: '', prenom: '', surnom: 'TxT', club: '', division: '', poste1: '', poste2: '', photo_url: '' }
 
-export default function App({ user, onSignOut }) {
+export default function App({ user, onSignOut, inviteTeamId }) {
   const [tab, setTab] = useState(() => localStorage.getItem('txt_tab') || 'dashboard')
   const [mesures, setMesures] = useState([])
   const [seances, setSeances] = useState([])
@@ -222,6 +222,24 @@ export default function App({ user, onSignOut }) {
 
   useEffect(() => { loadAll() }, [loadAll])
 
+  const inviteHandledRef = useRef(false)
+  useEffect(() => {
+    if (!inviteTeamId || inviteHandledRef.current) return
+    const team = availableTeams.find(t => t.id === inviteTeamId)
+    if (!team) return
+    inviteHandledRef.current = true
+    ;(async () => {
+      if (!myTeamIds.has(inviteTeamId)) {
+        const { error } = await supabase.from('team_members').insert({ user_id: user.id, team_id: inviteTeamId })
+        if (!error) {
+          setMyTeamIds(prev => new Set([...prev, inviteTeamId]))
+          showToast(`✅ Ajouté à l'équipe "${team.name}" !`)
+        }
+      }
+      window.history.replaceState({}, '', window.location.pathname)
+    })()
+  }, [inviteTeamId, availableTeams, myTeamIds, user.id])
+
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768)
     window.addEventListener('resize', onResize)
@@ -353,6 +371,20 @@ export default function App({ user, onSignOut }) {
     if (selectedAdminTeam?.id === teamId) { setSelectedAdminTeam(null); setAdminView('overview') }
     if (equipeTeamId === teamId) setEquipeTeamId(null)
     showToast('🗑️ Équipe supprimée')
+  }
+
+  const shareInviteLink = async (teamId, teamName) => {
+    const url = `${window.location.origin}/?invite=${teamId}`
+    if (navigator.share) {
+      try { await navigator.share({ title: 'TxT Tracker', text: `Rejoins l'équipe ${teamName} sur TxT Tracker !`, url }); return }
+      catch (e) { if (e.name === 'AbortError') return }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      showToast('🔗 Lien d\'invitation copié !')
+    } catch (e) {
+      showToast('❌ Impossible de copier le lien')
+    }
   }
 
   const createClub = async () => {
@@ -1515,6 +1547,10 @@ export default function App({ user, onSignOut }) {
                     {adminData.filter(j => (j.teams || []).some(t => t.id === selectedAdminTeam.id)).length} joueur{adminData.filter(j => (j.teams || []).some(t => t.id === selectedAdminTeam.id)).length !== 1 ? 's' : ''}
                   </div>
                 </div>
+                <button onClick={() => shareInviteLink(selectedAdminTeam.id, selectedAdminTeam.name)} title="Partager le lien d'invitation"
+                  style={{ width: 38, height: 38, borderRadius: 10, background: C.accent + '15', border: '1px solid ' + C.accent + '30', color: C.accent, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  🔗
+                </button>
                 <button onClick={() => deleteTeam(selectedAdminTeam.id)}
                   style={{ width: 38, height: 38, borderRadius: 10, background: C.red + '15', border: '1px solid ' + C.red + '30', color: C.red, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   🗑️

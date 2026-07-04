@@ -7,6 +7,7 @@ import App from './components/App'
 function Root() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [inviteTeamId] = useState(() => new URLSearchParams(window.location.search).get('invite'))
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -29,7 +30,7 @@ function Root() {
     </div>
   )
 
-  return user ? <App user={user} onSignOut={handleSignOut} /> : <Auth />
+  return user ? <App user={user} onSignOut={handleSignOut} inviteTeamId={inviteTeamId} /> : <Auth inviteTeamId={inviteTeamId} />
 }
 
 const root = createRoot(document.getElementById('root'))
