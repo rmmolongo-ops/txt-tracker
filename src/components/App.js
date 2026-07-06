@@ -16,6 +16,14 @@ const DAY_ORDER = ['LUN','MAR','MER','JEU','VEN','SAM','DIM']
 const toDateStr = (d) => { const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${day}` }
 const getMonday = (d) => { const date = new Date(d); const dow = date.getDay(); date.setDate(date.getDate() - dow + (dow === 0 ? -6 : 1)); date.setHours(0, 0, 0, 0); return date }
 
+const ROLE_CONFIG = {
+  joueur: { label: 'Joueur', color: '#64748b' },
+  coach: { label: 'Coach', color: '#3b82f6' },
+  dirigeant: { label: 'Dirigeant', color: '#8b5cf6' },
+  capitaine: { label: 'Capitaine', color: '#f59e0b' },
+  invite: { label: 'Invité', color: '#14b8a6' },
+}
+
 const KPI_CONFIG = [
   { id: 'sprint30', label: 'Sprint 30m', unit: 'sec', icon: '⚡', color: '#f59e0b', lower: true, category: 'physique' },
   { id: 'sprint10', label: 'Sprint 10m', unit: 'sec', icon: '💥', color: '#ef4444', lower: true, category: 'physique' },
@@ -161,7 +169,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
         supabase.from('seances').select('user_id, date, jour'),
         supabase.rpc('get_user_emails_for_admins'),
         supabase.from('teams').select('*').order('created_at'),
-        supabase.from('team_members').select('user_id, team_id'),
+        supabase.from('team_members').select('user_id, team_id, role'),
       ])
       if (errP) { setAdminError('Erreur lecture profils : ' + errP.message); setAdminLoading(false); return }
       setTeams(allTeams || [])
@@ -172,7 +180,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       const playerTeamsMap = {}
       ;(allTeamMembers || []).forEach(tm => {
         if (!playerTeamsMap[tm.user_id]) playerTeamsMap[tm.user_id] = []
-        if (teamMap[tm.team_id]) playerTeamsMap[tm.user_id].push(teamMap[tm.team_id])
+        if (teamMap[tm.team_id]) playerTeamsMap[tm.user_id].push({ ...teamMap[tm.team_id], role: tm.role })
       })
       const enriched = (allProfils || []).map(p => {
         const mes = (allMesures || []).filter(m => m.user_id === p.user_id)
@@ -283,11 +291,13 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     if (tab !== 'equipe' || isAdmin || !rosterTeamId) return
     let active = true
     ;(async () => {
-      const { data: members } = await supabase.from('team_members').select('user_id').eq('team_id', rosterTeamId)
+      const { data: members } = await supabase.from('team_members').select('user_id, role').eq('team_id', rosterTeamId)
+      const roleMap = {}
+      ;(members || []).forEach(m => { roleMap[m.user_id] = m.role })
       const ids = (members || []).map(m => m.user_id)
       if (ids.length === 0) { if (active) setRosterPlayers([]); return }
       const { data: players } = await supabase.from('profils').select('user_id, nom, prenom, surnom, photo_url, poste1, poste2').in('user_id', ids)
-      if (active) setRosterPlayers(players || [])
+      if (active) setRosterPlayers((players || []).map(p => ({ ...p, role: roleMap[p.user_id] || 'joueur' })))
     })()
     return () => { active = false }
   }, [tab, isAdmin, rosterTeamId])
@@ -478,8 +488,15 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     } else {
       await supabase.from('team_members').insert({ user_id: playerUserId, team_id: teamId })
       const team = teams.find(t => t.id === teamId)
-      setAdminData(prev => prev.map(p => p.user_id !== playerUserId ? p : { ...p, teams: [...(p.teams || []), team] }))
+      setAdminData(prev => prev.map(p => p.user_id !== playerUserId ? p : { ...p, teams: [...(p.teams || []), { ...team, role: 'joueur' }] }))
     }
+  }
+
+  const setPlayerRole = async (playerUserId, teamId, role) => {
+    const { error } = await supabase.from('team_members').update({ role }).eq('user_id', playerUserId).eq('team_id', teamId)
+    if (error) { showToast('❌ ' + error.message); return }
+    setAdminData(prev => prev.map(p => p.user_id !== playerUserId ? p : { ...p, teams: p.teams.map(t => t.id === teamId ? { ...t, role } : t) }))
+    showToast('✅ Rôle mis à jour')
   }
 
   const getProgramsForTeam = (teamId) => programsCatalog.filter(p => p.team_id === teamId).sort((a, b) => a.start_date.localeCompare(b.start_date))
@@ -608,8 +625,9 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     </div>
   )
 
-  const renderPlayerCard = (j, cardKey) => {
+  const renderPlayerCard = (j, cardKey, teamContextId) => {
     const expanded = expandedAdmin === cardKey
+    const currentRole = teamContextId ? ((j.teams || []).find(t => t.id === teamContextId)?.role || 'joueur') : null
     return (
       <div key={cardKey} style={{ background: C.card, borderRadius: 16, border: '1px solid ' + (expanded ? C.accent + '60' : C.border), overflow: 'hidden' }}>
         <div onClick={() => setExpandedAdmin(expanded ? null : cardKey)} style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
@@ -626,6 +644,13 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                 <span key={t.id} style={{ fontSize: 10, fontWeight: 700, color: t.color, background: t.color + '20', padding: '1px 7px', borderRadius: 10 }}>{t.name}</span>
               ))}
             </div>
+            {teamContextId && (
+              <select value={currentRole} onClick={e => e.stopPropagation()}
+                onChange={e => setPlayerRole(j.user_id, teamContextId, e.target.value)}
+                style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: ROLE_CONFIG[currentRole].color, background: ROLE_CONFIG[currentRole].color + '18', border: '1px solid ' + ROLE_CONFIG[currentRole].color + '50', borderRadius: 8, padding: '2px 6px', cursor: 'pointer', outline: 'none' }}>
+                {Object.entries(ROLE_CONFIG).map(([key, cfg]) => <option key={key} value={key}>{cfg.label}</option>)}
+              </select>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
             <div style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>{j.nb_seances || 0} séances</div>
@@ -1542,6 +1567,11 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                       {p.prenom || '—'} {p.nom || ''}{p.surnom && <span style={{ color: C.gold }}> "{p.surnom}"</span>}
                     </div>
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{p.poste1 || '—'}{p.poste2 ? ' · ' + p.poste2 : ''}</div>
+                    {p.role !== 'joueur' && (
+                      <span style={{ display: 'inline-block', marginTop: 4, fontSize: 10, fontWeight: 700, color: ROLE_CONFIG[p.role].color, background: ROLE_CONFIG[p.role].color + '18', padding: '2px 7px', borderRadius: 8 }}>
+                        {ROLE_CONFIG[p.role].label}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1799,7 +1829,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                 )
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
-                    {teamPlayers.map(j => renderPlayerCard(j, 'team_' + j.user_id))}
+                    {teamPlayers.map(j => renderPlayerCard(j, 'team_' + j.user_id, selectedAdminTeam.id))}
                   </div>
                 )
               })()}
