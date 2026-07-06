@@ -92,6 +92,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [expandedDayDashboard, setExpandedDayDashboard] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminData, setAdminData] = useState([])
+  const [unconfirmedSignups, setUnconfirmedSignups] = useState([])
   const [expandedAdmin, setExpandedAdmin] = useState(null)
   const [adminError, setAdminError] = useState(null)
   const [adminLoading, setAdminLoading] = useState(false)
@@ -124,6 +125,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [chatTeamId, setChatTeamId] = useState(null)
   const [chatMessages, setChatMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
+  const [unreadCounts, setUnreadCounts] = useState({})
+  const activeChatTeamRef = useRef(null)
   const [rosterTeamId, setRosterTeamId] = useState(null)
   const [rosterPlayers, setRosterPlayers] = useState([])
 
@@ -163,6 +166,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
         { data: allEmails },
         { data: allTeams },
         { data: allTeamMembers },
+        { data: unconfirmed },
       ] = await Promise.all([
         supabase.from('profils').select('*'),
         supabase.from('mesures').select('user_id, kpi_id, valeur, date'),
@@ -170,9 +174,11 @@ export default function App({ user, onSignOut, inviteTeamId }) {
         supabase.rpc('get_user_emails_for_admins'),
         supabase.from('teams').select('*').order('created_at'),
         supabase.from('team_members').select('user_id, team_id, role'),
+        supabase.rpc('get_unconfirmed_signups_for_admins'),
       ])
       if (errP) { setAdminError('Erreur lecture profils : ' + errP.message); setAdminLoading(false); return }
       setTeams(allTeams || [])
+      setUnconfirmedSignups(unconfirmed || [])
       const emailMap = {}
       ;(allEmails || []).forEach(e => { emailMap[e.user_id] = e.email })
       const teamMap = {}
@@ -278,8 +284,51 @@ export default function App({ user, onSignOut, inviteTeamId }) {
         setChatMessages(prev => prev.filter(m => m.id !== payload.old.id))
       })
       .subscribe()
+    markChatRead(chatTeamId)
     return () => { active = false; supabase.removeChannel(channel) }
   }, [tab, chatTeamId])
+
+  useEffect(() => {
+    activeChatTeamRef.current = (tab === 'chat') ? chatTeamId : null
+  }, [tab, chatTeamId])
+
+  useEffect(() => {
+    const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
+    if (myTeams.length === 0) return
+    let active = true
+    ;(async () => {
+      const { data: reads } = await supabase.from('chat_reads').select('team_id, last_read_at').eq('user_id', user.id)
+      const readMap = {}
+      ;(reads || []).forEach(r => { readMap[r.team_id] = r.last_read_at })
+      const counts = {}
+      await Promise.all(myTeams.map(async team => {
+        const since = readMap[team.id] || '1970-01-01T00:00:00Z'
+        const { count } = await supabase.from('team_messages').select('id', { count: 'exact', head: true }).eq('team_id', team.id).gt('created_at', since).neq('user_id', user.id)
+        counts[team.id] = count || 0
+      }))
+      if (active) setUnreadCounts(counts)
+    })()
+    return () => { active = false }
+  }, [availableTeams, myTeamIds, user.id])
+
+  useEffect(() => {
+    const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
+    if (myTeams.length === 0) return
+    const channels = myTeams.map(team => supabase.channel('unread_' + team.id)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_messages', filter: 'team_id=eq.' + team.id }, payload => {
+        if (payload.new.user_id === user.id) return
+        if (activeChatTeamRef.current === team.id) { markChatRead(team.id); return }
+        setUnreadCounts(prev => ({ ...prev, [team.id]: (prev[team.id] || 0) + 1 }))
+      })
+      .subscribe())
+    return () => { channels.forEach(c => supabase.removeChannel(c)) }
+  }, [availableTeams, myTeamIds, user.id])
+
+  const markChatRead = async (teamId) => {
+    const now = new Date().toISOString()
+    setUnreadCounts(prev => ({ ...prev, [teamId]: 0 }))
+    await supabase.from('chat_reads').upsert({ user_id: user.id, team_id: teamId, last_read_at: now }, { onConflict: 'user_id,team_id' })
+  }
 
   useEffect(() => {
     if (tab !== 'equipe' || isAdmin || rosterTeamId) return
@@ -582,6 +631,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       <div style={{ color: C.accent, fontSize: 40 }}>⚽</div>
     </div>
   )
+
+  const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0)
 
   const NAV_ITEMS = [
     { id: 'dashboard', icon: '🏠', label: 'Accueil' },
@@ -1014,26 +1065,39 @@ export default function App({ user, onSignOut, inviteTeamId }) {
           </div>
 
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Programme du jour</div>
-          {SESSIONS.filter(s => dayMap[s.day] === todayDow).map(s => {
-            const done = isSeanceDone(s.day); const expanded = expandedDayDashboard === s.day
-            return (
-              <div key={s.day} style={{ marginBottom: 10, borderRadius: 14, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
-                <div onClick={() => setExpandedDayDashboard(expanded ? null : s.day)}
-                  style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '15' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                  <div style={{ fontSize: 24 }}>{s.icon}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{s.label}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{s.duration} • {s.blocs.length} blocs</div>
+          {(() => {
+            const myTeamsWithProgram = availableTeams.filter(t => myTeamIds.has(t.id) && getProgramsForTeam(t.id).length > 0)
+            const todayDayCode = Object.keys(dayMap).find(k => dayMap[k] === todayDow)
+            let todaySessions = SESSIONS.filter(s => s.day === todayDayCode)
+            let todayTeam = null
+            let toggleTeamId = null
+            if (myTeamsWithProgram.length === 1) {
+              const program = getProgramForDate(myTeamsWithProgram[0].id, toDateStr(new Date()))
+              const s = program?.sessions.find(x => x.day === todayDayCode)
+              if (s) { todaySessions = [s]; todayTeam = myTeamsWithProgram[0]; toggleTeamId = myTeamsWithProgram[0].id }
+              else todaySessions = []
+            }
+            if (todaySessions.length === 0) {
+              return <div style={{ background: C.card, borderRadius: 14, padding: 16, textAlign: 'center', color: C.muted, fontSize: 14 }}>Va dans "Programme" pour valider ton entraînement</div>
+            }
+            return todaySessions.map(s => {
+              const done = isSeanceDone(s.day, undefined, toggleTeamId); const expanded = expandedDayDashboard === s.day
+              return (
+                <div key={s.day} style={{ marginBottom: 10, borderRadius: 14, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
+                  <div onClick={() => setExpandedDayDashboard(expanded ? null : s.day)}
+                    style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '15' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                    <div style={{ fontSize: 24 }}>{s.icon}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{s.label}</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{s.duration} • {todayTeam ? todayTeam.name : s.blocs.length + ' blocs'}</div>
+                    </div>
+                    <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
                   </div>
-                  <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
+                  {renderSessionBlocs(s, expanded, done, () => toggleSeance(s.day, undefined, toggleTeamId))}
                 </div>
-                {renderSessionBlocs(s, expanded, done, () => toggleSeance(s.day))}
-              </div>
-            )
-          })}
-          {!SESSIONS.some(s => dayMap[s.day] === todayDow) && (
-            <div style={{ background: C.card, borderRadius: 14, padding: 16, textAlign: 'center', color: C.muted, fontSize: 14 }}>Va dans "Séances" pour valider ton entraînement</div>
-          )}
+              )
+            })
+          })()}
         </div>
       )}
 
@@ -1600,6 +1664,23 @@ export default function App({ user, onSignOut, inviteTeamId }) {
             ))}
           </div>
 
+          {/* Inscriptions non confirmées */}
+          {unconfirmedSignups.length > 0 && (
+            <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.gold + '40' }}>
+              <div style={{ fontSize: 12, color: C.gold, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
+                ⏳ Inscriptions non confirmées ({unconfirmedSignups.length})
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {unconfirmedSignups.map(u => (
+                  <div key={u.user_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: C.surface, borderRadius: 10, padding: '8px 12px', gap: 10 }}>
+                    <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</span>
+                    <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{new Date(u.created_at).toLocaleDateString('fr-FR')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Créer une équipe */}
           <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
             <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Nouvelle équipe</div>
@@ -2017,8 +2098,13 @@ export default function App({ user, onSignOut, inviteTeamId }) {
           <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.card, borderTop: '1px solid ' + C.border, display: 'flex', padding: '8px 0 12px', zIndex: 50 }}>
             {NAV_ITEMS.map(t => (
               <button key={t.id} onClick={() => changeTab(t.id)}
-                style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, opacity: tab === t.id ? 1 : 0.4 }}>
-                <span style={{ fontSize: 20 }}>{t.icon}</span>
+                style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, opacity: tab === t.id ? 1 : 0.4, position: 'relative' }}>
+                <span style={{ fontSize: 20, position: 'relative' }}>
+                  {t.icon}
+                  {t.id === 'chat' && totalUnread > 0 && (
+                    <span style={{ position: 'absolute', top: -6, right: -10, background: C.red, color: '#fff', fontSize: 9, fontWeight: 800, borderRadius: 8, padding: '1px 5px', minWidth: 14, textAlign: 'center', lineHeight: '13px' }}>{totalUnread > 9 ? '9+' : totalUnread}</span>
+                  )}
+                </span>
                 <span style={{ fontSize: 10, color: tab === t.id ? C.accent : C.muted, fontWeight: tab === t.id ? 700 : 400 }}>{t.label}</span>
               </button>
             ))}
@@ -2033,7 +2119,10 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                   style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', background: tab === t.id ? C.accent + '18' : 'transparent', color: tab === t.id ? C.accent : C.muted, fontWeight: tab === t.id ? 700 : 400, fontSize: 14, marginBottom: 2, textAlign: 'left', transition: 'background 0.15s' }}>
                   <span style={{ fontSize: 18 }}>{t.icon}</span>
                   <span>{t.label}</span>
-                  {tab === t.id && <div style={{ width: 3, height: 18, borderRadius: 2, background: C.accent, marginLeft: 'auto' }} />}
+                  {t.id === 'chat' && totalUnread > 0 && (
+                    <span style={{ background: C.red, color: '#fff', fontSize: 10, fontWeight: 800, borderRadius: 8, padding: '1px 6px', marginLeft: tab === t.id ? 8 : 'auto' }}>{totalUnread > 9 ? '9+' : totalUnread}</span>
+                  )}
+                  {tab === t.id && <div style={{ width: 3, height: 18, borderRadius: 2, background: C.accent, marginLeft: t.id === 'chat' && totalUnread > 0 ? 8 : 'auto' }} />}
                 </button>
               ))}
             </div>
