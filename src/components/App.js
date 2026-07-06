@@ -116,6 +116,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [chatTeamId, setChatTeamId] = useState(null)
   const [chatMessages, setChatMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
+  const [rosterTeamId, setRosterTeamId] = useState(null)
+  const [rosterPlayers, setRosterPlayers] = useState([])
 
   const showToast = (msg, duration = 2500) => { setToast(msg); setTimeout(() => setToast(null), duration) }
 
@@ -193,7 +195,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     const [{ data: m }, { data: s }, { data: p }, { data: t }, { data: myMemberships }, { data: progs }, { data: cl }] = await Promise.all([
       supabase.from('mesures').select('*').eq('user_id', user.id).order('date', { ascending: true }),
       supabase.from('seances').select('*').eq('user_id', user.id),
-      supabase.from('profils').select('*').eq('user_id', user.id).single(),
+      supabase.from('profils').select('*').eq('user_id', user.id).maybeSingle(),
       supabase.from('teams').select('id, name, color, photo_url, dashboard_kpis').order('created_at'),
       supabase.from('team_members').select('team_id').eq('user_id', user.id),
       supabase.from('team_programs').select('*').order('start_date'),
@@ -209,7 +211,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     else {
       const meta = user.user_metadata || {}
       const initial = { ...DEFAULT_PROFIL, nom: meta.nom || '', prenom: meta.prenom || '', club: meta.club || '', poste1: meta.poste1 || '', poste2: meta.poste2 || '' }
-      const { data: newP } = await supabase.from('profils').insert({ user_id: user.id, ...initial }).select().single()
+      const { data: newP } = await supabase.from('profils').upsert({ user_id: user.id, ...initial }, { onConflict: 'user_id' }).select().single()
       if (newP) { setProfil(newP); setProfilEdit(newP) }
       if (meta.equipe) {
         const { error: joinError } = await supabase.from('team_members').insert({ user_id: user.id, team_id: meta.equipe })
@@ -270,6 +272,25 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       .subscribe()
     return () => { active = false; supabase.removeChannel(channel) }
   }, [tab, chatTeamId])
+
+  useEffect(() => {
+    if (tab !== 'equipe' || isAdmin || rosterTeamId) return
+    const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
+    if (myTeams.length > 0) setRosterTeamId(myTeams[0].id)
+  }, [tab, isAdmin, availableTeams, myTeamIds, rosterTeamId])
+
+  useEffect(() => {
+    if (tab !== 'equipe' || isAdmin || !rosterTeamId) return
+    let active = true
+    ;(async () => {
+      const { data: members } = await supabase.from('team_members').select('user_id').eq('team_id', rosterTeamId)
+      const ids = (members || []).map(m => m.user_id)
+      if (ids.length === 0) { if (active) setRosterPlayers([]); return }
+      const { data: players } = await supabase.from('profils').select('user_id, nom, prenom, surnom, photo_url, poste1, poste2').in('user_id', ids)
+      if (active) setRosterPlayers(players || [])
+    })()
+    return () => { active = false }
+  }, [tab, isAdmin, rosterTeamId])
 
   const sendChatMessage = async () => {
     if (!chatInput.trim() || !chatTeamId) return
@@ -551,8 +572,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     { id: 'kpi', icon: '📊', label: 'Mesures' },
     { id: 'stats', icon: '📈', label: 'Stats' },
     { id: 'chat', icon: '💬', label: 'Chat' },
+    { id: 'equipe', icon: '⚽', label: 'Équipe' },
     ...(isAdmin ? [
-      { id: 'equipe', icon: '⚽', label: 'Équipe' },
       { id: 'admin', icon: '🛡️', label: 'Admin' },
     ] : []),
   ]
@@ -1476,6 +1497,58 @@ export default function App({ user, onSignOut, inviteTeamId }) {
           )}
         </div>
       )}
+
+      {/* ── ÉQUIPE (JOUEUR) ── */}
+      {tab === 'equipe' && !isAdmin && (() => {
+        const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
+        if (myTeams.length === 0) {
+          return (
+            <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>👥</div>
+              Rejoins une équipe pour voir tes coéquipiers
+            </div>
+          )
+        }
+        const activeTeamId = myTeams.some(t => t.id === rosterTeamId) ? rosterTeamId : myTeams[0].id
+        const activeTeam = myTeams.find(t => t.id === activeTeamId)
+        const sortedPlayers = rosterPlayers.slice().sort((a, b) => (a.prenom || '').localeCompare(b.prenom || ''))
+        return (
+          <div>
+            {myTeams.length > 1 && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                {myTeams.map(team => {
+                  const sel = activeTeamId === team.id
+                  return (
+                    <button key={team.id} onClick={() => setRosterTeamId(team.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 13, cursor: 'pointer' }}>
+                      {team.name}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>
+              {sortedPlayers.length} joueur{sortedPlayers.length !== 1 ? 's' : ''} · {activeTeam?.name}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
+              {sortedPlayers.map(p => (
+                <div key={p.user_id} style={{ background: C.card, borderRadius: 14, padding: 14, border: '1px solid ' + C.border, display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                  <div style={{ width: 46, height: 46, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+                    {p.photo_url ? <img src={p.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.prenom || '—'} {p.nom || ''}{p.surnom && <span style={{ color: C.gold }}> "{p.surnom}"</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{p.poste1 || '—'}{p.poste2 ? ' · ' + p.poste2 : ''}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── ADMIN : VUE OVERVIEW ── */}
       {tab === 'admin' && isAdmin && adminView === 'overview' && (
