@@ -1348,10 +1348,14 @@ export default function App({ user, onSignOut, inviteTeamId }) {
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
                 {myTeams.map(team => {
                   const sel = activeTeamId === team.id
+                  const unread = unreadCounts[team.id] || 0
                   return (
                     <button key={team.id} onClick={() => setChatTeamId(team.id)}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 13, cursor: 'pointer' }}>
                       {team.name}
+                      {unread > 0 && (
+                        <span style={{ background: C.red, color: '#fff', fontSize: 10, fontWeight: 800, borderRadius: 8, padding: '1px 6px', minWidth: 14, textAlign: 'center', lineHeight: '13px' }}>{unread > 9 ? '9+' : unread}</span>
+                      )}
                     </button>
                   )
                 })}
