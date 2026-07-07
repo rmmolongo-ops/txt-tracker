@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { getDeferredPrompt, onPromptAvailable } from '../lib/installPrompt'
-import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { LineChart, Line, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
 const C = {
   bg: '#0a0e1a', card: '#111827', border: '#1e293b',
@@ -1511,15 +1511,19 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                                       <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
                                         Comparaison — {kpi.label} {kpi.lower ? '(moins = mieux)' : ''}
                                       </div>
-                                      <ResponsiveContainer width="100%" height={180}>
-                                        <BarChart data={barData} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
-                                          <XAxis type="number" tick={{ fontSize: 10, fill: C.muted }} />
-                                          <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: C.text }} width={70} />
+                                      <ResponsiveContainer width="100%" height={Math.max(180, barData.length * 56)}>
+                                        <BarChart data={barData} layout="vertical" margin={{ left: 0, right: 60, top: 4, bottom: 4 }} barCategoryGap="30%">
+                                          <CartesianGrid stroke={C.border} horizontal={false} />
+                                          <XAxis type="number" domain={[0, dataMax => Math.ceil(dataMax * 1.25)]} tick={{ fontSize: 11, fill: '#cbd5e1' }} axisLine={{ stroke: C.border }} tickLine={{ stroke: C.border }} />
+                                          <YAxis type="category" dataKey="name" tick={{ fontSize: 13, fontWeight: 600, fill: '#e2e8f0' }} axisLine={{ stroke: C.border }} tickLine={false} width={80} />
                                           <Tooltip
+                                            cursor={{ fill: '#ffffff', opacity: 0.04 }}
                                             contentStyle={{ background: C.card, border: '1px solid ' + C.border, borderRadius: 8, color: C.text, fontSize: 12 }}
                                             formatter={v => [v + ' ' + kpi.unit, kpi.label]} />
-                                          <Bar dataKey="val" radius={[0, 6, 6, 0]}>
+                                          <Bar dataKey="val" radius={[0, 6, 6, 0]} maxBarSize={28}>
                                             {barData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                                            <LabelList dataKey="val" position="right" fill="#e2e8f0" fontSize={12} fontWeight={700}
+                                              formatter={v => v + ' ' + kpi.unit} />
                                           </Bar>
                                         </BarChart>
                                       </ResponsiveContainer>
