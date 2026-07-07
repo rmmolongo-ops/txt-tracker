@@ -93,6 +93,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminData, setAdminData] = useState([])
   const [unconfirmedSignups, setUnconfirmedSignups] = useState([])
+  const [resendingEmail, setResendingEmail] = useState(null)
   const [expandedAdmin, setExpandedAdmin] = useState(null)
   const [adminError, setAdminError] = useState(null)
   const [adminLoading, setAdminLoading] = useState(false)
@@ -511,6 +512,14 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     } catch (e) {
       showToast('❌ Impossible de copier le lien')
     }
+  }
+
+  const resendConfirmation = async (email) => {
+    setResendingEmail(email)
+    const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: window.location.origin } })
+    if (error) showToast('❌ ' + error.message)
+    else showToast('✉️ Email de confirmation renvoyé !')
+    setResendingEmail(null)
   }
 
   const createClub = async () => {
@@ -1681,8 +1690,12 @@ export default function App({ user, onSignOut, inviteTeamId }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {unconfirmedSignups.map(u => (
                   <div key={u.user_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: C.surface, borderRadius: 10, padding: '8px 12px', gap: 10 }}>
-                    <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</span>
+                    <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{u.email}</span>
                     <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{new Date(u.created_at).toLocaleDateString('fr-FR')}</span>
+                    <button onClick={() => resendConfirmation(u.email)} disabled={resendingEmail === u.email}
+                      style={{ flexShrink: 0, padding: '5px 10px', background: C.gold + '20', color: C.gold, border: '1px solid ' + C.gold + '40', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: resendingEmail === u.email ? 'default' : 'pointer', opacity: resendingEmail === u.email ? 0.6 : 1 }}>
+                      {resendingEmail === u.email ? '...' : '✉️ Relancer'}
+                    </button>
                   </div>
                 ))}
               </div>
