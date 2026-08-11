@@ -132,6 +132,9 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [equipePlayerTab, setEquipePlayerTab] = useState('joueurs')
   const [expandedPlayerProgramId, setExpandedPlayerProgramId] = useState(null)
   const [rosterPlayers, setRosterPlayers] = useState([])
+  const [suiviWeekOffset, setSuiviWeekOffset] = useState(0)
+  const [teamSeances, setTeamSeances] = useState([])
+  const [suiviSelected, setSuiviSelected] = useState({})
 
   const showToast = (msg, duration = 2500) => { setToast(msg); setTimeout(() => setToast(null), duration) }
 
@@ -353,6 +356,41 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     })()
     return () => { active = false }
   }, [tab, isAdmin, rosterTeamId])
+
+  const loadTeamSeances = async (teamId) => {
+    const { data } = await supabase.from('seances').select('*').eq('team_id', teamId)
+    setTeamSeances(data || [])
+  }
+
+  useEffect(() => {
+    if (tab !== 'equipe' || !isAdmin || equipeTab !== 'suivi' || !equipeTeamId) return
+    loadTeamSeances(equipeTeamId)
+    setSuiviSelected({})
+  }, [tab, isAdmin, equipeTab, equipeTeamId])
+
+  const validateSeances = async (userIds, day, dateStr, teamId, cardKey) => {
+    const toInsert = userIds
+      .filter(uid => !teamSeances.some(s => s.user_id === uid && s.jour === day && s.date === dateStr && s.team_id === teamId))
+      .map(uid => ({ user_id: uid, jour: day, date: dateStr, team_id: teamId, validated_by: user.id }))
+    if (toInsert.length > 0) {
+      const { data, error } = await supabase.from('seances').insert(toInsert).select()
+      if (error) { showToast('❌ ' + error.message); return }
+      setTeamSeances(prev => [...prev, ...(data || [])])
+    }
+    setSuiviSelected(prev => ({ ...prev, [cardKey]: new Set() }))
+    showToast('✅ Séance validée pour ' + toInsert.length + ' joueur' + (toInsert.length !== 1 ? 's' : ''))
+  }
+
+  const unvalidateSeance = async (seanceId, cardKey, userId) => {
+    const { error } = await supabase.from('seances').delete().eq('id', seanceId)
+    if (error) { showToast('❌ ' + error.message); return }
+    setTeamSeances(prev => prev.filter(s => s.id !== seanceId))
+    setSuiviSelected(prev => {
+      const next = new Set(prev[cardKey] || [])
+      next.delete(userId)
+      return { ...prev, [cardKey]: next }
+    })
+  }
 
   const sendChatMessage = async () => {
     if (!chatInput.trim() || !chatTeamId) return
@@ -1432,7 +1470,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                 {teams.map(team => {
                   const sel = equipeTeamId === team.id
                   return (
-                    <button key={team.id} onClick={() => { setEquipeTeamId(team.id); setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
+                    <button key={team.id} onClick={() => { setEquipeTeamId(team.id); setEditingProg(false); setProgDraft(null); setEditingProgramId(null); setSuiviWeekOffset(0) }}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 14, cursor: 'pointer' }}>
                       {team.photo_url
                         ? <img src={team.photo_url} alt="" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
@@ -1456,7 +1494,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                   <>
                     {/* Sub-tabs */}
                     <div style={{ display: 'flex', background: C.surface, borderRadius: 12, padding: 4, marginBottom: 20, gap: 2 }}>
-                      {[{ id: 'perf', icon: '📊', label: 'Performances' }, { id: 'programme', icon: '📋', label: 'Programme' }].map(t => (
+                      {[{ id: 'perf', icon: '📊', label: 'Performances' }, { id: 'programme', icon: '📋', label: 'Programme' }, { id: 'suivi', icon: '✅', label: 'Suivi' }].map(t => (
                         <button key={t.id} onClick={() => { setEquipeTab(t.id); setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
                           style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 14, background: equipeTab === t.id ? C.accent : 'transparent', color: equipeTab === t.id ? '#fff' : C.muted, transition: 'all 0.2s' }}>
                           {t.icon} {t.label}
@@ -1598,6 +1636,121 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
                     {/* ── PROGRAMME (CATALOGUE) ── */}
                     {equipeTab === 'programme' && renderProgrammeCatalog(equipeTeamId)}
+
+                    {/* ── SUIVI (PRÉSENCE / VALIDATION) ── */}
+                    {equipeTab === 'suivi' && (() => {
+                      const progs = getProgramsForTeam(equipeTeamId)
+                      if (progs.length === 0) {
+                        return (
+                          <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
+                            <div style={{ fontSize: 32, marginBottom: 10 }}>✅</div>
+                            Aucun programme planifié pour cette équipe
+                          </div>
+                        )
+                      }
+                      const minDate = progs.reduce((acc, p) => p.start_date < acc ? p.start_date : acc, progs[0].start_date)
+                      const maxDate = progs.reduce((acc, p) => p.end_date > acc ? p.end_date : acc, progs[0].end_date)
+                      const weekMonday = getMonday(new Date())
+                      weekMonday.setDate(weekMonday.getDate() + suiviWeekOffset * 7)
+                      const weekDates = DAY_ORDER.map((day, i) => {
+                        const d = new Date(weekMonday); d.setDate(d.getDate() + i)
+                        return { day, date: d, dateStr: toDateStr(d) }
+                      })
+                      const firstWeekMondayStr = toDateStr(getMonday(new Date(minDate + 'T00:00:00')))
+                      const lastWeekMondayStr = toDateStr(getMonday(new Date(maxDate + 'T00:00:00')))
+                      const currentWeekMondayStr = toDateStr(weekMonday)
+                      const canGoPrev = currentWeekMondayStr > firstWeekMondayStr
+                      const canGoNext = currentWeekMondayStr < lastWeekMondayStr
+
+                      return (
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                            <button onClick={() => canGoPrev && setSuiviWeekOffset(o => o - 1)} disabled={!canGoPrev}
+                              style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid ' + C.border, background: C.card, color: canGoPrev ? C.text : C.border, fontSize: 16, cursor: canGoPrev ? 'pointer' : 'default' }}>‹</button>
+                            <div style={{ textAlign: 'center' }}>
+                              <div style={{ fontSize: 13, fontWeight: 700 }}>
+                                {weekDates[0].date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} — {weekDates[6].date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                              </div>
+                              {suiviWeekOffset !== 0 && (
+                                <button onClick={() => setSuiviWeekOffset(0)} style={{ background: 'none', border: 'none', color: C.accent, fontSize: 11, cursor: 'pointer', padding: 0, marginTop: 2 }}>Revenir à aujourd'hui</button>
+                              )}
+                            </div>
+                            <button onClick={() => canGoNext && setSuiviWeekOffset(o => o + 1)} disabled={!canGoNext}
+                              style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid ' + C.border, background: C.card, color: canGoNext ? C.text : C.border, fontSize: 16, cursor: canGoNext ? 'pointer' : 'default' }}>›</button>
+                          </div>
+
+                          {weekDates.map(({ day, date, dateStr }) => {
+                            const program = getProgramForDate(equipeTeamId, dateStr)
+                            const s = program?.sessions.find(x => x.day === day)
+                            if (!s) return null
+                            const dateLabel = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })
+                            const cardKey = dateStr
+                            const doneRows = teamSeances.filter(se => se.jour === day && se.date === dateStr)
+                            const doneUserIds = new Set(doneRows.map(r => r.user_id))
+                            const selected = suiviSelected[cardKey] || new Set()
+                            const pending = teamPlayers.filter(p => selected.has(p.user_id) && !doneUserIds.has(p.user_id))
+
+                            const toggleSelect = (uid) => {
+                              setSuiviSelected(prev => {
+                                const next = new Set(prev[cardKey] || [])
+                                if (next.has(uid)) next.delete(uid); else next.add(uid)
+                                return { ...prev, [cardKey]: next }
+                              })
+                            }
+
+                            return (
+                              <div key={cardKey} style={{ marginBottom: 14, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + C.border }}>
+                                <div style={{ background: C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                  <div style={{ width: 42, height: 42, borderRadius: 12, background: s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 700, fontSize: 14, textTransform: 'capitalize' }}>{dateLabel}</div>
+                                    <div style={{ fontSize: 12, color: C.muted }}>{s.label} · {doneUserIds.size}/{teamPlayers.length} fait{doneUserIds.size !== 1 ? 's' : ''}</div>
+                                  </div>
+                                </div>
+                                <div style={{ padding: '10px 16px 14px' }}>
+                                  {teamPlayers.length === 0 ? (
+                                    <div style={{ color: C.muted, fontSize: 13, textAlign: 'center', padding: 10 }}>Aucun joueur dans cette équipe</div>
+                                  ) : teamPlayers.map(p => {
+                                    const row = doneRows.find(r => r.user_id === p.user_id)
+                                    const isDone = !!row
+                                    const isSelected = selected.has(p.user_id)
+                                    return (
+                                      <div key={p.user_id} onClick={() => !isDone && toggleSelect(p.user_id)}
+                                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 6px', borderRadius: 10, cursor: isDone ? 'default' : 'pointer', background: isSelected && !isDone ? C.accent + '15' : 'transparent' }}>
+                                        <div style={{ width: 22, height: 22, borderRadius: 6, border: '2px solid ' + (isDone ? C.green : isSelected ? C.accent : C.border), background: isDone ? C.green : isSelected ? C.accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#fff', flexShrink: 0 }}>
+                                          {(isDone || isSelected) && '✓'}
+                                        </div>
+                                        <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>
+                                          {p.photo_url ? <img src={p.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {p.prenom || '—'} {p.nom || ''}
+                                        </div>
+                                        {isDone && (
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                            <span style={{ fontSize: 10, fontWeight: 700, color: row.validated_by ? C.gold : C.green, background: (row.validated_by ? C.gold : C.green) + '18', padding: '2px 7px', borderRadius: 8 }}>
+                                              {row.validated_by ? '✓ Validé' : '✓ Fait'}
+                                            </span>
+                                            <button onClick={(e) => { e.stopPropagation(); unvalidateSeance(row.id, cardKey, p.user_id) }}
+                                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, opacity: 0.4 }}>🗑️</button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                  {pending.length > 0 && (
+                                    <button onClick={() => validateSeances(pending.map(p => p.user_id), day, dateStr, equipeTeamId, cardKey)}
+                                      style={{ marginTop: 10, width: '100%', padding: '10px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                                      Valider pour {pending.length} joueur{pending.length !== 1 ? 's' : ''}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
                   </>
                 )
               })()}
