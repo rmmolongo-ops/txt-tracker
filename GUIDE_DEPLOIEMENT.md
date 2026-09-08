@@ -76,6 +76,25 @@ txt-tracker/
 
 ---
 
+## ⚠️ CORRECTIF SÉCURITÉ CRITIQUE À APPLIQUER
+
+Le fichier `supabase_rls_fix.sql` corrige une faille critique : les tables
+`teams`, `team_members`, `clubs`, `team_programs`, `team_messages` et
+`chat_reads` n'avaient pas de policies RLS versionnées, ce qui pouvait
+permettre à n'importe quel utilisateur connecté de contourner les
+protections "admin uniquement" de l'application directement via la
+console du navigateur (suppression d'équipes, changement de rôle,
+lecture du chat d'autres équipes, etc.). Il sécurise aussi les fonctions
+RPC `get_user_emails_for_admins`, `get_unconfirmed_signups_for_admins`
+et `delete_user_as_admin` avec une vérification stricte du statut admin.
+
+**À faire immédiatement** : Supabase → SQL Editor → coller le contenu de
+`supabase_rls_fix.sql` → Run. Voir aussi le commentaire en tête du fichier
+concernant les 3 fonctions RPC (à vérifier/remplacer si elles n'ont pas
+déjà ce garde-fou).
+
+---
+
 ## ÉTAPE 1 — Configurer Supabase
 
 ### 1.1 — Créer le projet
