@@ -395,7 +395,12 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       const seancesSemaine = mySeances.filter(s => s.date >= weekAgoStr).length
       const myMesures = (mes || []).filter(m => m.user_id === uid)
       const derniereMesure = myMesures.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
-      return { user_id: uid, ...prof, role: roleMap[uid] || 'joueur', derniereSeance, seancesSemaine, derniereMesure }
+      const kpis = {}
+      KPI_CONFIG.forEach(k => {
+        const arr = myMesures.filter(m => m.kpi_id === k.id).sort((a, b) => a.date.localeCompare(b.date))
+        kpis[k.id] = arr.length > 0 ? arr[arr.length - 1].valeur : null
+      })
+      return { user_id: uid, ...prof, role: roleMap[uid] || 'joueur', derniereSeance, seancesSemaine, derniereMesure, mesuresData: myMesures, nb_mesures: myMesures.length, nb_seances: mySeances.length, kpis }
     })
     setCoachRosterData(roster)
     setCoachRosterLoading(false)
@@ -408,12 +413,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   }, [availableTeams, myTeamIds, myTeamRoles, coachTeamId])
 
   useEffect(() => {
-    if (tab !== 'dashboard' || !coachTeamId) return
-    const myTeamsList = availableTeams.filter(t => myTeamIds.has(t.id))
-    const hasLeadership = myTeamsList.some(t => LEADERSHIP_ROLES.includes(myTeamRoles[t.id]))
-    const hasPlayerRole = myTeamsList.some(t => !LEADERSHIP_ROLES.includes(myTeamRoles[t.id])) || myTeamsList.length === 0
-    const effective = !hasLeadership ? 'joueur' : (!hasPlayerRole ? 'coach' : homeViewMode)
-    if (effective !== 'coach') return
+    if ((tab !== 'dashboard' && tab !== 'equipe') || !coachTeamId) return
+    if (!LEADERSHIP_ROLES.includes(myTeamRoles[coachTeamId])) return
     loadCoachRoster(coachTeamId)
   }, [tab, coachTeamId, myTeamRoles, availableTeams, myTeamIds, homeViewMode])
 
@@ -423,10 +424,14 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   }
 
   useEffect(() => {
-    if (tab !== 'equipe' || !isAdmin || equipeTab !== 'suivi' || !equipeTeamId) return
-    loadTeamSeances(equipeTeamId)
+    if (tab !== 'equipe' || equipeTab !== 'suivi') return
+    const isLeadershipNow = availableTeams.some(t => myTeamIds.has(t.id) && LEADERSHIP_ROLES.includes(myTeamRoles[t.id]))
+    if (!isAdmin && !isLeadershipNow) return
+    const activeEquipeTeamId = isAdmin ? equipeTeamId : coachTeamId
+    if (!activeEquipeTeamId) return
+    loadTeamSeances(activeEquipeTeamId)
     setSuiviSelected({})
-  }, [tab, isAdmin, equipeTab, equipeTeamId])
+  }, [tab, isAdmin, equipeTab, equipeTeamId, coachTeamId, availableTeams, myTeamIds, myTeamRoles])
 
   const validateSeances = async (userIds, day, dateStr, teamId, cardKey) => {
     const toInsert = userIds
@@ -1129,39 +1134,56 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                 </div>
               ) : (
                 <>
-                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>
-                    {coachRosterData.length} joueur{coachRosterData.length !== 1 ? 's' : ''} · {activeCoachTeam.name}
-                  </div>
-                  {coachRosterLoading ? (
-                    <div style={{ textAlign: 'center', color: C.muted, padding: 24 }}>Chargement...</div>
-                  ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
-                      {coachRosterData.slice().sort((a, b) => (a.prenom || '').localeCompare(b.prenom || '')).map(j => (
-                        <div key={j.user_id} style={{ background: C.card, borderRadius: 14, padding: 14, border: '1px solid ' + C.border, display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                          <div style={{ width: 46, height: 46, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
-                            {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
-                          </div>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontWeight: 700, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {j.prenom || '—'} {j.nom || ''}{j.surnom && <span style={{ color: C.gold }}> "{j.surnom}"</span>}
-                            </div>
-                            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{j.poste1 || '—'}</div>
-                            <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-                              <div style={{ fontSize: 11, color: j.derniereSeance ? C.green : C.muted }}>
-                                {j.derniereSeance ? new Date(j.derniereSeance).toLocaleDateString('fr-FR') : 'Aucune séance'}
-                              </div>
-                              <div style={{ fontSize: 11, color: C.accent, fontWeight: 700 }}>{j.seancesSemaine}/7 cette semaine</div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {coachRosterData.length === 0 && (
-                        <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted, gridColumn: '1 / -1' }}>
-                          Aucun joueur dans cette équipe pour le moment
-                        </div>
-                      )}
+                  <div style={{ background: 'linear-gradient(135deg, #1e3a5f, #0f2a4a)', borderRadius: 16, padding: 16, marginBottom: 16, border: '1px solid ' + C.accent + '30' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: 12, color: C.muted }}>ÉQUIPE SUIVIE</div>
+                        <div style={{ fontSize: 20, fontWeight: 900, color: C.accentGlow }}>{activeCoachTeam.name}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 12, color: C.muted }}>Joueurs</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: C.green }}>{coachRosterData.length}</div>
+                      </div>
                     </div>
-                  )}
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Prochaines séances</div>
+                    <button onClick={() => { changeTab('equipe'); setEquipeTab('programme') }}
+                      style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+                      📋 Gérer le programme
+                    </button>
+                  </div>
+                  {(() => {
+                    const upcoming = []
+                    for (let i = 0; i < 14 && upcoming.length < 5; i++) {
+                      const d = new Date(); d.setDate(d.getDate() + i)
+                      const dateStr = toDateStr(d)
+                      const dayCode = Object.keys(dayMap).find(k => dayMap[k] === d.getDay())
+                      const program = getProgramForDate(activeCoachTeam.id, dateStr)
+                      const s = program?.sessions.find(x => x.day === dayCode)
+                      if (s) upcoming.push({ dateStr, date: d, s })
+                    }
+                    if (upcoming.length === 0) {
+                      return (
+                        <div style={{ background: C.card, borderRadius: 14, padding: 24, textAlign: 'center', color: C.muted, marginBottom: 16 }}>
+                          <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+                          Aucun programme planifié — configure-en un pour {activeCoachTeam.name}
+                        </div>
+                      )
+                    }
+                    return upcoming.map(({ dateStr, date, s }) => (
+                      <div key={dateStr} style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.card, borderRadius: 14, padding: '12px 16px', marginBottom: 8, border: '1px solid ' + C.border }}>
+                        <div style={{ width: 42, height: 42, borderRadius: 12, background: s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: 14, textTransform: 'capitalize' }}>
+                            {date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })}
+                          </div>
+                          <div style={{ fontSize: 12, color: C.muted }}>{s.label} · {s.duration}</div>
+                        </div>
+                      </div>
+                    ))
+                  })()}
                 </>
               )}
             </div>
@@ -1646,42 +1668,52 @@ export default function App({ user, onSignOut, inviteTeamId }) {
         )
       })()}
 
-      {/* ── ÉQUIPE (ADMIN) ── */}
-      {tab === 'equipe' && isAdmin && (
+      {/* ── ÉQUIPE (ADMIN / COACH) ── */}
+      {tab === 'equipe' && (isAdmin || hasLeadership) && (() => {
+        const equipeViewTeams = isAdmin ? teams : leadershipTeams
+        const activeEquipeTeamId = isAdmin ? equipeTeamId : coachTeamId
+        const selectEquipeTeam = (id) => {
+          if (isAdmin) setEquipeTeamId(id); else setCoachTeamId(id)
+          setEditingProg(false); setProgDraft(null); setEditingProgramId(null); setSuiviWeekOffset(0)
+        }
+        return (
         <div>
           {/* Sélecteur d'équipe */}
-          {teams.length === 0 ? (
+          {equipeViewTeams.length === 0 ? (
             <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
               <div style={{ fontSize: 36, marginBottom: 10 }}>🏟️</div>
               <div style={{ fontWeight: 700 }}>Aucune équipe créée</div>
-              <div style={{ fontSize: 13, marginTop: 6 }}>Créez des équipes depuis l'onglet Admin</div>
+              <div style={{ fontSize: 13, marginTop: 6 }}>{isAdmin ? "Créez des équipes depuis l'onglet Admin" : "Tu ne diriges aucune équipe pour le moment"}</div>
             </div>
           ) : (
             <>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-                {teams.map(team => {
-                  const sel = equipeTeamId === team.id
-                  return (
-                    <button key={team.id} onClick={() => { setEquipeTeamId(team.id); setEditingProg(false); setProgDraft(null); setEditingProgramId(null); setSuiviWeekOffset(0) }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 14, cursor: 'pointer' }}>
-                      {team.photo_url
-                        ? <img src={team.photo_url} alt="" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
-                        : <span style={{ width: 10, height: 10, borderRadius: '50%', background: team.color, display: 'inline-block' }} />}
-                      {team.name}
-                    </button>
-                  )
-                })}
-              </div>
+              {equipeViewTeams.length > 1 && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+                  {equipeViewTeams.map(team => {
+                    const sel = activeEquipeTeamId === team.id
+                    return (
+                      <button key={team.id} onClick={() => selectEquipeTeam(team.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 14, cursor: 'pointer' }}>
+                        {team.photo_url
+                          ? <img src={team.photo_url} alt="" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
+                          : <span style={{ width: 10, height: 10, borderRadius: '50%', background: team.color, display: 'inline-block' }} />}
+                        {team.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
 
-              {!equipeTeamId && (
+              {!activeEquipeTeamId && (
                 <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
                   Sélectionne une équipe ci-dessus
                 </div>
               )}
 
-              {equipeTeamId && (() => {
-                const team = teams.find(t => t.id === equipeTeamId)
-                const teamPlayers = adminData.filter(j => (j.teams || []).some(t => t.id === equipeTeamId))
+              {activeEquipeTeamId && (() => {
+                const equipeTeamId = activeEquipeTeamId
+                const team = equipeViewTeams.find(t => t.id === equipeTeamId)
+                const teamPlayers = isAdmin ? adminData.filter(j => (j.teams || []).some(t => t.id === equipeTeamId)) : coachRosterData
                 return (
                   <>
                     {/* Sub-tabs */}
@@ -1949,10 +1981,11 @@ export default function App({ user, onSignOut, inviteTeamId }) {
             </>
           )}
         </div>
-      )}
+        )
+      })()}
 
       {/* ── ÉQUIPE (JOUEUR) ── */}
-      {tab === 'equipe' && !isAdmin && (() => {
+      {tab === 'equipe' && !isAdmin && !hasLeadership && (() => {
         const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
         if (myTeams.length === 0) {
           return (
