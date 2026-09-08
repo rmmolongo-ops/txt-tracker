@@ -74,6 +74,7 @@ const SESSIONS = [
 
 const DEFAULT_PROFIL = { nom: '', prenom: '', surnom: 'TxT', club: '', division: '', poste1: '', poste2: '', photo_url: '', dashboard_kpis: null }
 const DASHBOARD_KPIS_MAX = 4
+const LEADERSHIP_ROLES = ['coach', 'dirigeant']
 
 export default function App({ user, onSignOut, inviteTeamId }) {
   const [tab, setTab] = useState(() => localStorage.getItem('txt_tab') || 'dashboard')
@@ -110,6 +111,11 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [uploadingTeamPhoto, setUploadingTeamPhoto] = useState(null)
   const [availableTeams, setAvailableTeams] = useState([])
   const [myTeamIds, setMyTeamIds] = useState(new Set())
+  const [myTeamRoles, setMyTeamRoles] = useState({})
+  const [homeViewMode, setHomeViewMode] = useState(() => localStorage.getItem('txt_home_view') || 'joueur')
+  const [coachTeamId, setCoachTeamId] = useState(null)
+  const [coachRosterData, setCoachRosterData] = useState([])
+  const [coachRosterLoading, setCoachRosterLoading] = useState(false)
   const [adminChartKpi, setAdminChartKpi] = useState('sprint30')
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [adminView, setAdminView] = useState('overview')
@@ -220,14 +226,19 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       supabase.from('seances').select('*').eq('user_id', user.id),
       supabase.from('profils').select('*').eq('user_id', user.id).maybeSingle(),
       supabase.from('teams').select('id, name, color, photo_url, dashboard_kpis').order('created_at'),
-      supabase.from('team_members').select('team_id').eq('user_id', user.id),
+      supabase.from('team_members').select('team_id, role').eq('user_id', user.id),
       supabase.from('team_programs').select('*').order('start_date'),
       supabase.from('clubs').select('*').order('name'),
     ])
     if (m) setMesures(m)
     if (s) setSeances(s)
     if (t) setAvailableTeams(t)
-    if (myMemberships) setMyTeamIds(new Set(myMemberships.map(tm => tm.team_id)))
+    if (myMemberships) {
+      setMyTeamIds(new Set(myMemberships.map(tm => tm.team_id)))
+      const roleMap = {}
+      myMemberships.forEach(tm => { roleMap[tm.team_id] = tm.role })
+      setMyTeamRoles(roleMap)
+    }
     if (progs) setProgramsCatalog(progs)
     if (cl) setClubs(cl)
     if (p) { setProfil(p); setProfilEdit(p) }
@@ -261,6 +272,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
         const { error } = await supabase.from('team_members').insert({ user_id: user.id, team_id: inviteTeamId })
         if (!error) {
           setMyTeamIds(prev => new Set([...prev, inviteTeamId]))
+          setMyTeamRoles(prev => ({ ...prev, [inviteTeamId]: 'joueur' }))
           showToast(`✅ Ajouté à l'équipe "${team.name}" !`)
         }
       }
@@ -359,6 +371,51 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     })()
     return () => { active = false }
   }, [tab, isAdmin, rosterTeamId])
+
+  const setHomeView = (mode) => { localStorage.setItem('txt_home_view', mode); setHomeViewMode(mode) }
+
+  const loadCoachRoster = async (teamId) => {
+    setCoachRosterLoading(true)
+    const { data: members } = await supabase.from('team_members').select('user_id, role').eq('team_id', teamId)
+    const ids = (members || []).map(m => m.user_id)
+    if (ids.length === 0) { setCoachRosterData([]); setCoachRosterLoading(false); return }
+    const [{ data: profs }, { data: mes }, { data: sea }] = await Promise.all([
+      supabase.from('profils').select('user_id, nom, prenom, surnom, photo_url, poste1').in('user_id', ids),
+      supabase.from('mesures').select('user_id, kpi_id, valeur, date').in('user_id', ids),
+      supabase.from('seances').select('user_id, date').eq('team_id', teamId).in('user_id', ids),
+    ])
+    const roleMap = {}
+    members.forEach(m => { roleMap[m.user_id] = m.role })
+    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
+    const weekAgoStr = toDateStr(weekAgo)
+    const roster = ids.map(uid => {
+      const prof = (profs || []).find(p => p.user_id === uid) || {}
+      const mySeances = (sea || []).filter(s => s.user_id === uid)
+      const derniereSeance = mySeances.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
+      const seancesSemaine = mySeances.filter(s => s.date >= weekAgoStr).length
+      const myMesures = (mes || []).filter(m => m.user_id === uid)
+      const derniereMesure = myMesures.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
+      return { user_id: uid, ...prof, role: roleMap[uid] || 'joueur', derniereSeance, seancesSemaine, derniereMesure }
+    })
+    setCoachRosterData(roster)
+    setCoachRosterLoading(false)
+  }
+
+  useEffect(() => {
+    const leadershipTeamIds = availableTeams.filter(t => myTeamIds.has(t.id) && LEADERSHIP_ROLES.includes(myTeamRoles[t.id])).map(t => t.id)
+    if (leadershipTeamIds.length === 0) return
+    if (!coachTeamId || !leadershipTeamIds.includes(coachTeamId)) setCoachTeamId(leadershipTeamIds[0])
+  }, [availableTeams, myTeamIds, myTeamRoles, coachTeamId])
+
+  useEffect(() => {
+    if (tab !== 'dashboard' || !coachTeamId) return
+    const myTeamsList = availableTeams.filter(t => myTeamIds.has(t.id))
+    const hasLeadership = myTeamsList.some(t => LEADERSHIP_ROLES.includes(myTeamRoles[t.id]))
+    const hasPlayerRole = myTeamsList.some(t => !LEADERSHIP_ROLES.includes(myTeamRoles[t.id])) || myTeamsList.length === 0
+    const effective = !hasLeadership ? 'joueur' : (!hasPlayerRole ? 'coach' : homeViewMode)
+    if (effective !== 'coach') return
+    loadCoachRoster(coachTeamId)
+  }, [tab, coachTeamId, myTeamRoles, availableTeams, myTeamIds, homeViewMode])
 
   const loadTeamSeances = async (teamId) => {
     const { data } = await supabase.from('seances').select('*').eq('team_id', teamId)
@@ -463,9 +520,11 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     if (isIn) {
       await supabase.from('team_members').delete().eq('user_id', user.id).eq('team_id', teamId)
       setMyTeamIds(prev => { const next = new Set(prev); next.delete(teamId); return next })
+      setMyTeamRoles(prev => { const next = { ...prev }; delete next[teamId]; return next })
     } else {
       await supabase.from('team_members').insert({ user_id: user.id, team_id: teamId })
       setMyTeamIds(prev => new Set([...prev, teamId]))
+      setMyTeamRoles(prev => ({ ...prev, [teamId]: 'joueur' }))
     }
     const team = availableTeams.find(t => t.id === teamId)
     showToast(isIn ? `Retiré de "${team?.name}"` : `✅ Ajouté à "${team?.name}" !`)
@@ -686,6 +745,13 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const todayDow = new Date().getDay()
   const dayMap = { LUN: 1, MAR: 2, MER: 3, JEU: 4, VEN: 5, SAM: 6, DIM: 0 }
   const todayStr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+
+  const myTeamsWithRole = availableTeams.filter(t => myTeamIds.has(t.id)).map(t => ({ ...t, myRole: myTeamRoles[t.id] || 'joueur' }))
+  const leadershipTeams = myTeamsWithRole.filter(t => LEADERSHIP_ROLES.includes(t.myRole))
+  const hasLeadership = leadershipTeams.length > 0
+  const hasPlayerRole = myTeamsWithRole.some(t => !LEADERSHIP_ROLES.includes(t.myRole)) || myTeamsWithRole.length === 0
+  const effectiveHomeView = !hasLeadership ? 'joueur' : (!hasPlayerRole ? 'coach' : homeViewMode)
+  const activeCoachTeam = leadershipTeams.find(t => t.id === coachTeamId) || leadershipTeams[0]
 
   if (loading) return (
     <div style={{ background: C.bg, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1029,6 +1095,78 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       {/* ── DASHBOARD ── */}
       {tab === 'dashboard' && (
         <div>
+          {hasLeadership && hasPlayerRole && (
+            <div style={{ display: 'flex', background: C.surface, borderRadius: 12, padding: 4, marginBottom: 16, gap: 2 }}>
+              {[{ id: 'joueur', icon: '⚽', label: 'Vue Joueur' }, { id: 'coach', icon: '🧠', label: 'Vue Coach' }].map(v => (
+                <button key={v.id} onClick={() => setHomeView(v.id)}
+                  style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 14, background: homeViewMode === v.id ? C.accent : 'transparent', color: homeViewMode === v.id ? '#fff' : C.muted, transition: 'all 0.2s' }}>
+                  {v.icon} {v.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {effectiveHomeView === 'coach' ? (
+            <div>
+              {leadershipTeams.length > 1 && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                  {leadershipTeams.map(team => {
+                    const sel = activeCoachTeam?.id === team.id
+                    return (
+                      <button key={team.id} onClick={() => setCoachTeamId(team.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 13, cursor: 'pointer' }}>
+                        {team.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {!activeCoachTeam ? (
+                <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
+                  <div style={{ fontSize: 32, marginBottom: 10 }}>🧠</div>
+                  Aucune équipe à suivre pour le moment
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>
+                    {coachRosterData.length} joueur{coachRosterData.length !== 1 ? 's' : ''} · {activeCoachTeam.name}
+                  </div>
+                  {coachRosterLoading ? (
+                    <div style={{ textAlign: 'center', color: C.muted, padding: 24 }}>Chargement...</div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
+                      {coachRosterData.slice().sort((a, b) => (a.prenom || '').localeCompare(b.prenom || '')).map(j => (
+                        <div key={j.user_id} style={{ background: C.card, borderRadius: 14, padding: 14, border: '1px solid ' + C.border, display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                          <div style={{ width: 46, height: 46, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+                            {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+                          </div>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontWeight: 700, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {j.prenom || '—'} {j.nom || ''}{j.surnom && <span style={{ color: C.gold }}> "{j.surnom}"</span>}
+                            </div>
+                            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{j.poste1 || '—'}</div>
+                            <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+                              <div style={{ fontSize: 11, color: j.derniereSeance ? C.green : C.muted }}>
+                                {j.derniereSeance ? new Date(j.derniereSeance).toLocaleDateString('fr-FR') : 'Aucune séance'}
+                              </div>
+                              <div style={{ fontSize: 11, color: C.accent, fontWeight: 700 }}>{j.seancesSemaine}/7 cette semaine</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {coachRosterData.length === 0 && (
+                        <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted, gridColumn: '1 / -1' }}>
+                          Aucun joueur dans cette équipe pour le moment
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+          <>
           <div style={{ background: 'linear-gradient(135deg, #1e3a5f, #0f2a4a)', borderRadius: 16, padding: 16, marginBottom: 16, border: '1px solid ' + C.accent + '30' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div>
@@ -1199,6 +1337,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
               )
             })
           })()}
+          </>
+          )}
         </div>
       )}
 
