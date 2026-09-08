@@ -72,7 +72,8 @@ const SESSIONS = [
   ]},
 ]
 
-const DEFAULT_PROFIL = { nom: '', prenom: '', surnom: 'TxT', club: '', division: '', poste1: '', poste2: '', photo_url: '' }
+const DEFAULT_PROFIL = { nom: '', prenom: '', surnom: 'TxT', club: '', division: '', poste1: '', poste2: '', photo_url: '', dashboard_kpis: null }
+const DASHBOARD_KPIS_MAX = 4
 
 export default function App({ user, onSignOut, inviteTeamId }) {
   const [tab, setTab] = useState(() => localStorage.getItem('txt_tab') || 'dashboard')
@@ -90,6 +91,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [expandedDayDashboard, setExpandedDayDashboard] = useState(null)
+  const [editingDashboardKpis, setEditingDashboardKpis] = useState(false)
+  const [dashboardKpisDraft, setDashboardKpisDraft] = useState([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminData, setAdminData] = useState([])
   const [unconfirmedSignups, setUnconfirmedSignups] = useState([])
@@ -440,6 +443,14 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     }
   }
 
+  const saveDashboardKpis = async (ids) => {
+    await supabase.from('profils').update({ dashboard_kpis: ids }).eq('user_id', user.id)
+    setProfil(p => ({ ...p, dashboard_kpis: ids }))
+    setProfilEdit(p => ({ ...p, dashboard_kpis: ids }))
+    setEditingDashboardKpis(false)
+    showToast('✅ Performances clés mises à jour !')
+  }
+
   const saveProfil = async () => {
     await supabase.from('profils').update({ ...profilEdit, updated_at: new Date().toISOString() }).eq('user_id', user.id)
     setProfil(profilEdit)
@@ -657,6 +668,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     return diff.toFixed(1)
   }
   const getDashboardKpiIds = () => {
+    if (profil.dashboard_kpis && profil.dashboard_kpis.length > 0) return profil.dashboard_kpis
     const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
     const withConfig = myTeams.find(t => t.dashboard_kpis && t.dashboard_kpis.length > 0)
     return withConfig ? withConfig.dashboard_kpis : ['sprint30', 'jonglerie_g', 'precision', 'scan']
@@ -1062,7 +1074,47 @@ export default function App({ user, onSignOut, inviteTeamId }) {
             )
           })()}
 
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Performances clés</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Performances clés</div>
+            {!editingDashboardKpis && (
+              <button onClick={() => { setDashboardKpisDraft(getDashboardKpiIds()); setEditingDashboardKpis(true) }}
+                style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+                ✏️ Personnaliser
+              </button>
+            )}
+          </div>
+
+          {editingDashboardKpis && (
+            <div style={{ background: C.card, borderRadius: 14, padding: 14, marginBottom: 16, border: '1px solid ' + C.accent + '40' }}>
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
+                Choisis jusqu'à {DASHBOARD_KPIS_MAX} performances à afficher sur ton accueil ({dashboardKpisDraft.length}/{DASHBOARD_KPIS_MAX})
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                {KPI_CONFIG.map(kpi => {
+                  const selected = dashboardKpisDraft.includes(kpi.id)
+                  const disabled = !selected && dashboardKpisDraft.length >= DASHBOARD_KPIS_MAX
+                  return (
+                    <button key={kpi.id} disabled={disabled}
+                      onClick={() => setDashboardKpisDraft(prev => selected ? prev.filter(id => id !== kpi.id) : [...prev, kpi.id])}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 16, border: '2px solid ' + (selected ? kpi.color : C.border), background: selected ? kpi.color + '20' : 'transparent', color: selected ? kpi.color : (disabled ? C.muted + '80' : C.muted), cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600 }}>
+                      {kpi.icon} {kpi.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setEditingDashboardKpis(false)}
+                  style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: C.surface, color: C.muted, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+                  Annuler
+                </button>
+                <button onClick={() => saveDashboardKpis(dashboardKpisDraft.length > 0 ? dashboardKpisDraft : null)} disabled={dashboardKpisDraft.length === 0}
+                  style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: dashboardKpisDraft.length > 0 ? C.accent : C.surface, color: dashboardKpisDraft.length > 0 ? '#fff' : C.muted, fontSize: 13, cursor: dashboardKpisDraft.length > 0 ? 'pointer' : 'not-allowed', fontWeight: 700 }}>
+                  ✓ Enregistrer
+                </button>
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
             {KPI_CONFIG.filter(k => getDashboardKpiIds().includes(k.id)).map(kpi => {
               const val = getLatest(kpi.id); const prog = getProgress(kpi.id)
