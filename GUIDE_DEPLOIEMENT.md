@@ -76,6 +76,24 @@ txt-tracker/
 
 ---
 
+## ✅ Correctifs sécurité appliqués (2026-09-08)
+
+`supabase_rls_fix.sql` documente 4 correctifs déjà appliqués en base
+(projet Supabase `TxT_tracker`) :
+1. **Critique** : la vue `admin_dashboard` exposait publiquement (sans
+   connexion) les données de tous les joueurs — corrigée.
+2. **Élevé** : un joueur pouvait s'auto-promouvoir coach/capitaine d'une
+   équipe en modifiant lui-même son rôle — corrigé.
+3. **Moyen** : les programmes d'entraînement de toutes les équipes
+   étaient lisibles par tout utilisateur connecté — corrigé.
+4. **Mineur** : `search_path` non fixé sur la fonction `is_admin` —
+   corrigé.
+
+Reste à faire manuellement dans le dashboard Supabase (Authentication →
+Providers → Email) : activer **"Leaked password protection"**.
+
+---
+
 ## ÉTAPE 1 — Configurer Supabase
 
 ### 1.1 — Créer le projet
