@@ -76,22 +76,21 @@ txt-tracker/
 
 ---
 
-## ⚠️ CORRECTIF SÉCURITÉ CRITIQUE À APPLIQUER
+## ✅ Correctifs sécurité appliqués (2026-09-08)
 
-Le fichier `supabase_rls_fix.sql` corrige une faille critique : les tables
-`teams`, `team_members`, `clubs`, `team_programs`, `team_messages` et
-`chat_reads` n'avaient pas de policies RLS versionnées, ce qui pouvait
-permettre à n'importe quel utilisateur connecté de contourner les
-protections "admin uniquement" de l'application directement via la
-console du navigateur (suppression d'équipes, changement de rôle,
-lecture du chat d'autres équipes, etc.). Il sécurise aussi les fonctions
-RPC `get_user_emails_for_admins`, `get_unconfirmed_signups_for_admins`
-et `delete_user_as_admin` avec une vérification stricte du statut admin.
+`supabase_rls_fix.sql` documente 4 correctifs déjà appliqués en base
+(projet Supabase `TxT_tracker`) :
+1. **Critique** : la vue `admin_dashboard` exposait publiquement (sans
+   connexion) les données de tous les joueurs — corrigée.
+2. **Élevé** : un joueur pouvait s'auto-promouvoir coach/capitaine d'une
+   équipe en modifiant lui-même son rôle — corrigé.
+3. **Moyen** : les programmes d'entraînement de toutes les équipes
+   étaient lisibles par tout utilisateur connecté — corrigé.
+4. **Mineur** : `search_path` non fixé sur la fonction `is_admin` —
+   corrigé.
 
-**À faire immédiatement** : Supabase → SQL Editor → coller le contenu de
-`supabase_rls_fix.sql` → Run. Voir aussi le commentaire en tête du fichier
-concernant les 3 fonctions RPC (à vérifier/remplacer si elles n'ont pas
-déjà ce garde-fou).
+Reste à faire manuellement dans le dashboard Supabase (Authentication →
+Providers → Email) : activer **"Leaked password protection"**.
 
 ---
 
