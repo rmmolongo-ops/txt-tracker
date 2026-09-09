@@ -121,6 +121,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [coachRosterData, setCoachRosterData] = useState([])
   const [coachRosterLoading, setCoachRosterLoading] = useState(false)
   const [managedPlayers, setManagedPlayers] = useState([])
+  const [adminManagedPlayers, setAdminManagedPlayers] = useState([])
   const [addingManagedPlayer, setAddingManagedPlayer] = useState(false)
   const [managedPlayerDraft, setManagedPlayerDraft] = useState({ prenom: '', nom: '', poste1: '' })
   const [entryTarget, setEntryTarget] = useState(null)
@@ -192,6 +193,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
         { data: allTeams },
         { data: allTeamMembers },
         { data: unconfirmed },
+        { data: allManagedPlayers },
       ] = await Promise.all([
         supabase.from('profils').select('*'),
         supabase.from('mesures').select('user_id, kpi_id, valeur, date'),
@@ -200,7 +202,9 @@ export default function App({ user, onSignOut, inviteTeamId }) {
         supabase.from('teams').select('*').order('created_at'),
         supabase.from('team_members').select('user_id, team_id, role'),
         supabase.rpc('get_unconfirmed_signups_for_admins'),
+        supabase.from('managed_players').select('*'),
       ])
+      setAdminManagedPlayers(allManagedPlayers || [])
       if (errP) { setAdminError('Erreur lecture profils : ' + errP.message); setAdminLoading(false); return }
       setTeams(allTeams || [])
       setUnconfirmedSignups(unconfirmed || [])
@@ -2264,7 +2268,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
           {/* Stats globales */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
             {[
-              { val: adminData.length, label: 'JOUEURS', color: C.accent },
+              { val: adminData.length + adminManagedPlayers.length, label: 'JOUEURS', color: C.accent },
               { val: teams.length, label: 'ÉQUIPES', color: C.green },
               { val: adminData.filter(j => !j.teams || j.teams.length === 0).length, label: 'SANS ÉQUIPE', color: C.gold },
             ].map(s => (
@@ -2343,8 +2347,10 @@ export default function App({ user, onSignOut, inviteTeamId }) {
               <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Mes équipes</div>
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12, marginBottom: 24 }}>
                 {teams.map(team => {
-                  const teamPlayers = adminData.filter(j => (j.teams || []).some(t => t.id === team.id))
-                  const lastActivity = teamPlayers.reduce((acc, j) => {
+                  const teamRealPlayers = adminData.filter(j => (j.teams || []).some(t => t.id === team.id))
+                  const teamManaged = adminManagedPlayers.filter(mp => mp.team_id === team.id)
+                  const teamPlayers = [...teamRealPlayers, ...teamManaged.map(mp => ({ user_id: GHOST_PREFIX + mp.id, photo_url: mp.photo_url }))]
+                  const lastActivity = teamRealPlayers.reduce((acc, j) => {
                     const d = j.derniere_seance || j.derniere_mesure
                     return d && (!acc || d > acc) ? d : acc
                   }, null)
