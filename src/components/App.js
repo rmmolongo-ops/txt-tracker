@@ -455,7 +455,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   }
 
   useEffect(() => {
-    const activeTeamId = isAdmin ? equipeTeamId : coachTeamId
+    const activeTeamId = tab === 'equipe' ? (isAdmin ? equipeTeamId : coachTeamId) : coachTeamId
     if ((tab !== 'equipe' && tab !== 'dashboard') || !activeTeamId) return
     loadEquipeManagedPlayers(activeTeamId)
   }, [tab, isAdmin, equipeTeamId, coachTeamId])
