@@ -456,7 +456,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
   useEffect(() => {
     const activeTeamId = isAdmin ? equipeTeamId : coachTeamId
-    if (tab !== 'equipe' || !activeTeamId) return
+    if ((tab !== 'equipe' && tab !== 'dashboard') || !activeTeamId) return
     loadEquipeManagedPlayers(activeTeamId)
   }, [tab, isAdmin, equipeTeamId, coachTeamId])
 
@@ -1221,7 +1221,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: 12, color: C.muted }}>Joueurs</div>
-                        <div style={{ fontSize: 20, fontWeight: 700, color: C.green }}>{coachRosterData.length}</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: C.green }}>{coachRosterData.length + managedPlayers.length}</div>
                       </div>
                     </div>
                   </div>
