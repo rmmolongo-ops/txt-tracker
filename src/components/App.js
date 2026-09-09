@@ -194,6 +194,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
         { data: allTeamMembers },
         { data: unconfirmed },
         { data: allManagedPlayers },
+        { data: allManagedMesures },
+        { data: allManagedSeances },
       ] = await Promise.all([
         supabase.from('profils').select('*'),
         supabase.from('mesures').select('user_id, kpi_id, valeur, date'),
@@ -203,8 +205,9 @@ export default function App({ user, onSignOut, inviteTeamId }) {
         supabase.from('team_members').select('user_id, team_id, role'),
         supabase.rpc('get_unconfirmed_signups_for_admins'),
         supabase.from('managed_players').select('*'),
+        supabase.from('mesures').select('managed_player_id, kpi_id, valeur, date').not('managed_player_id', 'is', null),
+        supabase.from('seances').select('managed_player_id, date').not('managed_player_id', 'is', null),
       ])
-      setAdminManagedPlayers(allManagedPlayers || [])
       if (errP) { setAdminError('Erreur lecture profils : ' + errP.message); setAdminLoading(false); return }
       setTeams(allTeams || [])
       setUnconfirmedSignups(unconfirmed || [])
@@ -212,6 +215,25 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       ;(allEmails || []).forEach(e => { emailMap[e.user_id] = e.email })
       const teamMap = {}
       ;(allTeams || []).forEach(t => { teamMap[t.id] = t })
+      const enrichedManaged = (allManagedPlayers || []).map(mp => {
+        const mes = (allManagedMesures || []).filter(m => m.managed_player_id === mp.id)
+        const sea = (allManagedSeances || []).filter(s => s.managed_player_id === mp.id)
+        const kpis = {}
+        KPI_CONFIG.forEach(k => {
+          const arr = mes.filter(m => m.kpi_id === k.id).sort((a, b) => a.date.localeCompare(b.date))
+          kpis[k.id] = arr.length > 0 ? arr[arr.length - 1].valeur : null
+        })
+        return {
+          user_id: GHOST_PREFIX + mp.id, managed_player_id: mp.id, isManaged: true, team_id: mp.team_id,
+          nom: mp.nom, prenom: mp.prenom, surnom: mp.surnom, poste1: mp.poste1, poste2: mp.poste2, photo_url: mp.photo_url,
+          teams: teamMap[mp.team_id] ? [{ ...teamMap[mp.team_id], role: 'joueur' }] : [],
+          mesuresData: mes, nb_mesures: mes.length, nb_seances: sea.length,
+          derniere_seance: sea.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null,
+          derniere_mesure: mes.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null,
+          kpis,
+        }
+      })
+      setAdminManagedPlayers(enrichedManaged)
       const playerTeamsMap = {}
       ;(allTeamMembers || []).forEach(tm => {
         if (!playerTeamsMap[tm.user_id]) playerTeamsMap[tm.user_id] = []
@@ -470,7 +492,10 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       team_id: teamId, prenom: managedPlayerDraft.prenom.trim(), nom: managedPlayerDraft.nom.trim(), poste1: managedPlayerDraft.poste1.trim(), created_by: user.id,
     }).select().single()
     if (error) { showToast('❌ ' + error.message); return }
-    setManagedPlayers(prev => [...prev, { user_id: GHOST_PREFIX + data.id, managed_player_id: data.id, isManaged: true, nom: data.nom, prenom: data.prenom, surnom: data.surnom, photo_url: data.photo_url, poste1: data.poste1, poste2: data.poste2, role: 'joueur', mesuresData: [], nb_mesures: 0, nb_seances: 0, kpis: {}, derniereSeance: null, seancesSemaine: 0, derniereMesure: null }])
+    const team = teams.find(t => t.id === teamId) || availableTeams.find(t => t.id === teamId)
+    const entry = { user_id: GHOST_PREFIX + data.id, managed_player_id: data.id, isManaged: true, team_id: teamId, nom: data.nom, prenom: data.prenom, surnom: data.surnom, photo_url: data.photo_url, poste1: data.poste1, poste2: data.poste2, role: 'joueur', teams: team ? [{ ...team, role: 'joueur' }] : [], mesuresData: [], nb_mesures: 0, nb_seances: 0, kpis: {}, derniereSeance: null, seancesSemaine: 0, derniereMesure: null, derniere_seance: null, derniere_mesure: null }
+    setManagedPlayers(prev => [...prev, entry])
+    setAdminManagedPlayers(prev => [...prev, entry])
     setManagedPlayerDraft({ prenom: '', nom: '', poste1: '' })
     setAddingManagedPlayer(false)
     showToast('✅ Joueur ajouté !')
@@ -479,6 +504,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const deleteManagedPlayer = async (id) => {
     await supabase.from('managed_players').delete().eq('id', id)
     setManagedPlayers(prev => prev.filter(p => p.managed_player_id !== id))
+    setAdminManagedPlayers(prev => prev.filter(p => p.managed_player_id !== id))
     showToast('🗑️ Joueur supprimé')
   }
 
@@ -491,6 +517,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     if (error) { showToast('❌ ' + error.message); return }
     if (isGhostId(target.user_id)) {
       setManagedPlayers(prev => prev.map(p => p.user_id !== target.user_id ? p : { ...p, mesuresData: [...p.mesuresData, data], kpis: { ...p.kpis, [kpiId]: data.valeur } }))
+      setAdminManagedPlayers(prev => prev.map(p => p.user_id !== target.user_id ? p : { ...p, mesuresData: [...p.mesuresData, data], kpis: { ...p.kpis, [kpiId]: data.valeur } }))
     } else {
       setCoachRosterData(prev => prev.map(p => p.user_id !== target.user_id ? p : { ...p, mesuresData: [...p.mesuresData, data], kpis: { ...p.kpis, [kpiId]: data.valeur } }))
       setAdminData(prev => prev.map(p => p.user_id !== target.user_id ? p : { ...p, mesuresData: [...(p.mesuresData || []), data], kpis: { ...p.kpis, [kpiId]: data.valeur } }))
@@ -893,7 +920,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
   const renderPlayerCard = (j, cardKey, teamContextId) => {
     const expanded = expandedAdmin === cardKey
-    const currentRole = teamContextId ? ((j.teams || []).find(t => t.id === teamContextId)?.role || 'joueur') : null
+    const currentRole = teamContextId && !j.isManaged ? ((j.teams || []).find(t => t.id === teamContextId)?.role || 'joueur') : null
     return (
       <div key={cardKey} style={{ background: C.card, borderRadius: 16, border: '1px solid ' + (expanded ? C.accent + '60' : C.border), overflow: 'hidden' }}>
         <div onClick={() => setExpandedAdmin(expanded ? null : cardKey)} style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
@@ -910,7 +937,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                 <span key={t.id} style={{ fontSize: 10, fontWeight: 700, color: t.color, background: t.color + '20', padding: '1px 7px', borderRadius: 10 }}>{t.name}</span>
               ))}
             </div>
-            {teamContextId && (
+            {currentRole && (
               <select value={currentRole} onClick={e => e.stopPropagation()}
                 onChange={e => setPlayerRole(j.user_id, teamContextId, e.target.value)}
                 style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: ROLE_CONFIG[currentRole].color, background: ROLE_CONFIG[currentRole].color + '18', border: '1px solid ' + ROLE_CONFIG[currentRole].color + '50', borderRadius: 8, padding: '2px 6px', cursor: 'pointer', outline: 'none' }}>
@@ -927,6 +954,11 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
         {expanded && (
           <div style={{ borderTop: '1px solid ' + C.border, padding: '14px 16px' }}>
+            {j.isManaged && (
+              <div style={{ background: C.surface, borderRadius: 10, padding: '8px 12px', marginBottom: 10, fontSize: 12, color: C.muted }}>
+                👻 Joueur sans compte — géré par le coach/admin, pas d'accès à l'application
+              </div>
+            )}
             {j.email && (
               <div style={{ background: C.surface, borderRadius: 10, padding: '8px 12px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span>✉️</span>
@@ -937,21 +969,23 @@ export default function App({ user, onSignOut, inviteTeamId }) {
               </div>
             )}
 
-            <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
-              <div style={{ fontSize: 10, color: C.muted, marginBottom: 8, fontWeight: 600 }}>ÉQUIPES</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {teams.map(t => {
-                  const inTeam = (j.teams || []).some(jt => jt.id === t.id)
-                  return (
-                    <button key={t.id} onClick={() => togglePlayerTeam(j.user_id, t.id)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 16, border: '2px solid ' + (inTeam ? t.color : C.border), background: inTeam ? t.color + '20' : 'transparent', color: inTeam ? t.color : C.muted, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                      {inTeam ? '✓ ' : '+ '}{t.name}
-                    </button>
-                  )
-                })}
-                {teams.length === 0 && <span style={{ fontSize: 12, color: C.muted }}>Aucune équipe créée</span>}
+            {!j.isManaged && (
+              <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
+                <div style={{ fontSize: 10, color: C.muted, marginBottom: 8, fontWeight: 600 }}>ÉQUIPES</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {teams.map(t => {
+                    const inTeam = (j.teams || []).some(jt => jt.id === t.id)
+                    return (
+                      <button key={t.id} onClick={() => togglePlayerTeam(j.user_id, t.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 16, border: '2px solid ' + (inTeam ? t.color : C.border), background: inTeam ? t.color + '20' : 'transparent', color: inTeam ? t.color : C.muted, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                        {inTeam ? '✓ ' : '+ '}{t.name}
+                      </button>
+                    )
+                  })}
+                  {teams.length === 0 && <span style={{ fontSize: 12, color: C.muted }}>Aucune équipe créée</span>}
+                </div>
               </div>
-            </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
               <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
@@ -1015,7 +1049,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
               {deleteConfirm?.userId === j.user_id ? (
                 deleteConfirm.step === 1 ? (
                   <div style={{ background: C.red + '12', border: '1px solid ' + C.red + '40', borderRadius: 12, padding: '12px 14px' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 4 }}>Supprimer le compte de {j.prenom || '—'} {j.nom || ''} ?</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 4 }}>Supprimer {j.isManaged ? 'le joueur' : 'le compte de'} {j.prenom || '—'} {j.nom || ''} ?</div>
                     <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>Toutes ses séances et performances seront supprimées.</div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => setDeleteConfirm(null)} style={{ flex: 1, padding: '8px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface, color: C.muted, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>Annuler</button>
@@ -1031,14 +1065,14 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => setDeleteConfirm(null)} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface, color: C.muted, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>Annuler</button>
-                      <button onClick={() => deleteUserAccount(j.user_id)} style={{ flex: 2, padding: '10px', borderRadius: 8, border: 'none', background: C.red, color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 800 }}>🗑️ Supprimer définitivement</button>
+                      <button onClick={() => j.isManaged ? deleteManagedPlayer(j.managed_player_id) : deleteUserAccount(j.user_id)} style={{ flex: 2, padding: '10px', borderRadius: 8, border: 'none', background: C.red, color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 800 }}>🗑️ Supprimer définitivement</button>
                     </div>
                   </div>
                 )
               ) : (
                 <button onClick={() => setDeleteConfirm({ userId: j.user_id, step: 1 })}
                   style={{ width: '100%', padding: '9px', borderRadius: 10, border: '1px solid ' + C.red + '35', background: 'transparent', color: C.red, fontSize: 12, cursor: 'pointer', fontWeight: 600, opacity: 0.75 }}>
-                  Supprimer ce compte
+                  {j.isManaged ? 'Supprimer ce joueur' : 'Supprimer ce compte'}
                 </button>
               )}
             </div>
@@ -2517,11 +2551,41 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                 )
               })()}
 
+              {/* Joueurs sans compte */}
+              <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: addingManagedPlayer ? 12 : 0 }}>
+                  <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Joueurs sans compte</div>
+                  {!addingManagedPlayer && (
+                    <button onClick={() => setAddingManagedPlayer(true)}
+                      style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+                      + Ajouter un joueur
+                    </button>
+                  )}
+                </div>
+                {addingManagedPlayer && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <input placeholder="Prénom" value={managedPlayerDraft.prenom} onChange={e => setManagedPlayerDraft(d => ({ ...d, prenom: e.target.value }))}
+                      style={{ flex: 1, minWidth: 100, background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }} />
+                    <input placeholder="Nom" value={managedPlayerDraft.nom} onChange={e => setManagedPlayerDraft(d => ({ ...d, nom: e.target.value }))}
+                      style={{ flex: 1, minWidth: 100, background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }} />
+                    <input placeholder="Poste (optionnel)" value={managedPlayerDraft.poste1} onChange={e => setManagedPlayerDraft(d => ({ ...d, poste1: e.target.value }))}
+                      style={{ flex: 1, minWidth: 100, background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }} />
+                    <button onClick={() => { setAddingManagedPlayer(false); setManagedPlayerDraft({ prenom: '', nom: '', poste1: '' }) }}
+                      style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer' }}>Annuler</button>
+                    <button onClick={() => addManagedPlayer(selectedAdminTeam.id)}
+                      style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: C.accent, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>✓ Ajouter</button>
+                  </div>
+                )}
+              </div>
+
               {/* Joueurs de l'équipe */}
               <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Joueurs de l'équipe</div>
               {adminError && <div style={{ background: C.red + '15', border: '1px solid ' + C.red + '40', borderRadius: 12, padding: '12px 14px', marginBottom: 14, fontSize: 12, color: C.red }}>{adminError}</div>}
               {(() => {
-                const teamPlayers = adminData.filter(j => (j.teams || []).some(t => t.id === selectedAdminTeam.id))
+                const teamPlayers = [
+                  ...adminData.filter(j => (j.teams || []).some(t => t.id === selectedAdminTeam.id)),
+                  ...adminManagedPlayers.filter(mp => mp.team_id === selectedAdminTeam.id),
+                ]
                 if (teamPlayers.length === 0) return (
                   <div style={{ background: C.card, borderRadius: 16, padding: 40, textAlign: 'center', color: C.muted }}>
                     <div style={{ fontSize: 36, marginBottom: 10 }}>👥</div>
