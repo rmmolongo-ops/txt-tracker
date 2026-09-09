@@ -75,6 +75,10 @@ const SESSIONS = [
 const DEFAULT_PROFIL = { nom: '', prenom: '', surnom: 'TxT', club: '', division: '', poste1: '', poste2: '', photo_url: '', dashboard_kpis: null }
 const DASHBOARD_KPIS_MAX = 4
 const LEADERSHIP_ROLES = ['coach', 'dirigeant']
+const GHOST_PREFIX = 'ghost:'
+const isGhostId = (id) => typeof id === 'string' && id.startsWith(GHOST_PREFIX)
+const ghostRealId = (id) => id.slice(GHOST_PREFIX.length)
+const seanceRowKey = (r) => r.user_id || (r.managed_player_id ? GHOST_PREFIX + r.managed_player_id : null)
 
 export default function App({ user, onSignOut, inviteTeamId }) {
   const [tab, setTab] = useState(() => localStorage.getItem('txt_tab') || 'dashboard')
@@ -116,6 +120,12 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [coachTeamId, setCoachTeamId] = useState(null)
   const [coachRosterData, setCoachRosterData] = useState([])
   const [coachRosterLoading, setCoachRosterLoading] = useState(false)
+  const [managedPlayers, setManagedPlayers] = useState([])
+  const [addingManagedPlayer, setAddingManagedPlayer] = useState(false)
+  const [managedPlayerDraft, setManagedPlayerDraft] = useState({ prenom: '', nom: '', poste1: '' })
+  const [entryTarget, setEntryTarget] = useState(null)
+  const [entryKpi, setEntryKpi] = useState('sprint30')
+  const [entryValue, setEntryValue] = useState('')
   const [adminChartKpi, setAdminChartKpi] = useState('sprint30')
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [adminView, setAdminView] = useState('overview')
@@ -418,6 +428,73 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     loadCoachRoster(coachTeamId)
   }, [tab, coachTeamId, myTeamRoles, availableTeams, myTeamIds, homeViewMode])
 
+  const loadEquipeManagedPlayers = async (teamId) => {
+    const { data: mp } = await supabase.from('managed_players').select('*').eq('team_id', teamId).order('created_at')
+    const ids = (mp || []).map(p => p.id)
+    if (ids.length === 0) { setManagedPlayers([]); return }
+    const [{ data: mes }, { data: sea }] = await Promise.all([
+      supabase.from('mesures').select('managed_player_id, kpi_id, valeur, date').in('managed_player_id', ids),
+      supabase.from('seances').select('managed_player_id, date').eq('team_id', teamId).in('managed_player_id', ids),
+    ])
+    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
+    const weekAgoStr = toDateStr(weekAgo)
+    const enriched = mp.map(p => {
+      const myMesures = (mes || []).filter(m => m.managed_player_id === p.id)
+      const mySeances = (sea || []).filter(s => s.managed_player_id === p.id)
+      const derniereSeance = mySeances.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
+      const seancesSemaine = mySeances.filter(s => s.date >= weekAgoStr).length
+      const derniereMesure = myMesures.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
+      const kpis = {}
+      KPI_CONFIG.forEach(k => {
+        const arr = myMesures.filter(m => m.kpi_id === k.id).sort((a, b) => a.date.localeCompare(b.date))
+        kpis[k.id] = arr.length > 0 ? arr[arr.length - 1].valeur : null
+      })
+      return { user_id: GHOST_PREFIX + p.id, managed_player_id: p.id, isManaged: true, nom: p.nom, prenom: p.prenom, surnom: p.surnom, photo_url: p.photo_url, poste1: p.poste1, poste2: p.poste2, role: 'joueur', mesuresData: myMesures, nb_mesures: myMesures.length, nb_seances: mySeances.length, kpis, derniereSeance, seancesSemaine, derniereMesure }
+    })
+    setManagedPlayers(enriched)
+  }
+
+  useEffect(() => {
+    const activeTeamId = isAdmin ? equipeTeamId : coachTeamId
+    if (tab !== 'equipe' || !activeTeamId) return
+    loadEquipeManagedPlayers(activeTeamId)
+  }, [tab, isAdmin, equipeTeamId, coachTeamId])
+
+  const addManagedPlayer = async (teamId) => {
+    if (!managedPlayerDraft.prenom.trim() && !managedPlayerDraft.nom.trim()) { showToast('❌ Donne au moins un prénom ou un nom'); return }
+    const { data, error } = await supabase.from('managed_players').insert({
+      team_id: teamId, prenom: managedPlayerDraft.prenom.trim(), nom: managedPlayerDraft.nom.trim(), poste1: managedPlayerDraft.poste1.trim(), created_by: user.id,
+    }).select().single()
+    if (error) { showToast('❌ ' + error.message); return }
+    setManagedPlayers(prev => [...prev, { user_id: GHOST_PREFIX + data.id, managed_player_id: data.id, isManaged: true, nom: data.nom, prenom: data.prenom, surnom: data.surnom, photo_url: data.photo_url, poste1: data.poste1, poste2: data.poste2, role: 'joueur', mesuresData: [], nb_mesures: 0, nb_seances: 0, kpis: {}, derniereSeance: null, seancesSemaine: 0, derniereMesure: null }])
+    setManagedPlayerDraft({ prenom: '', nom: '', poste1: '' })
+    setAddingManagedPlayer(false)
+    showToast('✅ Joueur ajouté !')
+  }
+
+  const deleteManagedPlayer = async (id) => {
+    await supabase.from('managed_players').delete().eq('id', id)
+    setManagedPlayers(prev => prev.filter(p => p.managed_player_id !== id))
+    showToast('🗑️ Joueur supprimé')
+  }
+
+  const saveMesureForPlayer = async (target, kpiId, value) => {
+    const today = new Date().toISOString().split('T')[0]
+    const payload = isGhostId(target.user_id)
+      ? { managed_player_id: target.managed_player_id, kpi_id: kpiId, valeur: parseFloat(value), date: today }
+      : { user_id: target.user_id, kpi_id: kpiId, valeur: parseFloat(value), date: today }
+    const { data, error } = await supabase.from('mesures').insert(payload).select().single()
+    if (error) { showToast('❌ ' + error.message); return }
+    if (isGhostId(target.user_id)) {
+      setManagedPlayers(prev => prev.map(p => p.user_id !== target.user_id ? p : { ...p, mesuresData: [...p.mesuresData, data], kpis: { ...p.kpis, [kpiId]: data.valeur } }))
+    } else {
+      setCoachRosterData(prev => prev.map(p => p.user_id !== target.user_id ? p : { ...p, mesuresData: [...p.mesuresData, data], kpis: { ...p.kpis, [kpiId]: data.valeur } }))
+      setAdminData(prev => prev.map(p => p.user_id !== target.user_id ? p : { ...p, mesuresData: [...(p.mesuresData || []), data], kpis: { ...p.kpis, [kpiId]: data.valeur } }))
+    }
+    setEntryValue('')
+    showToast('✅ Performance enregistrée pour ' + (target.prenom || 'ce joueur') + ' !')
+  }
+
   const loadTeamSeances = async (teamId) => {
     const { data } = await supabase.from('seances').select('*').eq('team_id', teamId)
     setTeamSeances(data || [])
@@ -435,8 +512,10 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
   const validateSeances = async (userIds, day, dateStr, teamId, cardKey) => {
     const toInsert = userIds
-      .filter(uid => !teamSeances.some(s => s.user_id === uid && s.jour === day && s.date === dateStr && s.team_id === teamId))
-      .map(uid => ({ user_id: uid, jour: day, date: dateStr, team_id: teamId, validated_by: user.id }))
+      .filter(uid => !teamSeances.some(s => seanceRowKey(s) === uid && s.jour === day && s.date === dateStr && s.team_id === teamId))
+      .map(uid => isGhostId(uid)
+        ? { managed_player_id: ghostRealId(uid), jour: day, date: dateStr, team_id: teamId, validated_by: user.id }
+        : { user_id: uid, jour: day, date: dateStr, team_id: teamId, validated_by: user.id })
     if (toInsert.length > 0) {
       const { data, error } = await supabase.from('seances').insert(toInsert).select()
       if (error) { showToast('❌ ' + error.message); return }
@@ -1713,9 +1792,74 @@ export default function App({ user, onSignOut, inviteTeamId }) {
               {activeEquipeTeamId && (() => {
                 const equipeTeamId = activeEquipeTeamId
                 const team = equipeViewTeams.find(t => t.id === equipeTeamId)
-                const teamPlayers = isAdmin ? adminData.filter(j => (j.teams || []).some(t => t.id === equipeTeamId)) : coachRosterData
+                const realPlayers = isAdmin ? adminData.filter(j => (j.teams || []).some(t => t.id === equipeTeamId)) : coachRosterData
+                const teamPlayers = [...realPlayers, ...managedPlayers]
+                const canManagePlayers = isAdmin || LEADERSHIP_ROLES.includes(myTeamRoles[equipeTeamId])
                 return (
                   <>
+                    {canManagePlayers && (
+                      <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: managedPlayers.length > 0 || addingManagedPlayer ? 12 : 0 }}>
+                          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Joueurs sans compte</div>
+                          {!addingManagedPlayer && (
+                            <button onClick={() => setAddingManagedPlayer(true)}
+                              style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+                              + Ajouter un joueur
+                            </button>
+                          )}
+                        </div>
+                        {addingManagedPlayer && (
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                            <input placeholder="Prénom" value={managedPlayerDraft.prenom} onChange={e => setManagedPlayerDraft(d => ({ ...d, prenom: e.target.value }))}
+                              style={{ flex: 1, minWidth: 100, background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }} />
+                            <input placeholder="Nom" value={managedPlayerDraft.nom} onChange={e => setManagedPlayerDraft(d => ({ ...d, nom: e.target.value }))}
+                              style={{ flex: 1, minWidth: 100, background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }} />
+                            <input placeholder="Poste (optionnel)" value={managedPlayerDraft.poste1} onChange={e => setManagedPlayerDraft(d => ({ ...d, poste1: e.target.value }))}
+                              style={{ flex: 1, minWidth: 100, background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }} />
+                            <button onClick={() => { setAddingManagedPlayer(false); setManagedPlayerDraft({ prenom: '', nom: '', poste1: '' }) }}
+                              style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer' }}>Annuler</button>
+                            <button onClick={() => addManagedPlayer(equipeTeamId)}
+                              style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: C.accent, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>✓ Ajouter</button>
+                          </div>
+                        )}
+                        {managedPlayers.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            {managedPlayers.map(p => (
+                              <div key={p.managed_player_id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 16, background: C.surface, fontSize: 12 }}>
+                                <span>{p.prenom || '—'} {p.nom || ''}</span>
+                                <button onClick={() => deleteManagedPlayer(p.managed_player_id)}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, opacity: 0.5, padding: 0 }}>🗑️</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {canManagePlayers && teamPlayers.length > 0 && (
+                      <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
+                        <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Saisir une performance</div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <select value={entryTarget || ''} onChange={e => setEntryTarget(e.target.value)}
+                            style={{ flex: '1 1 160px', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }}>
+                            <option value="">Joueur...</option>
+                            {teamPlayers.map(p => <option key={p.user_id} value={p.user_id}>{p.prenom || '—'} {p.nom || ''}</option>)}
+                          </select>
+                          <select value={entryKpi} onChange={e => setEntryKpi(e.target.value)}
+                            style={{ flex: '1 1 160px', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }}>
+                            {KPI_CONFIG.map(k => <option key={k.id} value={k.id}>{k.icon} {k.label}</option>)}
+                          </select>
+                          <input type="number" placeholder="Valeur" value={entryValue} onChange={e => setEntryValue(e.target.value)}
+                            style={{ flex: '0 1 100px', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }} />
+                          <button disabled={!entryTarget || !entryValue}
+                            onClick={() => saveMesureForPlayer(teamPlayers.find(p => p.user_id === entryTarget), entryKpi, entryValue)}
+                            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: entryTarget && entryValue ? C.accent : C.surface, color: entryTarget && entryValue ? '#fff' : C.muted, fontWeight: 700, fontSize: 13, cursor: entryTarget && entryValue ? 'pointer' : 'not-allowed' }}>
+                            ✓ Enregistrer
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Sub-tabs */}
                     <div style={{ display: 'flex', background: C.surface, borderRadius: 12, padding: 4, marginBottom: 20, gap: 2 }}>
                       {[{ id: 'perf', icon: '📊', label: 'Performances' }, { id: 'programme', icon: '📋', label: 'Programme' }, { id: 'suivi', icon: '✅', label: 'Suivi' }].map(t => (
@@ -1910,7 +2054,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                             const dateLabel = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })
                             const cardKey = dateStr
                             const doneRows = teamSeances.filter(se => se.jour === day && se.date === dateStr)
-                            const doneUserIds = new Set(doneRows.map(r => r.user_id))
+                            const doneUserIds = new Set(doneRows.map(seanceRowKey))
                             const selected = suiviSelected[cardKey] || new Set()
                             const pending = teamPlayers.filter(p => selected.has(p.user_id) && !doneUserIds.has(p.user_id))
 
@@ -1935,7 +2079,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                                   {teamPlayers.length === 0 ? (
                                     <div style={{ color: C.muted, fontSize: 13, textAlign: 'center', padding: 10 }}>Aucun joueur dans cette équipe</div>
                                   ) : teamPlayers.map(p => {
-                                    const row = doneRows.find(r => r.user_id === p.user_id)
+                                    const row = doneRows.find(r => seanceRowKey(r) === p.user_id)
                                     const isDone = !!row
                                     const isSelected = selected.has(p.user_id)
                                     return (
