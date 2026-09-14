@@ -165,6 +165,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [editingTemplateId, setEditingTemplateId] = useState(null)
   const [expandedTemplateId, setExpandedTemplateId] = useState(null)
   const [libraryPickerFor, setLibraryPickerFor] = useState(null)
+  const [viewDay, setViewDay] = useState(null)
   const [expandedPlayerProgramId, setExpandedPlayerProgramId] = useState(null)
   const [rosterPlayers, setRosterPlayers] = useState([])
   const [suiviWeekOffset, setSuiviWeekOffset] = useState(0)
@@ -1410,7 +1411,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                           {week.map(({ dateStr, date, dayCode, s }) => {
                             const planned = sessionHasContent(s)
                             return (
-                              <button key={dateStr} onClick={() => planSessionForDay(activeCoachTeam.id, dayCode)}
+                              <button key={dateStr} onClick={() => setViewDay({ dateStr, date, dayCode, s, teamId: activeCoachTeam.id })}
                                 style={{ flex: '0 0 auto', width: 68, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 4px', borderRadius: 12, border: '1px solid ' + (planned ? s.color + '50' : C.border), background: planned ? s.color + '15' : C.card, cursor: 'pointer' }}>
                                 <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: 'uppercase' }}>{dayCode}</div>
                                 <div style={{ fontSize: 15, fontWeight: 800, color: dateStr === toDateStr(new Date()) ? C.accent : C.text }}>{date.getDate()}</div>
@@ -1420,7 +1421,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                           })}
                         </div>
                         {week.map(({ dateStr, date, dayCode, s }) => sessionHasContent(s) && (
-                          <div key={dateStr} onClick={() => planSessionForDay(activeCoachTeam.id, dayCode)}
+                          <div key={dateStr} onClick={() => setViewDay({ dateStr, date, dayCode, s, teamId: activeCoachTeam.id })}
                             style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.card, borderRadius: 14, padding: '12px 16px', marginBottom: 8, border: '1px solid ' + C.border, cursor: 'pointer' }}>
                             <div style={{ width: 42, height: 42, borderRadius: 12, background: s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -1434,13 +1435,66 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                         {week.every(w => !sessionHasContent(w.s)) && (
                           <div style={{ background: C.card, borderRadius: 14, padding: 24, textAlign: 'center', color: C.muted, marginBottom: 16 }}>
                             <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
-                            Aucune séance planifiée — appuie sur un jour ci-dessus pour en composer une depuis ta bibliothèque
+                            Aucune séance planifiée — appuie sur un jour ci-dessus pour voir ou sur le + pour en composer une
                           </div>
                         )}
                       </>
                     )
                   })()}
                 </>
+              )}
+
+              {viewDay && (
+                <div onClick={() => setViewDay(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
+                  <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 20, maxWidth: 420, width: '100%', maxHeight: '80vh', overflowY: 'auto', border: '1px solid ' + C.border }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, gap: 10 }}>
+                      <div style={{ fontWeight: 800, fontSize: 15, textTransform: 'capitalize' }}>
+                        {viewDay.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      </div>
+                      <button onClick={() => setViewDay(null)} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 18, cursor: 'pointer', padding: 0 }}>✕</button>
+                    </div>
+                    {sessionHasContent(viewDay.s) ? (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                          <div style={{ width: 42, height: 42, borderRadius: 12, background: viewDay.s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{viewDay.s.icon}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: 14 }}>{viewDay.s.label}</div>
+                            <div style={{ fontSize: 12, color: C.muted }}>{viewDay.s.duration}{viewDay.s.objectif ? ' · ' + viewDay.s.objectif : ''}</div>
+                          </div>
+                        </div>
+                        {(viewDay.s.blocs || []).map((bloc, bi) => (
+                          <div key={bi} style={{ marginBottom: 10 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                              <div style={{ fontSize: 13, fontWeight: 700 }}>{bloc.titre}</div>
+                              <div style={{ fontSize: 11, color: viewDay.s.color, background: viewDay.s.color + '20', padding: '2px 8px', borderRadius: 8, fontWeight: 600 }}>{bloc.duree}</div>
+                            </div>
+                            {(bloc.exercices || []).filter(e => e.trim()).map((ex, ei) => (
+                              <div key={ei} style={{ display: 'flex', gap: 8, marginBottom: 4, alignItems: 'flex-start' }}>
+                                <div style={{ width: 6, height: 6, borderRadius: '50%', background: viewDay.s.color, marginTop: 6, flexShrink: 0 }} />
+                                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.4 }}>{ex}</div>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                        <button onClick={() => { setViewDay(null); planSessionForDay(viewDay.teamId, viewDay.dayCode) }}
+                          style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer', marginTop: 8 }}>
+                          ✏️ Modifier
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ textAlign: 'center', color: C.muted, padding: '16px 0 20px' }}>
+                          <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+                          Aucune séance planifiée pour ce jour
+                        </div>
+                        <button onClick={() => { setViewDay(null); planSessionForDay(viewDay.teamId, viewDay.dayCode) }}
+                          style={{ width: '100%', padding: 12, borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                          📚 Ajouter une séance depuis la bibliothèque
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           ) : (
