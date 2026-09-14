@@ -856,14 +856,16 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
   const sessionHasContent = (s) => !!(s && s.blocs && s.blocs.length > 0)
 
-  const planSessionForDay = async (teamId, dayCode) => {
-    const todayStr2 = toDateStr(new Date())
-    let program = getProgramForDate(teamId, todayStr2) || getProgramsForTeam(teamId)[0]
+  const planSessionForDay = async (teamId, dayCode, dateStr) => {
+    const targetDate = dateStr || toDateStr(new Date())
+    let program = getProgramForDate(teamId, targetDate)
     if (!program) {
-      const endFar = new Date(); endFar.setFullYear(endFar.getFullYear() + 1)
+      const todayStr2 = toDateStr(new Date())
+      const startDate = targetDate < todayStr2 ? targetDate : todayStr2
+      const endFar = new Date(startDate); endFar.setFullYear(endFar.getFullYear() + 1)
       const blankSessions = SESSIONS.map(s => ({ day: s.day, icon: s.icon, color: s.color, label: '', duration: '', objectif: '', blocs: [] }))
       const { data, error } = await supabase.from('team_programs').insert({
-        team_id: teamId, name: 'Programme', start_date: todayStr2, end_date: toDateStr(endFar), sessions: blankSessions,
+        team_id: teamId, name: 'Programme', start_date: startDate, end_date: toDateStr(endFar), sessions: blankSessions,
       }).select().single()
       if (error) { showToast('❌ ' + error.message); return }
       setProgramsCatalog(prev => [...prev, data])
@@ -1476,7 +1478,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                             ))}
                           </div>
                         ))}
-                        <button onClick={() => { setViewDay(null); planSessionForDay(viewDay.teamId, viewDay.dayCode) }}
+                        <button onClick={() => { setViewDay(null); planSessionForDay(viewDay.teamId, viewDay.dayCode, viewDay.dateStr) }}
                           style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer', marginTop: 8 }}>
                           ✏️ Modifier
                         </button>
@@ -1487,7 +1489,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                           <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
                           Aucune séance planifiée pour ce jour
                         </div>
-                        <button onClick={() => { setViewDay(null); planSessionForDay(viewDay.teamId, viewDay.dayCode) }}
+                        <button onClick={() => { setViewDay(null); planSessionForDay(viewDay.teamId, viewDay.dayCode, viewDay.dateStr) }}
                           style={{ width: '100%', padding: 12, borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
                           📚 Ajouter une séance depuis la bibliothèque
                         </button>
@@ -3146,7 +3148,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       )}
 
       {tab === 'dashboard' && effectiveHomeView === 'coach' && activeCoachTeam && (
-        <button onClick={() => planSessionForDay(activeCoachTeam.id, Object.keys(dayMap).find(k => dayMap[k] === todayDow))}
+        <button onClick={() => planSessionForDay(activeCoachTeam.id, Object.keys(dayMap).find(k => dayMap[k] === todayDow), toDateStr(new Date()))}
           title="Ajouter une séance à ma journée"
           style={{ position: 'fixed', left: 20, bottom: isMobile ? 84 : 24, width: 56, height: 56, borderRadius: '50%', border: 'none', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', fontSize: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 16px rgba(59,130,246,0.5)', zIndex: 60 }}>
           +
