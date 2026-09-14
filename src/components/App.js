@@ -853,13 +853,16 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
   const getProgramForDate = (teamId, dateStr) => programsCatalog.find(p => p.team_id === teamId && dateStr >= p.start_date && dateStr <= p.end_date)
 
+  const sessionHasContent = (s) => !!(s && s.blocs && s.blocs.length > 0)
+
   const planSessionForDay = async (teamId, dayCode) => {
     const todayStr2 = toDateStr(new Date())
     let program = getProgramForDate(teamId, todayStr2) || getProgramsForTeam(teamId)[0]
     if (!program) {
       const endFar = new Date(); endFar.setFullYear(endFar.getFullYear() + 1)
+      const blankSessions = SESSIONS.map(s => ({ day: s.day, icon: s.icon, color: s.color, label: '', duration: '', objectif: '', blocs: [] }))
       const { data, error } = await supabase.from('team_programs').insert({
-        team_id: teamId, name: 'Programme', start_date: todayStr2, end_date: toDateStr(endFar), sessions: JSON.parse(JSON.stringify(SESSIONS)),
+        team_id: teamId, name: 'Programme', start_date: todayStr2, end_date: toDateStr(endFar), sessions: blankSessions,
       }).select().single()
       if (error) { showToast('❌ ' + error.message); return }
       setProgramsCatalog(prev => [...prev, data])
@@ -872,7 +875,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     if (isAdmin) setEquipeTeamId(teamId); else setCoachTeamId(teamId)
     setEquipeTab('programme')
     changeTab('equipe')
-    if (si >= 0) setLibraryPickerFor({ si })
+    if (si >= 0 && !sessionHasContent(program.sessions[si])) setLibraryPickerFor({ si })
   }
 
   const saveProgram = async (teamId, draft, programId) => {
@@ -1404,16 +1407,19 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                     return (
                       <>
                         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 16 }}>
-                          {week.map(({ dateStr, date, dayCode, s }) => (
-                            <button key={dateStr} onClick={() => planSessionForDay(activeCoachTeam.id, dayCode)}
-                              style={{ flex: '0 0 auto', width: 68, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 4px', borderRadius: 12, border: '1px solid ' + (s ? s.color + '50' : C.border), background: s ? s.color + '15' : C.card, cursor: 'pointer' }}>
-                              <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: 'uppercase' }}>{dayCode}</div>
-                              <div style={{ fontSize: 15, fontWeight: 800, color: dateStr === toDateStr(new Date()) ? C.accent : C.text }}>{date.getDate()}</div>
-                              <div style={{ fontSize: 16 }}>{s ? s.icon : '+'}</div>
-                            </button>
-                          ))}
+                          {week.map(({ dateStr, date, dayCode, s }) => {
+                            const planned = sessionHasContent(s)
+                            return (
+                              <button key={dateStr} onClick={() => planSessionForDay(activeCoachTeam.id, dayCode)}
+                                style={{ flex: '0 0 auto', width: 68, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 4px', borderRadius: 12, border: '1px solid ' + (planned ? s.color + '50' : C.border), background: planned ? s.color + '15' : C.card, cursor: 'pointer' }}>
+                                <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: 'uppercase' }}>{dayCode}</div>
+                                <div style={{ fontSize: 15, fontWeight: 800, color: dateStr === toDateStr(new Date()) ? C.accent : C.text }}>{date.getDate()}</div>
+                                <div style={{ fontSize: 16 }}>{planned ? s.icon : '+'}</div>
+                              </button>
+                            )
+                          })}
                         </div>
-                        {week.map(({ dateStr, date, dayCode, s }) => s && (
+                        {week.map(({ dateStr, date, dayCode, s }) => sessionHasContent(s) && (
                           <div key={dateStr} onClick={() => planSessionForDay(activeCoachTeam.id, dayCode)}
                             style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.card, borderRadius: 14, padding: '12px 16px', marginBottom: 8, border: '1px solid ' + C.border, cursor: 'pointer' }}>
                             <div style={{ width: 42, height: 42, borderRadius: 12, background: s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
@@ -1425,7 +1431,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                             </div>
                           </div>
                         ))}
-                        {week.every(w => !w.s) && (
+                        {week.every(w => !sessionHasContent(w.s)) && (
                           <div style={{ background: C.card, borderRadius: 14, padding: 24, textAlign: 'center', color: C.muted, marginBottom: 16 }}>
                             <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
                             Aucune séance planifiée — appuie sur un jour ci-dessus pour en composer une depuis ta bibliothèque
