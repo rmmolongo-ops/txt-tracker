@@ -75,6 +75,14 @@ const SESSIONS = [
 const DEFAULT_PROFIL = { nom: '', prenom: '', surnom: 'TxT', club: '', division: '', poste1: '', poste2: '', photo_url: '', dashboard_kpis: null }
 const DASHBOARD_KPIS_MAX = 4
 const LEADERSHIP_ROLES = ['coach', 'dirigeant']
+const DEFAULT_TEMPLATE_BLOCS = [
+  { titre: 'Mise en route & causerie', duree: '10 min', exercices: [''] },
+  { titre: 'Échauffement', duree: '15 min', exercices: [''] },
+  { titre: 'Jeu thème', duree: '20 min', exercices: [''] },
+  { titre: 'Exercice', duree: '20 min', exercices: [''] },
+  { titre: 'Jeu libre', duree: '20 min', exercices: [''] },
+  { titre: 'Retour au calme', duree: '5 min', exercices: [''] },
+]
 const GHOST_PREFIX = 'ghost:'
 const isGhostId = (id) => typeof id === 'string' && id.startsWith(GHOST_PREFIX)
 const ghostRealId = (id) => id.slice(GHOST_PREFIX.length)
@@ -845,6 +853,28 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
   const getProgramForDate = (teamId, dateStr) => programsCatalog.find(p => p.team_id === teamId && dateStr >= p.start_date && dateStr <= p.end_date)
 
+  const planSessionForDay = async (teamId, dayCode) => {
+    const todayStr2 = toDateStr(new Date())
+    let program = getProgramForDate(teamId, todayStr2) || getProgramsForTeam(teamId)[0]
+    if (!program) {
+      const endFar = new Date(); endFar.setFullYear(endFar.getFullYear() + 1)
+      const { data, error } = await supabase.from('team_programs').insert({
+        team_id: teamId, name: 'Programme', start_date: todayStr2, end_date: toDateStr(endFar), sessions: JSON.parse(JSON.stringify(SESSIONS)),
+      }).select().single()
+      if (error) { showToast('❌ ' + error.message); return }
+      setProgramsCatalog(prev => [...prev, data])
+      program = data
+    }
+    const si = program.sessions.findIndex(s => s.day === dayCode)
+    setEditingProgramId(program.id)
+    setProgDraft({ name: program.name, start_date: program.start_date, end_date: program.end_date, sessions: JSON.parse(JSON.stringify(program.sessions)) })
+    setEditingProg(true)
+    if (isAdmin) setEquipeTeamId(teamId); else setCoachTeamId(teamId)
+    setEquipeTab('programme')
+    changeTab('equipe')
+    if (si >= 0) setLibraryPickerFor({ si })
+  }
+
   const saveProgram = async (teamId, draft, programId) => {
     if (!draft.name.trim()) { showToast('❌ Donne un nom au programme'); return }
     if (!draft.start_date || !draft.end_date) { showToast('❌ Renseigne les dates de début et de fin'); return }
@@ -1362,34 +1392,47 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                     </button>
                   </div>
                   {(() => {
-                    const upcoming = []
-                    for (let i = 0; i < 14 && upcoming.length < 5; i++) {
+                    const week = []
+                    for (let i = 0; i < 7; i++) {
                       const d = new Date(); d.setDate(d.getDate() + i)
                       const dateStr = toDateStr(d)
                       const dayCode = Object.keys(dayMap).find(k => dayMap[k] === d.getDay())
                       const program = getProgramForDate(activeCoachTeam.id, dateStr)
                       const s = program?.sessions.find(x => x.day === dayCode)
-                      if (s) upcoming.push({ dateStr, date: d, s })
+                      week.push({ dateStr, date: d, dayCode, s })
                     }
-                    if (upcoming.length === 0) {
-                      return (
-                        <div style={{ background: C.card, borderRadius: 14, padding: 24, textAlign: 'center', color: C.muted, marginBottom: 16 }}>
-                          <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
-                          Aucun programme planifié — configure-en un pour {activeCoachTeam.name}
+                    return (
+                      <>
+                        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 16 }}>
+                          {week.map(({ dateStr, date, dayCode, s }) => (
+                            <button key={dateStr} onClick={() => planSessionForDay(activeCoachTeam.id, dayCode)}
+                              style={{ flex: '0 0 auto', width: 68, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 4px', borderRadius: 12, border: '1px solid ' + (s ? s.color + '50' : C.border), background: s ? s.color + '15' : C.card, cursor: 'pointer' }}>
+                              <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: 'uppercase' }}>{dayCode}</div>
+                              <div style={{ fontSize: 15, fontWeight: 800, color: dateStr === toDateStr(new Date()) ? C.accent : C.text }}>{date.getDate()}</div>
+                              <div style={{ fontSize: 16 }}>{s ? s.icon : '+'}</div>
+                            </button>
+                          ))}
                         </div>
-                      )
-                    }
-                    return upcoming.map(({ dateStr, date, s }) => (
-                      <div key={dateStr} style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.card, borderRadius: 14, padding: '12px 16px', marginBottom: 8, border: '1px solid ' + C.border }}>
-                        <div style={{ width: 42, height: 42, borderRadius: 12, background: s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 700, fontSize: 14, textTransform: 'capitalize' }}>
-                            {date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })}
+                        {week.map(({ dateStr, date, dayCode, s }) => s && (
+                          <div key={dateStr} onClick={() => planSessionForDay(activeCoachTeam.id, dayCode)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.card, borderRadius: 14, padding: '12px 16px', marginBottom: 8, border: '1px solid ' + C.border, cursor: 'pointer' }}>
+                            <div style={{ width: 42, height: 42, borderRadius: 12, background: s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 700, fontSize: 14, textTransform: 'capitalize' }}>
+                                {date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })}
+                              </div>
+                              <div style={{ fontSize: 12, color: C.muted }}>{s.label} · {s.duration}</div>
+                            </div>
                           </div>
-                          <div style={{ fontSize: 12, color: C.muted }}>{s.label} · {s.duration}</div>
-                        </div>
-                      </div>
-                    ))
+                        ))}
+                        {week.every(w => !w.s) && (
+                          <div style={{ background: C.card, borderRadius: 14, padding: 24, textAlign: 'center', color: C.muted, marginBottom: 16 }}>
+                            <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+                            Aucune séance planifiée — appuie sur un jour ci-dessus pour en composer une depuis ta bibliothèque
+                          </div>
+                        )}
+                      </>
+                    )
                   })()}
                 </>
               )}
@@ -2390,7 +2433,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Mes séances types</div>
-                <button onClick={() => { setTemplateDraft({ label: '', icon: '💪', color: '#3b82f6', duration: '1h30', objectif: '', blocs: [{ titre: '', duree: '15 min', exercices: [''] }] }); setEditingTemplateId(null); setEditingTemplate(true) }}
+                <button onClick={() => { setTemplateDraft({ label: '', icon: '💪', color: '#3b82f6', duration: '1h30', objectif: '', blocs: JSON.parse(JSON.stringify(DEFAULT_TEMPLATE_BLOCS)) }); setEditingTemplateId(null); setEditingTemplate(true) }}
                   style={{ padding: '9px 16px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
                   + Nouvelle séance
                 </button>
