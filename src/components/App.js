@@ -3222,7 +3222,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       {tab === 'dashboard' && effectiveHomeView === 'coach' && activeCoachTeam && (
         <button onClick={() => setDailyPickerFor({ teamId: viewDay?.teamId || activeCoachTeam.id, dateStr: viewDay?.dateStr || toDateStr(new Date()) })}
           title={viewDay ? 'Ajouter une séance à ce jour' : "Ajouter une séance à ma journée"}
-          style={{ position: 'fixed', left: 20, bottom: isMobile ? 84 : 24, width: 56, height: 56, borderRadius: '50%', border: 'none', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', fontSize: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 16px rgba(59,130,246,0.5)', zIndex: 60 }}>
+          style={{ position: 'fixed', right: 20, bottom: isMobile ? 84 : 24, width: 56, height: 56, borderRadius: '50%', border: 'none', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', fontSize: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 16px rgba(59,130,246,0.5)', zIndex: 60 }}>
           +
         </button>
       )}
