@@ -168,6 +168,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [viewDay, setViewDay] = useState(null)
   const [dailySessions, setDailySessions] = useState([])
   const [dailyPickerFor, setDailyPickerFor] = useState(null)
+  const [editingDailySession, setEditingDailySession] = useState(false)
+  const [dailySessionDraft, setDailySessionDraft] = useState(null)
   const [expandedPlayerProgramId, setExpandedPlayerProgramId] = useState(null)
   const [rosterPlayers, setRosterPlayers] = useState([])
   const [suiviWeekOffset, setSuiviWeekOffset] = useState(0)
@@ -884,6 +886,28 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     showToast('✅ Séance planifiée !')
   }
 
+  const removeDailySession = async (id) => {
+    await supabase.from('team_daily_sessions').delete().eq('id', id)
+    setDailySessions(prev => prev.filter(d => d.id !== id))
+    setViewDay(v => v ? { ...v, s: null } : v)
+    setEditingDailySession(false)
+    showToast('🗑️ Séance retirée')
+  }
+
+  const updateDailySession = async (id, draft) => {
+    const clean = {
+      label: draft.label.trim(), duration: draft.duration.trim(), objectif: draft.objectif.trim(),
+      blocs: draft.blocs.map(b => ({ ...b, exercices: b.exercices.filter(e => e.trim() !== '') })),
+    }
+    const { data, error } = await supabase.from('team_daily_sessions').update(clean).eq('id', id).select().single()
+    if (error) { showToast('❌ ' + error.message); return }
+    setDailySessions(prev => prev.map(d => d.id === id ? data : d))
+    setViewDay(v => v ? { ...v, s: data } : v)
+    setEditingDailySession(false)
+    setDailySessionDraft(null)
+    showToast('✅ Séance mise à jour !')
+  }
+
   const saveProgram = async (teamId, draft, programId) => {
     if (!draft.name.trim()) { showToast('❌ Donne un nom au programme'); return }
     if (!draft.start_date || !draft.end_date) { showToast('❌ Renseigne les dates de début et de fin'); return }
@@ -1427,30 +1451,92 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                         </div>
                         {viewDay && viewDay.s && (
                           <div style={{ background: C.card, borderRadius: 14, padding: 16, marginBottom: 16, border: '1px solid ' + C.border }}>
-                            <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, textTransform: 'capitalize' }}>
-                              {viewDay.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                              <div style={{ width: 42, height: 42, borderRadius: 12, background: viewDay.s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{viewDay.s.icon}</div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 700, fontSize: 14 }}>{viewDay.s.label}</div>
-                                <div style={{ fontSize: 12, color: C.muted }}>{viewDay.s.duration}{viewDay.s.objectif ? ' · ' + viewDay.s.objectif : ''}</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                              <div style={{ fontSize: 12, color: C.muted, textTransform: 'capitalize' }}>
+                                {viewDay.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
                               </div>
-                            </div>
-                            {(viewDay.s.blocs || []).map((bloc, bi) => (
-                              <div key={bi} style={{ marginBottom: 10 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                  <div style={{ fontSize: 13, fontWeight: 700 }}>{bloc.titre}</div>
-                                  <div style={{ fontSize: 11, color: viewDay.s.color, background: viewDay.s.color + '20', padding: '2px 8px', borderRadius: 8, fontWeight: 600 }}>{bloc.duree}</div>
+                              {!editingDailySession && (
+                                <div style={{ display: 'flex', gap: 10 }}>
+                                  <button onClick={() => { setDailySessionDraft(JSON.parse(JSON.stringify({ label: viewDay.s.label, duration: viewDay.s.duration, objectif: viewDay.s.objectif, blocs: viewDay.s.blocs || [] }))); setEditingDailySession(viewDay.s.id) }}
+                                    style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>✏️ Modifier</button>
+                                  <button onClick={() => removeDailySession(viewDay.s.id)}
+                                    style={{ background: 'none', border: 'none', color: C.red, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>🗑️ Supprimer</button>
                                 </div>
-                                {(bloc.exercices || []).filter(e => e.trim()).map((ex, ei) => (
-                                  <div key={ei} style={{ display: 'flex', gap: 8, marginBottom: 4, alignItems: 'flex-start' }}>
-                                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: viewDay.s.color, marginTop: 6, flexShrink: 0 }} />
-                                    <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.4 }}>{ex}</div>
+                              )}
+                            </div>
+
+                            {editingDailySession === viewDay.s.id ? (
+                              <div>
+                                <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+                                  <input value={dailySessionDraft.label} placeholder="Nom de la séance"
+                                    onChange={e => setDailySessionDraft(d => ({ ...d, label: e.target.value }))}
+                                    style={{ flex: 1, background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }} />
+                                  <input value={dailySessionDraft.duration} placeholder="Durée"
+                                    onChange={e => setDailySessionDraft(d => ({ ...d, duration: e.target.value }))}
+                                    style={{ width: 80, background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none', textAlign: 'center' }} />
+                                </div>
+                                <input value={dailySessionDraft.objectif} placeholder="Objectif de la séance..."
+                                  onChange={e => setDailySessionDraft(d => ({ ...d, objectif: e.target.value }))}
+                                  style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 14 }} />
+
+                                {dailySessionDraft.blocs.map((bloc, bi) => (
+                                  <div key={bi} style={{ background: C.surface, borderRadius: 10, padding: 12, marginBottom: 10 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                                      <input value={bloc.titre} placeholder="Titre du bloc"
+                                        onChange={e => { const d = JSON.parse(JSON.stringify(dailySessionDraft)); d.blocs[bi].titre = e.target.value; setDailySessionDraft(d) }}
+                                        style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid ' + C.border, color: C.text, fontSize: 13, fontWeight: 700, outline: 'none' }} />
+                                      <input value={bloc.duree} placeholder="Durée"
+                                        onChange={e => { const d = JSON.parse(JSON.stringify(dailySessionDraft)); d.blocs[bi].duree = e.target.value; setDailySessionDraft(d) }}
+                                        style={{ background: 'transparent', border: '1px solid ' + C.border, borderRadius: 6, color: viewDay.s.color, fontSize: 11, padding: '2px 6px', outline: 'none', width: 70, textAlign: 'center' }} />
+                                      <button onClick={() => setDailySessionDraft(d => ({ ...d, blocs: d.blocs.filter((_, i) => i !== bi) }))}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.red, fontSize: 14 }}>🗑️</button>
+                                    </div>
+                                    <textarea value={bloc.exercices.join('\n')} placeholder="Un exercice par ligne..."
+                                      onChange={e => { const d = JSON.parse(JSON.stringify(dailySessionDraft)); d.blocs[bi].exercices = e.target.value.split('\n'); setDailySessionDraft(d) }}
+                                      rows={Math.max(2, bloc.exercices.length + 1)}
+                                      style={{ width: '100%', background: C.card, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.7, boxSizing: 'border-box' }} />
                                   </div>
                                 ))}
+                                <button onClick={() => setDailySessionDraft(d => ({ ...d, blocs: [...d.blocs, { titre: '', duree: '', exercices: [''] }] }))}
+                                  style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px dashed ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer', fontWeight: 600, marginBottom: 12 }}>
+                                  + Ajouter un bloc
+                                </button>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                  <button onClick={() => { setEditingDailySession(false); setDailySessionDraft(null) }}
+                                    style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer' }}>
+                                    Annuler
+                                  </button>
+                                  <button onClick={() => updateDailySession(viewDay.s.id, dailySessionDraft)}
+                                    style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: C.green, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                                    ✓ Enregistrer
+                                  </button>
+                                </div>
                               </div>
-                            ))}
+                            ) : (
+                              <>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                                  <div style={{ width: 42, height: 42, borderRadius: 12, background: viewDay.s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{viewDay.s.icon}</div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 700, fontSize: 14 }}>{viewDay.s.label}</div>
+                                    <div style={{ fontSize: 12, color: C.muted }}>{viewDay.s.duration}{viewDay.s.objectif ? ' · ' + viewDay.s.objectif : ''}</div>
+                                  </div>
+                                </div>
+                                {(viewDay.s.blocs || []).map((bloc, bi) => (
+                                  <div key={bi} style={{ marginBottom: 10 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                      <div style={{ fontSize: 13, fontWeight: 700 }}>{bloc.titre}</div>
+                                      <div style={{ fontSize: 11, color: viewDay.s.color, background: viewDay.s.color + '20', padding: '2px 8px', borderRadius: 8, fontWeight: 600 }}>{bloc.duree}</div>
+                                    </div>
+                                    {(bloc.exercices || []).filter(e => e.trim()).map((ex, ei) => (
+                                      <div key={ei} style={{ display: 'flex', gap: 8, marginBottom: 4, alignItems: 'flex-start' }}>
+                                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: viewDay.s.color, marginTop: 6, flexShrink: 0 }} />
+                                        <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.4 }}>{ex}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ))}
+                              </>
+                            )}
                           </div>
                         )}
                       </>
@@ -3134,8 +3220,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       )}
 
       {tab === 'dashboard' && effectiveHomeView === 'coach' && activeCoachTeam && (
-        <button onClick={() => setDailyPickerFor({ teamId: activeCoachTeam.id, dateStr: toDateStr(new Date()) })}
-          title="Ajouter une séance à ma journée"
+        <button onClick={() => setDailyPickerFor({ teamId: viewDay?.teamId || activeCoachTeam.id, dateStr: viewDay?.dateStr || toDateStr(new Date()) })}
+          title={viewDay ? 'Ajouter une séance à ce jour' : "Ajouter une séance à ma journée"}
           style={{ position: 'fixed', left: 20, bottom: isMobile ? 84 : 24, width: 56, height: 56, borderRadius: '50%', border: 'none', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', fontSize: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 16px rgba(59,130,246,0.5)', zIndex: 60 }}>
           +
         </button>
