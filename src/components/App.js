@@ -884,13 +884,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     showToast('✅ Séance planifiée !')
   }
 
-  const removeDailySession = async (id) => {
-    await supabase.from('team_daily_sessions').delete().eq('id', id)
-    setDailySessions(prev => prev.filter(d => d.id !== id))
-    setViewDay(null)
-    showToast('🗑️ Séance retirée')
-  }
-
   const saveProgram = async (teamId, draft, programId) => {
     if (!draft.name.trim()) { showToast('❌ Donne un nom au programme'); return }
     if (!draft.start_date || !draft.end_date) { showToast('❌ Renseigne les dates de début et de fin'); return }
@@ -1487,28 +1480,12 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                             ))}
                           </div>
                         ))}
-                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                          <button onClick={() => setDailyPickerFor({ teamId: viewDay.teamId, dateStr: viewDay.dateStr })}
-                            style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer' }}>
-                            🔄 Changer
-                          </button>
-                          <button onClick={() => removeDailySession(viewDay.s.id)}
-                            style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid ' + C.red + '40', background: 'transparent', color: C.red, fontSize: 13, cursor: 'pointer' }}>
-                            🗑️ Retirer
-                          </button>
-                        </div>
                       </>
                     ) : (
-                      <>
-                        <div style={{ textAlign: 'center', color: C.muted, padding: '16px 0 20px' }}>
-                          <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
-                          Aucune séance planifiée pour ce jour
-                        </div>
-                        <button onClick={() => setDailyPickerFor({ teamId: viewDay.teamId, dateStr: viewDay.dateStr })}
-                          style={{ width: '100%', padding: 12, borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                          📚 Ajouter une séance depuis la bibliothèque
-                        </button>
-                      </>
+                      <div style={{ textAlign: 'center', color: C.muted, padding: '16px 0 20px' }}>
+                        <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+                        Aucune séance planifiée pour ce jour
+                      </div>
                     )}
                   </div>
                 </div>
