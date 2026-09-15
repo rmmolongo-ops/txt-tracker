@@ -169,6 +169,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [viewDay, setViewDay] = useState(null)
   const [dailySessions, setDailySessions] = useState([])
   const [dailyPickerFor, setDailyPickerFor] = useState(null)
+  const [pickerMode, setPickerMode] = useState('entrainement')
+  const [matchOpponent, setMatchOpponent] = useState('')
   const [editingDailySession, setEditingDailySession] = useState(false)
   const [dailySessionDraft, setDailySessionDraft] = useState(null)
   const [calendarMonth, setCalendarMonth] = useState(() => { const d = new Date(); d.setDate(1); return d })
@@ -881,7 +883,21 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     const payload = {
       team_id: teamId, date: dateStr, template_id: template.id,
       label: template.label, icon: template.icon, color: template.color, duration: template.duration, objectif: template.objectif, blocs: template.blocs,
-      created_by: user.id,
+      created_by: user.id, type: 'entrainement',
+    }
+    const { data, error } = await supabase.from('team_daily_sessions').upsert(payload, { onConflict: 'team_id,date' }).select().single()
+    if (error) { showToast('❌ ' + error.message); return }
+    setDailySessions(prev => [...prev.filter(d => !(d.team_id === teamId && d.date === dateStr)), data])
+    setDailyPickerFor(null)
+    setViewDay(v => v && v.dateStr === dateStr ? { ...v, s: data } : v)
+    showToast('✅ Séance planifiée !')
+  }
+
+  const assignMatchSession = async (teamId, dateStr, opponent) => {
+    const payload = {
+      team_id: teamId, date: dateStr, template_id: null,
+      label: opponent ? `Match vs ${opponent}` : 'Match', icon: '🏆', color: '#eab308', duration: '', objectif: '', blocs: [],
+      created_by: user.id, type: 'match',
     }
     const { data, error } = await supabase.from('team_daily_sessions').upsert(payload, { onConflict: 'team_id,date' }).select().single()
     if (error) { showToast('❌ ' + error.message); return }
@@ -1465,6 +1481,67 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                     </div>
                   </div>
 
+                  {(() => {
+                    const weekMonday = getMonday(new Date())
+                    const weekMondayStr = toDateStr(weekMonday)
+                    const weekSunday = new Date(weekMonday); weekSunday.setDate(weekMonday.getDate() + 6)
+                    const weekSundayStr = toDateStr(weekSunday)
+                    const todayStr = toDateStr(new Date())
+                    const weekPlanned = dailySessions.filter(d => d.team_id === activeCoachTeam.id && d.date >= weekMondayStr && d.date <= weekSundayStr)
+                    const trainings = weekPlanned.filter(d => d.type !== 'match')
+                    const matches = weekPlanned.filter(d => d.type === 'match')
+                    const realized = weekPlanned.filter(d => d.date <= todayStr)
+
+                    const allPlayers = [...coachRosterData, ...managedPlayers]
+                    const kpiAverages = KPI_CONFIG.map(kpi => {
+                      const values = []
+                      allPlayers.forEach(p => (p.mesuresData || []).forEach(m => {
+                        if (m.kpi_id === kpi.id && m.date >= weekMondayStr && m.date <= weekSundayStr) values.push(m.valeur)
+                      }))
+                      if (values.length === 0) return null
+                      return { kpi, avg: values.reduce((a, b) => a + b, 0) / values.length, count: values.length }
+                    }).filter(Boolean)
+
+                    if (weekPlanned.length === 0 && kpiAverages.length === 0) return null
+
+                    return (
+                      <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 16, border: '1px solid ' + C.border }}>
+                        <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
+                          📊 Récap de la semaine
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: kpiAverages.length > 0 ? 14 : 0 }}>
+                          <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>PRÉVU VS RÉALISÉ</div>
+                            <div style={{ fontSize: 18, fontWeight: 800 }}>{realized.length} / {weekPlanned.length}</div>
+                          </div>
+                          <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>MATCH DE LA SEMAINE</div>
+                            {matches.length > 0 ? (
+                              <div style={{ fontSize: 13, fontWeight: 700, color: '#eab308' }}>
+                                🏆 {matches[0].label} · {new Date(matches[0].date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 13, color: C.muted }}>Aucun</div>
+                            )}
+                          </div>
+                        </div>
+                        {kpiAverages.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>MOYENNES KPI DE LA SEMAINE</div>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              {kpiAverages.map(({ kpi, avg, count }) => (
+                                <div key={kpi.id} style={{ background: kpi.color + '18', border: '1px solid ' + kpi.color + '40', borderRadius: 10, padding: '6px 10px', fontSize: 12 }}>
+                                  {kpi.icon} {kpi.label} : <b style={{ color: kpi.color }}>{avg.toFixed(1)}{kpi.unit === '/10' ? '/10' : ' ' + kpi.unit}</b>
+                                  <span style={{ color: C.muted }}> ({count})</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
                     <button onClick={() => { changeTab('equipe'); setEquipeTab('programme') }}
                       style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
@@ -1691,24 +1768,51 @@ export default function App({ user, onSignOut, inviteTeamId }) {
               )}
 
               {dailyPickerFor && (
-                <div onClick={() => setDailyPickerFor(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: 20 }}>
+                <div onClick={() => { setDailyPickerFor(null); setPickerMode('entrainement'); setMatchOpponent('') }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: 20 }}>
                   <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 20, maxWidth: 420, width: '100%', maxHeight: '80vh', overflowY: 'auto', border: '1px solid ' + C.border }}>
-                    <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 14 }}>Choisir une séance de la bibliothèque</div>
-                    {seanceTemplates.length === 0 ? (
-                      <div style={{ textAlign: 'center', color: C.muted, padding: '16px 0' }}>
-                        Ta bibliothèque est vide — crée une séance dans l'onglet Bibliothèque
-                      </div>
-                    ) : seanceTemplates.map(t => (
-                      <button key={t.id} onClick={() => assignDailySession(dailyPickerFor.teamId, dailyPickerFor.dateStr, t)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid ' + C.border, background: C.surface, color: C.text, cursor: 'pointer', marginBottom: 8 }}>
-                        <span style={{ fontSize: 20 }}>{t.icon}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 700, fontSize: 13 }}>{t.label}</div>
-                          <div style={{ fontSize: 11, color: C.muted }}>{t.duration}{t.objectif ? ' · ' + t.objectif : ''}</div>
-                        </div>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                      <button onClick={() => setPickerMode('entrainement')}
+                        style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, background: pickerMode === 'entrainement' ? C.accent : C.surface, color: pickerMode === 'entrainement' ? '#fff' : C.muted }}>
+                        🏃 Entraînement
                       </button>
-                    ))}
-                    <button onClick={() => setDailyPickerFor(null)}
+                      <button onClick={() => setPickerMode('match')}
+                        style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, background: pickerMode === 'match' ? '#eab308' : C.surface, color: pickerMode === 'match' ? '#fff' : C.muted }}>
+                        🏆 Match
+                      </button>
+                    </div>
+
+                    {pickerMode === 'entrainement' ? (
+                      <>
+                        <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 14 }}>Choisir une séance de la bibliothèque</div>
+                        {seanceTemplates.length === 0 ? (
+                          <div style={{ textAlign: 'center', color: C.muted, padding: '16px 0' }}>
+                            Ta bibliothèque est vide — crée une séance dans l'onglet Bibliothèque
+                          </div>
+                        ) : seanceTemplates.map(t => (
+                          <button key={t.id} onClick={() => assignDailySession(dailyPickerFor.teamId, dailyPickerFor.dateStr, t)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid ' + C.border, background: C.surface, color: C.text, cursor: 'pointer', marginBottom: 8 }}>
+                            <span style={{ fontSize: 20 }}>{t.icon}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 700, fontSize: 13 }}>{t.label}</div>
+                              <div style={{ fontSize: 11, color: C.muted }}>{t.duration}{t.objectif ? ' · ' + t.objectif : ''}</div>
+                            </div>
+                          </button>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 14 }}>Planifier un match</div>
+                        <input value={matchOpponent} placeholder="Adversaire (optionnel)"
+                          onChange={e => setMatchOpponent(e.target.value)}
+                          style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 14 }} />
+                        <button onClick={() => { assignMatchSession(dailyPickerFor.teamId, dailyPickerFor.dateStr, matchOpponent.trim()); setMatchOpponent('') }}
+                          style={{ width: '100%', padding: 10, borderRadius: 10, border: 'none', background: '#eab308', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', marginBottom: 8 }}>
+                          🏆 Planifier ce match
+                        </button>
+                      </>
+                    )}
+
+                    <button onClick={() => { setDailyPickerFor(null); setPickerMode('entrainement'); setMatchOpponent('') }}
                       style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer', marginTop: 4 }}>
                       Annuler
                     </button>
