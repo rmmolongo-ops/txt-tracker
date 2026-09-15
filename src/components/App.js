@@ -166,6 +166,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [expandedTemplateId, setExpandedTemplateId] = useState(null)
   const [libraryPickerFor, setLibraryPickerFor] = useState(null)
   const [viewDay, setViewDay] = useState(null)
+  const [dailySessions, setDailySessions] = useState([])
+  const [dailyPickerFor, setDailyPickerFor] = useState(null)
   const [expandedPlayerProgramId, setExpandedPlayerProgramId] = useState(null)
   const [rosterPlayers, setRosterPlayers] = useState([])
   const [suiviWeekOffset, setSuiviWeekOffset] = useState(0)
@@ -550,7 +552,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   }
 
   useEffect(() => {
-    if (tab !== 'bibliotheque' && tab !== 'equipe') return
+    if (tab !== 'bibliotheque' && tab !== 'equipe' && tab !== 'dashboard') return
     const isLeadershipNow = availableTeams.some(t => myTeamIds.has(t.id) && LEADERSHIP_ROLES.includes(myTeamRoles[t.id]))
     if (!isLeadershipNow) return
     loadSeanceTemplates()
@@ -856,29 +858,37 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
   const sessionHasContent = (s) => !!(s && s.blocs && s.blocs.length > 0)
 
-  const planSessionForDay = async (teamId, dayCode, dateStr) => {
-    const targetDate = dateStr || toDateStr(new Date())
-    let program = getProgramForDate(teamId, targetDate)
-    if (!program) {
-      const todayStr2 = toDateStr(new Date())
-      const startDate = targetDate < todayStr2 ? targetDate : todayStr2
-      const endFar = new Date(startDate); endFar.setFullYear(endFar.getFullYear() + 1)
-      const blankSessions = SESSIONS.map(s => ({ day: s.day, icon: s.icon, color: s.color, label: '', duration: '', objectif: '', blocs: [] }))
-      const { data, error } = await supabase.from('team_programs').insert({
-        team_id: teamId, name: 'Programme', start_date: startDate, end_date: toDateStr(endFar), sessions: blankSessions,
-      }).select().single()
-      if (error) { showToast('❌ ' + error.message); return }
-      setProgramsCatalog(prev => [...prev, data])
-      program = data
+  const loadDailySessions = async (teamId) => {
+    const { data } = await supabase.from('team_daily_sessions').select('*').eq('team_id', teamId)
+    setDailySessions(data || [])
+  }
+
+  useEffect(() => {
+    if (tab !== 'dashboard' || !coachTeamId) return
+    loadDailySessions(coachTeamId)
+  }, [tab, coachTeamId])
+
+  const getDailySession = (teamId, dateStr) => dailySessions.find(d => d.team_id === teamId && d.date === dateStr)
+
+  const assignDailySession = async (teamId, dateStr, template) => {
+    const payload = {
+      team_id: teamId, date: dateStr, template_id: template.id,
+      label: template.label, icon: template.icon, color: template.color, duration: template.duration, objectif: template.objectif, blocs: template.blocs,
+      created_by: user.id,
     }
-    const si = program.sessions.findIndex(s => s.day === dayCode)
-    setEditingProgramId(program.id)
-    setProgDraft({ name: program.name, start_date: program.start_date, end_date: program.end_date, sessions: JSON.parse(JSON.stringify(program.sessions)) })
-    setEditingProg(true)
-    if (isAdmin) setEquipeTeamId(teamId); else setCoachTeamId(teamId)
-    setEquipeTab('programme')
-    changeTab('equipe')
-    if (si >= 0 && !sessionHasContent(program.sessions[si])) setLibraryPickerFor({ si })
+    const { data, error } = await supabase.from('team_daily_sessions').upsert(payload, { onConflict: 'team_id,date' }).select().single()
+    if (error) { showToast('❌ ' + error.message); return }
+    setDailySessions(prev => [...prev.filter(d => !(d.team_id === teamId && d.date === dateStr)), data])
+    setDailyPickerFor(null)
+    setViewDay(v => v && v.dateStr === dateStr ? { ...v, s: data } : v)
+    showToast('✅ Séance planifiée !')
+  }
+
+  const removeDailySession = async (id) => {
+    await supabase.from('team_daily_sessions').delete().eq('id', id)
+    setDailySessions(prev => prev.filter(d => d.id !== id))
+    setViewDay(null)
+    showToast('🗑️ Séance retirée')
   }
 
   const saveProgram = async (teamId, draft, programId) => {
@@ -1403,15 +1413,14 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                       const d = new Date(); d.setDate(d.getDate() + i)
                       const dateStr = toDateStr(d)
                       const dayCode = Object.keys(dayMap).find(k => dayMap[k] === d.getDay())
-                      const program = getProgramForDate(activeCoachTeam.id, dateStr)
-                      const s = program?.sessions.find(x => x.day === dayCode)
+                      const s = getDailySession(activeCoachTeam.id, dateStr)
                       week.push({ dateStr, date: d, dayCode, s })
                     }
                     return (
                       <>
                         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 16 }}>
                           {week.map(({ dateStr, date, dayCode, s }) => {
-                            const planned = sessionHasContent(s)
+                            const planned = !!s
                             return (
                               <button key={dateStr} onClick={() => setViewDay({ dateStr, date, dayCode, s, teamId: activeCoachTeam.id })}
                                 style={{ flex: '0 0 auto', width: 68, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 4px', borderRadius: 12, border: '1px solid ' + (planned ? s.color + '50' : C.border), background: planned ? s.color + '15' : C.card, cursor: 'pointer' }}>
@@ -1422,7 +1431,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                             )
                           })}
                         </div>
-                        {week.map(({ dateStr, date, dayCode, s }) => sessionHasContent(s) && (
+                        {week.map(({ dateStr, date, dayCode, s }) => s && (
                           <div key={dateStr} onClick={() => setViewDay({ dateStr, date, dayCode, s, teamId: activeCoachTeam.id })}
                             style={{ display: 'flex', alignItems: 'center', gap: 12, background: C.card, borderRadius: 14, padding: '12px 16px', marginBottom: 8, border: '1px solid ' + C.border, cursor: 'pointer' }}>
                             <div style={{ width: 42, height: 42, borderRadius: 12, background: s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
@@ -1434,7 +1443,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                             </div>
                           </div>
                         ))}
-                        {week.every(w => !sessionHasContent(w.s)) && (
+                        {week.every(w => !w.s) && (
                           <div style={{ background: C.card, borderRadius: 14, padding: 24, textAlign: 'center', color: C.muted, marginBottom: 16 }}>
                             <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
                             Aucune séance planifiée — appuie sur un jour ci-dessus pour voir ou sur le + pour en composer une
@@ -1455,7 +1464,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                       </div>
                       <button onClick={() => setViewDay(null)} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 18, cursor: 'pointer', padding: 0 }}>✕</button>
                     </div>
-                    {sessionHasContent(viewDay.s) ? (
+                    {viewDay.s ? (
                       <>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                           <div style={{ width: 42, height: 42, borderRadius: 12, background: viewDay.s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{viewDay.s.icon}</div>
@@ -1478,10 +1487,16 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                             ))}
                           </div>
                         ))}
-                        <button onClick={() => { setViewDay(null); planSessionForDay(viewDay.teamId, viewDay.dayCode, viewDay.dateStr) }}
-                          style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer', marginTop: 8 }}>
-                          ✏️ Modifier
-                        </button>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                          <button onClick={() => setDailyPickerFor({ teamId: viewDay.teamId, dateStr: viewDay.dateStr })}
+                            style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer' }}>
+                            🔄 Changer
+                          </button>
+                          <button onClick={() => removeDailySession(viewDay.s.id)}
+                            style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid ' + C.red + '40', background: 'transparent', color: C.red, fontSize: 13, cursor: 'pointer' }}>
+                            🗑️ Retirer
+                          </button>
+                        </div>
                       </>
                     ) : (
                       <>
@@ -1489,12 +1504,38 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                           <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
                           Aucune séance planifiée pour ce jour
                         </div>
-                        <button onClick={() => { setViewDay(null); planSessionForDay(viewDay.teamId, viewDay.dayCode, viewDay.dateStr) }}
+                        <button onClick={() => setDailyPickerFor({ teamId: viewDay.teamId, dateStr: viewDay.dateStr })}
                           style={{ width: '100%', padding: 12, borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
                           📚 Ajouter une séance depuis la bibliothèque
                         </button>
                       </>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {dailyPickerFor && (
+                <div onClick={() => setDailyPickerFor(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: 20 }}>
+                  <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 20, maxWidth: 420, width: '100%', maxHeight: '80vh', overflowY: 'auto', border: '1px solid ' + C.border }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 14 }}>Choisir une séance de la bibliothèque</div>
+                    {seanceTemplates.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: C.muted, padding: '16px 0' }}>
+                        Ta bibliothèque est vide — crée une séance dans l'onglet Bibliothèque
+                      </div>
+                    ) : seanceTemplates.map(t => (
+                      <button key={t.id} onClick={() => assignDailySession(dailyPickerFor.teamId, dailyPickerFor.dateStr, t)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid ' + C.border, background: C.surface, color: C.text, cursor: 'pointer', marginBottom: 8 }}>
+                        <span style={{ fontSize: 20 }}>{t.icon}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: 13 }}>{t.label}</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>{t.duration}{t.objectif ? ' · ' + t.objectif : ''}</div>
+                        </div>
+                      </button>
+                    ))}
+                    <button onClick={() => setDailyPickerFor(null)}
+                      style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer', marginTop: 4 }}>
+                      Annuler
+                    </button>
                   </div>
                 </div>
               )}
@@ -3148,7 +3189,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       )}
 
       {tab === 'dashboard' && effectiveHomeView === 'coach' && activeCoachTeam && (
-        <button onClick={() => planSessionForDay(activeCoachTeam.id, Object.keys(dayMap).find(k => dayMap[k] === todayDow), toDateStr(new Date()))}
+        <button onClick={() => setDailyPickerFor({ teamId: activeCoachTeam.id, dateStr: toDateStr(new Date()) })}
           title="Ajouter une séance à ma journée"
           style={{ position: 'fixed', left: 20, bottom: isMobile ? 84 : 24, width: 56, height: 56, borderRadius: '50%', border: 'none', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', fontSize: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 16px rgba(59,130,246,0.5)', zIndex: 60 }}>
           +
