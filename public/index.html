@@ -15,6 +15,11 @@
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { background: #0a0e1a; -webkit-tap-highlight-color: transparent; }
       input, button { font-family: inherit; }
+      @media print {
+        body * { visibility: hidden; }
+        #fiche-joueur-print, #fiche-joueur-print * { visibility: visible; }
+        #fiche-joueur-print { position: absolute; top: 0; left: 0; width: 100%; max-height: none !important; overflow: visible !important; }
+      }
     </style>
   </head>
   <body>
