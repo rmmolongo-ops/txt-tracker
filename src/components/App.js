@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { getDeferredPrompt, onPromptAvailable } from '../lib/installPrompt'
-import { LineChart, Line, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { LineChart, Line, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts'
 
 const C = {
   bg: '#0a0e1a', card: '#111827', border: '#1e293b',
@@ -111,6 +111,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [unconfirmedSignups, setUnconfirmedSignups] = useState([])
   const [resendingEmail, setResendingEmail] = useState(null)
   const [expandedAdmin, setExpandedAdmin] = useState(null)
+  const [ficheJoueur, setFicheJoueur] = useState(null)
   const [adminError, setAdminError] = useState(null)
   const [adminLoading, setAdminLoading] = useState(false)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
@@ -1033,6 +1034,31 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
   const PLAYER_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#14b8a6','#ec4899']
 
+  const RADAR_AXES = [
+    { id: 'sprint30', label: 'Vitesse' },
+    { id: 'jonglerie_g', label: 'Jonglerie' },
+    { id: 'precision', label: 'Précision' },
+    { id: 'scan', label: 'Vision' },
+    { id: 'motivation', label: 'Mental' },
+  ]
+
+  const openFiche = (j, pool) => setFicheJoueur({ ...j, __pool: pool || [] })
+
+  const buildRadarData = (j) => {
+    const pool = (j.__pool || []).filter(p => p.user_id !== j.user_id)
+    return RADAR_AXES.map(axis => {
+      const kpi = KPI_CONFIG.find(k => k.id === axis.id)
+      const val = j.kpis?.[axis.id]
+      if (val == null) return { axis: axis.label, value: 0 }
+      const others = pool.map(p => p.kpis?.[axis.id]).filter(v => v != null)
+      const all = [val, ...others]
+      const min = Math.min(...all), max = Math.max(...all)
+      let pct = 50
+      if (max > min) pct = kpi.lower ? ((max - val) / (max - min)) * 100 : ((val - min) / (max - min)) * 100
+      return { axis: axis.label, value: Math.round(pct) }
+    })
+  }
+
   const renderSessionBlocs = (s, expanded, done, onToggle) => expanded && (
     <div style={{ background: C.card, padding: '0 16px 16px' }}>
       <div style={{ background: s.color + '15', borderRadius: 10, padding: '8px 12px', margin: '12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1091,6 +1117,10 @@ export default function App({ user, onSignOut, inviteTeamId }) {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
             <div style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>{j.nb_seances || 0} séances</div>
             <div style={{ fontSize: 11, color: C.muted }}>{j.nb_mesures || 0} mesures</div>
+            <button onClick={e => { e.stopPropagation(); openFiche(j, [...(isAdmin ? adminData : coachRosterData), ...(isAdmin ? adminManagedPlayers : managedPlayers)]) }}
+              style={{ background: 'none', border: 'none', color: C.accent, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+              📋 Fiche
+            </button>
           </div>
           <div style={{ fontSize: 16, color: C.muted, marginLeft: 4, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
         </div>
@@ -2382,7 +2412,11 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                                             </div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                               <div style={{ fontWeight: 700, fontSize: 13 }}>{j.prenom} {j.nom}</div>
-                                              <div style={{ fontSize: 11, color: C.muted }}>{j.poste1 || '—'}</div>
+                                              <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>{j.poste1 || '—'}</div>
+                                              <button onClick={() => openFiche(j, teamPlayers)}
+                                                style={{ background: 'none', border: 'none', color: C.accent, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+                                                📋 Fiche joueur
+                                              </button>
                                             </div>
                                             <div style={{ textAlign: 'right' }}>
                                               <div style={{ fontSize: 20, fontWeight: 900, color: latest != null ? kpi.color : C.muted }}>
@@ -3252,6 +3286,94 @@ export default function App({ user, onSignOut, inviteTeamId }) {
           {toast}
         </div>
       )}
+
+      {ficheJoueur && (() => {
+        const j = ficheJoueur
+        const radarData = buildRadarData(j)
+        const semaine = j.seancesSemaine
+        return (
+          <div onClick={() => setFicheJoueur(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
+            <div onClick={e => e.stopPropagation()} id="fiche-joueur-print" style={{ background: C.card, borderRadius: 18, padding: 20, maxWidth: 460, width: '100%', maxHeight: '88vh', overflowY: 'auto', border: '1px solid ' + C.border }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 58, height: 58, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, flexShrink: 0 }}>
+                    {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: 18 }}>{j.prenom || '—'} {j.nom || ''}</div>
+                    <div style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}>"{j.surnom || 'TxT'}"</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{j.poste1 || '—'}{j.poste2 ? ' / ' + j.poste2 : ''} {j.club ? '· ' + j.club : ''}</div>
+                  </div>
+                </div>
+                <button onClick={() => setFicheJoueur(null)} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', padding: 0 }}>✕</button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+                <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>SÉANCES VALIDÉES</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>{j.nb_seances || 0}</div>
+                </div>
+                <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>DERNIÈRE SÉANCE</div>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>
+                    {(j.derniereSeance || j.derniere_seance) ? new Date(j.derniereSeance || j.derniere_seance).toLocaleDateString('fr-FR') : '—'}
+                  </div>
+                </div>
+                {semaine != null && (
+                  <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px', gridColumn: '1 / -1' }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>SÉANCES SUR LES 7 DERNIERS JOURS</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: C.accent }}>{semaine}</div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Profil</div>
+              <div style={{ background: C.surface, borderRadius: 12, padding: 8, marginBottom: 16 }}>
+                <ResponsiveContainer width="100%" height={220}>
+                  <RadarChart data={radarData}>
+                    <PolarGrid stroke={C.border} />
+                    <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11, fill: C.muted }} />
+                    <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+                    <Radar dataKey="value" stroke={C.accent} fill={C.accent} fillOpacity={0.35} />
+                  </RadarChart>
+                </ResponsiveContainer>
+                <div style={{ fontSize: 10, color: C.muted, textAlign: 'center' }}>Position relative à l'équipe (0 = plus faible, 100 = plus fort)</div>
+              </div>
+
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Performances & progression</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+                {KPI_CONFIG.map(kpi => {
+                  const arr = (j.mesuresData || []).filter(m => m.kpi_id === kpi.id).sort((a, b) => a.date.localeCompare(b.date))
+                  const latest = arr.length > 0 ? arr[arr.length - 1].valeur : null
+                  const prog = arr.length >= 2 ? (kpi.lower
+                    ? ((arr[0].valeur - arr[arr.length - 1].valeur) / arr[0].valeur * 100).toFixed(1)
+                    : ((arr[arr.length - 1].valeur - arr[0].valeur) / arr[0].valeur * 100).toFixed(1)
+                  ) : null
+                  return (
+                    <div key={kpi.id} style={{ background: C.surface, borderRadius: 10, padding: '8px 10px' }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>{kpi.icon} {kpi.label}</div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: latest != null ? kpi.color : C.muted }}>{latest != null ? latest : '—'}</div>
+                        {latest != null && <div style={{ fontSize: 10, color: C.muted }}>{kpi.unit}</div>}
+                        {prog != null && (
+                          <div style={{ fontSize: 10, fontWeight: 700, color: parseFloat(prog) >= 0 ? C.green : C.red, marginLeft: 'auto' }}>
+                            {parseFloat(prog) >= 0 ? '▲' : '▼'}{Math.abs(prog)}%
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <button onClick={() => window.print()}
+                style={{ width: '100%', padding: 12, borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                🖨️ Exporter / Imprimer la fiche
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Header */}
       <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)', padding: '16px 20px', borderBottom: '1px solid ' + C.border, position: 'sticky', top: 0, zIndex: 50 }}>
