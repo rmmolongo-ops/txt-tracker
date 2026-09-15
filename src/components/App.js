@@ -170,6 +170,10 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [dailyPickerFor, setDailyPickerFor] = useState(null)
   const [editingDailySession, setEditingDailySession] = useState(false)
   const [dailySessionDraft, setDailySessionDraft] = useState(null)
+  const [calendarMonth, setCalendarMonth] = useState(() => { const d = new Date(); d.setDate(1); return d })
+  const swipeStartX = useRef(null)
+  const [annotatingId, setAnnotatingId] = useState(null)
+  const [annotationDraft, setAnnotationDraft] = useState({ note_coach: '', rating_deroule: 0, rating_ressenti: 0 })
   const [expandedPlayerProgramId, setExpandedPlayerProgramId] = useState(null)
   const [rosterPlayers, setRosterPlayers] = useState([])
   const [suiviWeekOffset, setSuiviWeekOffset] = useState(0)
@@ -908,6 +912,20 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     showToast('✅ Séance mise à jour !')
   }
 
+  const saveAnnotation = async (id, draft) => {
+    const clean = {
+      note_coach: draft.note_coach.trim() || null,
+      rating_deroule: draft.rating_deroule || null,
+      rating_ressenti: draft.rating_ressenti || null,
+    }
+    const { data, error } = await supabase.from('team_daily_sessions').update(clean).eq('id', id).select().single()
+    if (error) { showToast('❌ ' + error.message); return }
+    setDailySessions(prev => prev.map(d => d.id === id ? data : d))
+    setViewDay(v => v ? { ...v, s: data } : v)
+    setAnnotatingId(null)
+    showToast('✅ Notes enregistrées')
+  }
+
   const saveProgram = async (teamId, draft, programId) => {
     if (!draft.name.trim()) { showToast('❌ Donne un nom au programme'); return }
     if (!draft.start_date || !draft.end_date) { showToast('❌ Renseigne les dates de début et de fin'); return }
@@ -1417,38 +1435,83 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Prochaines séances</div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
                     <button onClick={() => { changeTab('equipe'); setEquipeTab('programme') }}
                       style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
                       📋 Gérer le programme
                     </button>
                   </div>
                   {(() => {
-                    const week = []
-                    for (let i = 0; i < 7; i++) {
-                      const d = new Date(); d.setDate(d.getDate() + i)
-                      const dateStr = toDateStr(d)
-                      const dayCode = Object.keys(dayMap).find(k => dayMap[k] === d.getDay())
-                      const s = getDailySession(activeCoachTeam.id, dateStr)
-                      week.push({ dateStr, date: d, dayCode, s })
-                    }
+                    const monthLabel = calendarMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+                    const year = calendarMonth.getFullYear(), month = calendarMonth.getMonth()
+                    const firstOfMonth = new Date(year, month, 1)
+                    const daysInMonth = new Date(year, month + 1, 0).getDate()
+                    const leading = (firstOfMonth.getDay() + 6) % 7 // lundi = 0
+                    const cells = []
+                    for (let i = 0; i < leading; i++) cells.push(null)
+                    for (let day = 1; day <= daysInMonth; day++) cells.push(day)
+                    const todayStr = toDateStr(new Date())
+                    const monthSessions = dailySessions.filter(d => d.team_id === activeCoachTeam.id && d.date.slice(0, 7) === `${year}-${String(month + 1).padStart(2, '0')}`)
+
+                    const changeMonth = (delta) => { setCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() + delta, 1)); setViewDay(null) }
+
                     return (
                       <>
-                        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 16 }}>
-                          {week.map(({ dateStr, date, dayCode, s }) => {
-                            const planned = !!s
-                            const selected = viewDay?.dateStr === dateStr
-                            return (
-                              <button key={dateStr} onClick={() => setViewDay(selected ? null : { dateStr, date, dayCode, s, teamId: activeCoachTeam.id })}
-                                style={{ flex: '0 0 auto', width: 68, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 4px', borderRadius: 12, border: '2px solid ' + (selected ? C.accent : (planned ? s.color + '50' : C.border)), background: planned ? s.color + '15' : C.card, cursor: 'pointer' }}>
-                                <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: 'uppercase' }}>{dayCode}</div>
-                                <div style={{ fontSize: 15, fontWeight: 800, color: dateStr === toDateStr(new Date()) ? C.accent : C.text }}>{date.getDate()}</div>
-                                <div style={{ fontSize: 16 }}>{planned ? s.icon : '+'}</div>
-                              </button>
-                            )
-                          })}
+                        <div
+                          onTouchStart={e => { swipeStartX.current = e.touches[0].clientX }}
+                          onTouchEnd={e => {
+                            if (swipeStartX.current == null) return
+                            const delta = e.changedTouches[0].clientX - swipeStartX.current
+                            swipeStartX.current = null
+                            if (delta > 50) changeMonth(-1)
+                            else if (delta < -50) changeMonth(1)
+                          }}
+                          style={{ background: C.card, borderRadius: 16, border: '1px solid ' + C.border, overflow: 'hidden', marginBottom: 16 }}>
+                          <div style={{ background: 'linear-gradient(135deg, #1e3a8a, #4f6ef7)', padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <button onClick={() => changeMonth(-1)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer', padding: 4 }}>‹</button>
+                            <div style={{ fontWeight: 800, fontSize: 15, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 }}>{monthLabel}</div>
+                            <button onClick={() => changeMonth(1)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer', padding: 4 }}>›</button>
+                          </div>
+                          <div style={{ padding: 14 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 6 }}>
+                              {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((c, i) => (
+                                <div key={i} style={{ textAlign: 'center', fontSize: 11, color: C.muted, fontWeight: 700 }}>{c}</div>
+                              ))}
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+                              {cells.map((day, i) => {
+                                if (!day) return <div key={i} />
+                                const d = new Date(year, month, day)
+                                const dateStr = toDateStr(d)
+                                const dayCode = Object.keys(dayMap).find(k => dayMap[k] === d.getDay())
+                                const s = getDailySession(activeCoachTeam.id, dateStr)
+                                const planned = !!s
+                                const selected = viewDay?.dateStr === dateStr
+                                const isToday = dateStr === todayStr
+                                return (
+                                  <button key={i} onClick={() => setViewDay(selected ? null : { dateStr, date: d, dayCode, s, teamId: activeCoachTeam.id })}
+                                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '6px 0', borderRadius: 10, border: selected ? '2px solid ' + C.accent : '2px solid transparent', background: isToday && !selected ? C.accent + '15' : 'transparent', cursor: 'pointer' }}>
+                                    <div style={{ fontSize: 14, fontWeight: isToday ? 800 : 600, color: isToday ? C.accent : C.text }}>{day}</div>
+                                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: planned ? s.color : 'transparent' }} />
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                          {monthSessions.length > 0 && (
+                            <div style={{ padding: '0 14px 12px', fontSize: 11, color: C.muted }}>
+                              {monthSessions.length} séance{monthSessions.length > 1 ? 's' : ''} planifiée{monthSessions.length > 1 ? 's' : ''} ce mois-ci
+                            </div>
+                          )}
                         </div>
+                        {viewDay && !viewDay.s && (
+                          <div style={{ background: C.card, borderRadius: 14, padding: 20, marginBottom: 16, border: '1px solid ' + C.border, textAlign: 'center' }}>
+                            <div style={{ fontSize: 12, color: C.muted, textTransform: 'capitalize', marginBottom: 6 }}>
+                              {viewDay.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                            </div>
+                            <div style={{ color: C.muted, fontSize: 13 }}>Aucune séance planifiée</div>
+                          </div>
+                        )}
                         {viewDay && viewDay.s && (
                           <div style={{ background: C.card, borderRadius: 14, padding: 16, marginBottom: 16, border: '1px solid ' + C.border }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -1536,6 +1599,58 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                                   </div>
                                 ))}
                               </>
+                            )}
+
+                            {!editingDailySession && (
+                              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid ' + C.border }}>
+                                {annotatingId === viewDay.s.id ? (
+                                  <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 12 }}>
+                                      {[{ key: 'rating_deroule', label: 'Prévu vs déroulé' }, { key: 'rating_ressenti', label: 'Ressenti des joueurs' }].map(({ key, label }) => (
+                                        <div key={key} style={{ flex: 1 }}>
+                                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
+                                          <div style={{ display: 'flex', gap: 2 }}>
+                                            {[1, 2, 3, 4, 5].map(n => (
+                                              <button key={n} onClick={() => setAnnotationDraft(d => ({ ...d, [key]: d[key] === n ? 0 : n }))}
+                                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 0, opacity: n <= annotationDraft[key] ? 1 : 0.25 }}>⭐</button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <textarea value={annotationDraft.note_coach} placeholder="Note du coach sur cette séance..."
+                                      onChange={e => setAnnotationDraft(d => ({ ...d, note_coach: e.target.value }))}
+                                      rows={3}
+                                      style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 10 }} />
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                      <button onClick={() => setAnnotatingId(null)}
+                                        style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer' }}>
+                                        Annuler
+                                      </button>
+                                      <button onClick={() => saveAnnotation(viewDay.s.id, annotationDraft)}
+                                        style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: C.green, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                                        ✓ Enregistrer
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    {(viewDay.s.rating_deroule || viewDay.s.rating_ressenti) && (
+                                      <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
+                                        {viewDay.s.rating_deroule ? <div style={{ fontSize: 12, color: C.muted }}>Prévu/déroulé : <b style={{ color: C.text }}>{viewDay.s.rating_deroule}/5</b></div> : null}
+                                        {viewDay.s.rating_ressenti ? <div style={{ fontSize: 12, color: C.muted }}>Ressenti : <b style={{ color: C.text }}>{viewDay.s.rating_ressenti}/5</b></div> : null}
+                                      </div>
+                                    )}
+                                    {viewDay.s.note_coach && (
+                                      <div style={{ fontSize: 13, color: C.text, background: C.surface, borderRadius: 8, padding: 10, marginBottom: 8, lineHeight: 1.4 }}>{viewDay.s.note_coach}</div>
+                                    )}
+                                    <button onClick={() => { setAnnotationDraft({ note_coach: viewDay.s.note_coach || '', rating_deroule: viewDay.s.rating_deroule || 0, rating_ressenti: viewDay.s.rating_ressenti || 0 }); setAnnotatingId(viewDay.s.id) }}
+                                      style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+                                      📝 {viewDay.s.note_coach || viewDay.s.rating_deroule || viewDay.s.rating_ressenti ? 'Modifier les notes' : 'Ajouter une note / noter la séance'}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}
