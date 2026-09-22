@@ -84,6 +84,12 @@ const DEFAULT_TEMPLATE_BLOCS = [
   { titre: 'Retour au calme', duree: '5 min', exercices: [''] },
 ]
 const GHOST_PREFIX = 'ghost:'
+
+const MATCH_RESULTS = [
+  { id: 'victoire', label: 'Victoire', short: 'V', color: '#10b981' },
+  { id: 'nul', label: 'Nul', short: 'N', color: '#64748b' },
+  { id: 'defaite', label: 'Défaite', short: 'D', color: '#ef4444' },
+]
 const isGhostId = (id) => typeof id === 'string' && id.startsWith(GHOST_PREFIX)
 const ghostRealId = (id) => id.slice(GHOST_PREFIX.length)
 const seanceRowKey = (r) => r.user_id || (r.managed_player_id ? GHOST_PREFIX + r.managed_player_id : null)
@@ -177,6 +183,9 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const swipeStartX = useRef(null)
   const [annotatingId, setAnnotatingId] = useState(null)
   const [annotationDraft, setAnnotationDraft] = useState({ note_coach: '', rating_deroule: 0, rating_ressenti: 0 })
+  const [editingMatchId, setEditingMatchId] = useState(null)
+  const [matchDraft, setMatchDraft] = useState({ resultat: null, buts: {} })
+  const [ficheMatches, setFicheMatches] = useState([])
   const [expandedPlayerProgramId, setExpandedPlayerProgramId] = useState(null)
   const [rosterPlayers, setRosterPlayers] = useState([])
   const [suiviWeekOffset, setSuiviWeekOffset] = useState(0)
@@ -943,6 +952,37 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     showToast('✅ Notes enregistrées')
   }
 
+  const saveMatchResult = async (id, draft) => {
+    const buts = {}
+    Object.entries(draft.buts).forEach(([k, n]) => { if (n > 0) buts[k] = n })
+    const { data, error } = await supabase.from('team_daily_sessions').update({ resultat: draft.resultat || null, buts }).eq('id', id).select().single()
+    if (error) { showToast('❌ ' + error.message); return }
+    setDailySessions(prev => prev.map(d => d.id === id ? data : d))
+    setViewDay(v => v ? { ...v, s: data } : v)
+    setEditingMatchId(null)
+    showToast('✅ Résultat enregistré')
+  }
+
+  useEffect(() => {
+    if (!ficheJoueur) { setFicheMatches([]); return }
+    let active = true
+    const j = ficheJoueur
+    ;(async () => {
+      let teamIds = (j.teams || []).map(t => t.id)
+      if (j.team_id) teamIds.push(j.team_id)
+      if (teamIds.length === 0) {
+        const { data } = j.isManaged
+          ? await supabase.from('managed_players').select('team_id').eq('id', j.managed_player_id)
+          : await supabase.from('team_members').select('team_id').eq('user_id', j.user_id)
+        teamIds = (data || []).map(r => r.team_id)
+      }
+      if (teamIds.length === 0) return
+      const { data } = await supabase.from('team_daily_sessions').select('id, team_id, date, label, resultat, buts').eq('type', 'match').in('team_id', [...new Set(teamIds)]).order('date', { ascending: false })
+      if (active) setFicheMatches(data || [])
+    })()
+    return () => { active = false }
+  }, [ficheJoueur])
+
   const saveProgram = async (teamId, draft, programId) => {
     if (!draft.name.trim()) { showToast('❌ Donne un nom au programme'); return }
     if (!draft.start_date || !draft.end_date) { showToast('❌ Renseigne les dates de début et de fin'); return }
@@ -1707,6 +1747,75 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                                 ))}
                               </>
                             )}
+
+                            {!editingDailySession && viewDay.s.type === 'match' && (() => {
+                              const matchPlayers = [...coachRosterData.filter(p => p.role === 'joueur'), ...managedPlayers]
+                              const nameOf = (key) => { const p = matchPlayers.find(pl => pl.user_id === key); return p ? `${p.prenom || '—'} ${p.nom || ''}`.trim() : 'Joueur retiré' }
+                              const savedButs = Object.entries(viewDay.s.buts || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])
+                              const totalButs = savedButs.reduce((a, [, n]) => a + n, 0)
+                              return (
+                                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid ' + C.border }}>
+                                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Résultat du match</div>
+                                  {editingMatchId === viewDay.s.id ? (
+                                    <div>
+                                      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                                        {MATCH_RESULTS.map(r => (
+                                          <button key={r.id} onClick={() => setMatchDraft(d => ({ ...d, resultat: d.resultat === r.id ? null : r.id }))}
+                                            style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, background: matchDraft.resultat === r.id ? r.color : C.surface, color: matchDraft.resultat === r.id ? '#fff' : C.muted }}>
+                                            {r.label}
+                                          </button>
+                                        ))}
+                                      </div>
+                                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>⚽ Buts marqués</div>
+                                      {matchPlayers.length === 0 && <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>Aucun joueur dans l'équipe</div>}
+                                      {matchPlayers.map(p => {
+                                        const n = matchDraft.buts[p.user_id] || 0
+                                        const setN = (v) => setMatchDraft(d => ({ ...d, buts: { ...d.buts, [p.user_id]: Math.max(0, v) } }))
+                                        return (
+                                          <div key={p.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid ' + C.border }}>
+                                            <div style={{ flex: 1, fontSize: 13, fontWeight: n > 0 ? 700 : 400 }}>{p.prenom || '—'} {p.nom || ''}</div>
+                                            <button onClick={() => setN(n - 1)} disabled={n === 0}
+                                              style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid ' + C.border, background: C.surface, color: C.text, fontSize: 16, cursor: n === 0 ? 'default' : 'pointer', opacity: n === 0 ? 0.4 : 1 }}>−</button>
+                                            <div style={{ width: 22, textAlign: 'center', fontWeight: 800, fontSize: 15, color: n > 0 ? '#eab308' : C.muted }}>{n}</div>
+                                            <button onClick={() => setN(n + 1)}
+                                              style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid ' + C.border, background: C.surface, color: C.text, fontSize: 16, cursor: 'pointer' }}>+</button>
+                                          </div>
+                                        )
+                                      })}
+                                      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                                        <button onClick={() => setEditingMatchId(null)}
+                                          style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer' }}>
+                                          Annuler
+                                        </button>
+                                        <button onClick={() => saveMatchResult(viewDay.s.id, matchDraft)}
+                                          style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: C.green, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                                          ✓ Enregistrer
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      {viewDay.s.resultat && (() => {
+                                        const r = MATCH_RESULTS.find(x => x.id === viewDay.s.resultat)
+                                        return <div style={{ display: 'inline-block', fontSize: 13, fontWeight: 800, color: '#fff', background: r.color, borderRadius: 8, padding: '4px 12px', marginBottom: 8 }}>{r.label}</div>
+                                      })()}
+                                      {savedButs.length > 0 && (
+                                        <div style={{ marginBottom: 8 }}>
+                                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>⚽ {totalButs} but{totalButs > 1 ? 's' : ''}</div>
+                                          {savedButs.map(([k, n]) => (
+                                            <div key={k} style={{ fontSize: 13, marginBottom: 2 }}>{nameOf(k)} <b style={{ color: '#eab308' }}>× {n}</b></div>
+                                          ))}
+                                        </div>
+                                      )}
+                                      <button onClick={() => { setMatchDraft({ resultat: viewDay.s.resultat || null, buts: { ...(viewDay.s.buts || {}) } }); setEditingMatchId(viewDay.s.id) }}
+                                        style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+                                        🏆 {viewDay.s.resultat || savedButs.length > 0 ? 'Modifier le résultat / les buteurs' : 'Saisir le résultat et les buteurs'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
 
                             {!editingDailySession && (
                               <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid ' + C.border }}>
@@ -3430,6 +3539,45 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                   </div>
                 )}
               </div>
+
+              {(() => {
+                const played = ficheMatches.filter(m => m.resultat)
+                if (played.length === 0) return null
+                const butsOf = (m) => (m.buts || {})[j.user_id] || 0
+                const totalButs = played.reduce((a, m) => a + butsOf(m), 0)
+                const count = (id) => played.filter(m => m.resultat === id).length
+                return (
+                  <>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Matchs</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                      <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>BUTS MARQUÉS</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: '#eab308' }}>⚽ {totalButs}</div>
+                      </div>
+                      <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>BILAN ÉQUIPE ({played.length} MATCH{played.length > 1 ? 'S' : ''})</div>
+                        <div style={{ fontSize: 14, fontWeight: 800 }}>
+                          {MATCH_RESULTS.map((r, i) => <span key={r.id} style={{ color: r.color }}>{i > 0 ? ' · ' : ''}{count(r.id)}{r.short}</span>)}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ background: C.surface, borderRadius: 10, padding: '6px 12px', marginBottom: 16 }}>
+                      {played.slice(0, 8).map(m => {
+                        const r = MATCH_RESULTS.find(x => x.id === m.resultat)
+                        const n = butsOf(m)
+                        return (
+                          <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 12 }}>
+                            <div style={{ width: 20, height: 20, borderRadius: 6, background: r.color, color: '#fff', fontWeight: 800, fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{r.short}</div>
+                            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</div>
+                            <div style={{ color: C.muted }}>{new Date(m.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</div>
+                            <div style={{ width: 36, textAlign: 'right', fontWeight: 700, color: n > 0 ? '#eab308' : C.muted }}>{n > 0 ? `⚽ ${n}` : '—'}</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )
+              })()}
 
               <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Profil</div>
               <div style={{ background: C.surface, borderRadius: 12, padding: 8, marginBottom: 16 }}>
