@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { Fragment, useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { getDeferredPrompt, onPromptAvailable } from '../lib/installPrompt'
 import { LineChart, Line, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts'
@@ -84,6 +84,21 @@ const DEFAULT_TEMPLATE_BLOCS = [
   { titre: 'Retour au calme', duree: '5 min', exercices: [''] },
 ]
 const GHOST_PREFIX = 'ghost:'
+
+const hasScore = (m) => m.score_pour != null && m.score_contre != null
+
+const resultFromScore = (pour, contre) => {
+  if (pour === '' || contre === '' || pour == null || contre == null) return null
+  const a = parseInt(pour, 10), b = parseInt(contre, 10)
+  if (isNaN(a) || isNaN(b)) return null
+  return a > b ? 'victoire' : a < b ? 'defaite' : 'nul'
+}
+
+const MATCH_RESULTS = [
+  { id: 'victoire', label: 'Victoire', short: 'V', color: '#10b981' },
+  { id: 'nul', label: 'Nul', short: 'N', color: '#64748b' },
+  { id: 'defaite', label: 'Défaite', short: 'D', color: '#ef4444' },
+]
 const isGhostId = (id) => typeof id === 'string' && id.startsWith(GHOST_PREFIX)
 const ghostRealId = (id) => id.slice(GHOST_PREFIX.length)
 const seanceRowKey = (r) => r.user_id || (r.managed_player_id ? GHOST_PREFIX + r.managed_player_id : null)
@@ -177,6 +192,9 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const swipeStartX = useRef(null)
   const [annotatingId, setAnnotatingId] = useState(null)
   const [annotationDraft, setAnnotationDraft] = useState({ note_coach: '', rating_deroule: 0, rating_ressenti: 0 })
+  const [editingMatchId, setEditingMatchId] = useState(null)
+  const [matchDraft, setMatchDraft] = useState({ resultat: null, buts: {}, presents: [], score_pour: '', score_contre: '' })
+  const [ficheMatches, setFicheMatches] = useState([])
   const [expandedPlayerProgramId, setExpandedPlayerProgramId] = useState(null)
   const [rosterPlayers, setRosterPlayers] = useState([])
   const [suiviWeekOffset, setSuiviWeekOffset] = useState(0)
@@ -943,6 +961,41 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     showToast('✅ Notes enregistrées')
   }
 
+  const saveMatchResult = async (id, draft) => {
+    const buts = {}
+    Object.entries(draft.buts).forEach(([k, n]) => { if (n > 0 && draft.presents.includes(k)) buts[k] = n })
+    const toScore = (v) => v === '' || v == null ? null : Math.max(0, parseInt(v, 10) || 0)
+    const { data, error } = await supabase.from('team_daily_sessions').update({
+      resultat: draft.resultat || null, buts, presents: draft.presents,
+      score_pour: toScore(draft.score_pour), score_contre: toScore(draft.score_contre),
+    }).eq('id', id).select().single()
+    if (error) { showToast('❌ ' + error.message); return }
+    setDailySessions(prev => prev.map(d => d.id === id ? data : d))
+    setViewDay(v => v ? { ...v, s: data } : v)
+    setEditingMatchId(null)
+    showToast('✅ Résultat enregistré')
+  }
+
+  useEffect(() => {
+    if (!ficheJoueur) { setFicheMatches([]); return }
+    let active = true
+    const j = ficheJoueur
+    ;(async () => {
+      let teamIds = (j.teams || []).map(t => t.id)
+      if (j.team_id) teamIds.push(j.team_id)
+      if (teamIds.length === 0) {
+        const { data } = j.isManaged
+          ? await supabase.from('managed_players').select('team_id').eq('id', j.managed_player_id)
+          : await supabase.from('team_members').select('team_id').eq('user_id', j.user_id)
+        teamIds = (data || []).map(r => r.team_id)
+      }
+      if (teamIds.length === 0) return
+      const { data } = await supabase.from('team_daily_sessions').select('id, team_id, date, label, resultat, buts, presents, score_pour, score_contre').eq('type', 'match').in('team_id', [...new Set(teamIds)]).order('date', { ascending: false })
+      if (active) setFicheMatches(data || [])
+    })()
+    return () => { active = false }
+  }, [ficheJoueur])
+
   const saveProgram = async (teamId, draft, programId) => {
     if (!draft.name.trim()) { showToast('❌ Donne un nom au programme'); return }
     if (!draft.start_date || !draft.end_date) { showToast('❌ Renseigne les dates de début et de fin'); return }
@@ -1707,6 +1760,114 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                                 ))}
                               </>
                             )}
+
+                            {!editingDailySession && viewDay.s.type === 'match' && (() => {
+                              const matchPlayers = [...coachRosterData.filter(p => p.role === 'joueur'), ...managedPlayers]
+                              const nameOf = (key) => { const p = matchPlayers.find(pl => pl.user_id === key); return p ? `${p.prenom || '—'} ${p.nom || ''}`.trim() : 'Joueur retiré' }
+                              const savedButs = Object.entries(viewDay.s.buts || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])
+                              const totalButs = savedButs.reduce((a, [, n]) => a + n, 0)
+                              return (
+                                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid ' + C.border }}>
+                                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Résultat du match</div>
+                                  {editingMatchId === viewDay.s.id ? (
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 12 }}>
+                                        {[{ key: 'score_pour', label: 'Nous' }, { key: 'score_contre', label: 'Adversaire' }].map(({ key, label }, i) => (
+                                          <Fragment key={key}>
+                                            {i === 1 && <div style={{ fontSize: 20, fontWeight: 800, color: C.muted, marginTop: 14 }}>–</div>}
+                                            <div style={{ textAlign: 'center' }}>
+                                              <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
+                                              <input type="number" min="0" inputMode="numeric" value={matchDraft[key]}
+                                                onChange={e => setMatchDraft(d => {
+                                                  const next = { ...d, [key]: e.target.value }
+                                                  const res = resultFromScore(next.score_pour, next.score_contre)
+                                                  return res ? { ...next, resultat: res } : next
+                                                })}
+                                                style={{ width: 64, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '8px 0', color: C.text, fontSize: 22, fontWeight: 800, outline: 'none', textAlign: 'center' }} />
+                                            </div>
+                                          </Fragment>
+                                        ))}
+                                      </div>
+                                      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                                        {MATCH_RESULTS.map(r => (
+                                          <button key={r.id} onClick={() => setMatchDraft(d => ({ ...d, resultat: d.resultat === r.id ? null : r.id }))}
+                                            style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, background: matchDraft.resultat === r.id ? r.color : C.surface, color: matchDraft.resultat === r.id ? '#fff' : C.muted }}>
+                                            {r.label}
+                                          </button>
+                                        ))}
+                                      </div>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                        <div style={{ fontSize: 11, color: C.muted }}>✅ Présents ({matchDraft.presents.length}/{matchPlayers.length}) · ⚽ Buts</div>
+                                        {matchPlayers.length > 0 && (
+                                          <button onClick={() => setMatchDraft(d => ({ ...d, presents: d.presents.length === matchPlayers.length ? [] : matchPlayers.map(p => p.user_id) }))}
+                                            style={{ background: 'none', border: 'none', color: C.accent, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+                                            {matchDraft.presents.length === matchPlayers.length ? 'Tout décocher' : 'Tous présents'}
+                                          </button>
+                                        )}
+                                      </div>
+                                      {matchPlayers.length === 0 && <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>Aucun joueur dans l'équipe</div>}
+                                      {matchPlayers.map(p => {
+                                        const present = matchDraft.presents.includes(p.user_id)
+                                        const n = present ? (matchDraft.buts[p.user_id] || 0) : 0
+                                        const setN = (v) => setMatchDraft(d => ({ ...d, presents: d.presents.includes(p.user_id) ? d.presents : [...d.presents, p.user_id], buts: { ...d.buts, [p.user_id]: Math.max(0, v) } }))
+                                        const togglePresent = () => setMatchDraft(d => ({ ...d, presents: present ? d.presents.filter(k => k !== p.user_id) : [...d.presents, p.user_id] }))
+                                        return (
+                                          <div key={p.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid ' + C.border }}>
+                                            <button onClick={togglePresent} title={present ? 'Présent' : 'Absent'}
+                                              style={{ width: 26, height: 26, borderRadius: 7, border: '2px solid ' + (present ? C.green : C.border), background: present ? C.green : 'transparent', color: '#fff', fontSize: 14, fontWeight: 800, cursor: 'pointer', padding: 0, flexShrink: 0 }}>{present ? '✓' : ''}</button>
+                                            <div onClick={togglePresent} style={{ flex: 1, fontSize: 13, fontWeight: n > 0 ? 700 : 400, color: present ? C.text : C.muted, cursor: 'pointer' }}>{p.prenom || '—'} {p.nom || ''}</div>
+                                            <button onClick={() => setN(n - 1)} disabled={n === 0}
+                                              style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid ' + C.border, background: C.surface, color: C.text, fontSize: 16, cursor: n === 0 ? 'default' : 'pointer', opacity: n === 0 ? 0.4 : 1 }}>−</button>
+                                            <div style={{ width: 22, textAlign: 'center', fontWeight: 800, fontSize: 15, color: n > 0 ? '#eab308' : C.muted }}>{n}</div>
+                                            <button onClick={() => setN(n + 1)}
+                                              style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid ' + C.border, background: C.surface, color: C.text, fontSize: 16, cursor: 'pointer' }}>+</button>
+                                          </div>
+                                        )
+                                      })}
+                                      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                                        <button onClick={() => setEditingMatchId(null)}
+                                          style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer' }}>
+                                          Annuler
+                                        </button>
+                                        <button onClick={() => saveMatchResult(viewDay.s.id, matchDraft)}
+                                          style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: C.green, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                                          ✓ Enregistrer
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      {(viewDay.s.resultat || hasScore(viewDay.s)) && (() => {
+                                        const r = MATCH_RESULTS.find(x => x.id === viewDay.s.resultat)
+                                        return (
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                                            {r && <div style={{ fontSize: 13, fontWeight: 800, color: '#fff', background: r.color, borderRadius: 8, padding: '4px 12px' }}>{r.label}</div>}
+                                            {hasScore(viewDay.s) && <div style={{ fontSize: 20, fontWeight: 900 }}>{viewDay.s.score_pour} – {viewDay.s.score_contre}</div>}
+                                          </div>
+                                        )
+                                      })()}
+                                      {(viewDay.s.presents || []).length > 0 && (
+                                        <div style={{ fontSize: 12, color: C.muted, marginBottom: 8, lineHeight: 1.5 }}>
+                                          ✅ {viewDay.s.presents.length} présent{viewDay.s.presents.length > 1 ? 's' : ''} : <span style={{ color: C.text }}>{viewDay.s.presents.map(nameOf).join(', ')}</span>
+                                        </div>
+                                      )}
+                                      {savedButs.length > 0 && (
+                                        <div style={{ marginBottom: 8 }}>
+                                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>⚽ {totalButs} but{totalButs > 1 ? 's' : ''}</div>
+                                          {savedButs.map(([k, n]) => (
+                                            <div key={k} style={{ fontSize: 13, marginBottom: 2 }}>{nameOf(k)} <b style={{ color: '#eab308' }}>× {n}</b></div>
+                                          ))}
+                                        </div>
+                                      )}
+                                      <button onClick={() => { setMatchDraft({ resultat: viewDay.s.resultat || null, buts: { ...(viewDay.s.buts || {}) }, presents: [...(viewDay.s.presents || [])], score_pour: viewDay.s.score_pour ?? '', score_contre: viewDay.s.score_contre ?? '' }); setEditingMatchId(viewDay.s.id) }}
+                                        style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+                                        🏆 {viewDay.s.resultat || hasScore(viewDay.s) || savedButs.length > 0 || (viewDay.s.presents || []).length > 0 ? 'Modifier le match (score, présents, buteurs)' : 'Saisir le score, les présents et les buteurs'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
 
                             {!editingDailySession && (
                               <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid ' + C.border }}>
@@ -3430,6 +3591,54 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                   </div>
                 )}
               </div>
+
+              {(() => {
+                const teamMatches = ficheMatches.filter(m => m.resultat || hasScore(m))
+                if (teamMatches.length === 0) return null
+                const butsOf = (m) => (m.buts || {})[j.user_id] || 0
+                const isPresent = (m) => (m.presents || []).includes(j.user_id) || butsOf(m) > 0
+                const isAbsent = (m) => (m.presents || []).length > 0 && !isPresent(m)
+                const played = teamMatches.filter(isPresent)
+                const totalButs = played.reduce((a, m) => a + butsOf(m), 0)
+                const count = (id) => played.filter(m => m.resultat === id).length
+                return (
+                  <>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Matchs</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+                      <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>JOUÉS</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: C.accent }}>{played.length}<span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}> / {teamMatches.length}</span></div>
+                      </div>
+                      <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>BUTS</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: '#eab308' }}>⚽ {totalButs}</div>
+                      </div>
+                      <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>BILAN</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3 }}>
+                          {played.length === 0 ? <span style={{ color: C.muted }}>—</span> : MATCH_RESULTS.map((r, i) => <span key={r.id} style={{ color: r.color }}>{i > 0 ? ' · ' : ''}{count(r.id)}{r.short}</span>)}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ background: C.surface, borderRadius: 10, padding: '6px 12px', marginBottom: 16 }}>
+                      {teamMatches.slice(0, 8).map(m => {
+                        const r = MATCH_RESULTS.find(x => x.id === m.resultat)
+                        const n = butsOf(m)
+                        const absent = isAbsent(m)
+                        return (
+                          <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 12, opacity: absent ? 0.5 : 1 }}>
+                            <div style={{ width: 20, height: 20, borderRadius: 6, background: r ? r.color : C.border, color: '#fff', fontWeight: 800, fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{r ? r.short : '?'}</div>
+                            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</div>
+                            {hasScore(m) && <div style={{ fontWeight: 800 }}>{m.score_pour}-{m.score_contre}</div>}
+                            <div style={{ color: C.muted }}>{new Date(m.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</div>
+                            <div style={{ width: 44, textAlign: 'right', fontWeight: 700, color: n > 0 ? '#eab308' : C.muted }}>{absent ? 'Absent' : n > 0 ? `⚽ ${n}` : '—'}</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )
+              })()}
 
               <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Profil</div>
               <div style={{ background: C.surface, borderRadius: 12, padding: 8, marginBottom: 16 }}>
