@@ -153,6 +153,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [entryValue, setEntryValue] = useState('')
   const [adminChartKpi, setAdminChartKpi] = useState('sprint30')
   const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [mesureToDelete, setMesureToDelete] = useState(null)
   const [adminView, setAdminView] = useState('overview')
   const [selectedAdminTeam, setSelectedAdminTeam] = useState(null)
   const [adminDetailTab, setAdminDetailTab] = useState('joueurs')
@@ -243,14 +244,14 @@ export default function App({ user, onSignOut, inviteTeamId }) {
         { data: allManagedSeances },
       ] = await Promise.all([
         supabase.from('profils').select('*'),
-        supabase.from('mesures').select('user_id, kpi_id, valeur, date'),
+        supabase.from('mesures').select('id, user_id, kpi_id, valeur, date'),
         supabase.from('seances').select('user_id, date, jour'),
         supabase.rpc('get_user_emails_for_admins'),
         supabase.from('teams').select('*').order('created_at'),
         supabase.from('team_members').select('user_id, team_id, role'),
         supabase.rpc('get_unconfirmed_signups_for_admins'),
         supabase.from('managed_players').select('*'),
-        supabase.from('mesures').select('managed_player_id, kpi_id, valeur, date').not('managed_player_id', 'is', null),
+        supabase.from('mesures').select('id, managed_player_id, kpi_id, valeur, date').not('managed_player_id', 'is', null),
         supabase.from('seances').select('managed_player_id, date').not('managed_player_id', 'is', null),
       ])
       if (errP) { setAdminError('Erreur lecture profils : ' + errP.message); setAdminLoading(false); return }
@@ -1156,6 +1157,26 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     </div>
   )
 
+  const adminDeleteMesure = async (target, mesureId) => {
+    const { error } = await supabase.from('mesures').delete().eq('id', mesureId)
+    if (error) { showToast('❌ ' + error.message); return }
+    const strip = (p) => {
+      if (p.user_id !== target.user_id) return p
+      const mes = (p.mesuresData || []).filter(m => m.id !== mesureId)
+      const kpis = {}
+      KPI_CONFIG.forEach(k => {
+        const arr = mes.filter(m => m.kpi_id === k.id).sort((a, b) => a.date.localeCompare(b.date))
+        kpis[k.id] = arr.length > 0 ? arr[arr.length - 1].valeur : null
+      })
+      const derniere_mesure = mes.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
+      return { ...p, mesuresData: mes, nb_mesures: mes.length, kpis, derniere_mesure }
+    }
+    if (target.isManaged) { setAdminManagedPlayers(prev => prev.map(strip)); setManagedPlayers(prev => prev.map(strip)) }
+    else { setAdminData(prev => prev.map(strip)); setCoachRosterData(prev => prev.map(strip)) }
+    setMesureToDelete(null)
+    showToast('🗑️ Mesure supprimée')
+  }
+
   const renderPlayerCard = (j, cardKey, teamContextId) => {
     const expanded = expandedAdmin === cardKey
     const currentRole = teamContextId && !j.isManaged ? ((j.teams || []).find(t => t.id === teamContextId)?.role || 'joueur') : null
@@ -1286,6 +1307,41 @@ export default function App({ user, onSignOut, inviteTeamId }) {
               })()}
               <div style={{ fontSize: 10, color: C.muted, textAlign: 'center', marginTop: 6 }}>Cliquez sur un KPI pour changer le graphique</div>
             </div>
+
+            {isAdmin && (() => {
+              const kpi = KPI_CONFIG.find(k => k.id === adminChartKpi)
+              const entries = (j.mesuresData || []).filter(m => m.kpi_id === adminChartKpi && m.id).sort((a, b) => b.date.localeCompare(a.date))
+              return (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid ' + C.border }}>
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>
+                    Saisies — {kpi?.label} ({entries.length})
+                  </div>
+                  {entries.length === 0 ? (
+                    <div style={{ fontSize: 12, color: C.muted }}>Aucune saisie pour ce KPI</div>
+                  ) : (
+                    <div style={{ background: C.surface, borderRadius: 10, padding: '4px 12px', maxHeight: 220, overflowY: 'auto' }}>
+                      {entries.map(m => (
+                        <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid ' + C.border, fontSize: 13 }}>
+                          <div style={{ color: C.muted, width: 80 }}>{new Date(m.date).toLocaleDateString('fr-FR')}</div>
+                          <div style={{ flex: 1, fontWeight: 700, color: kpi?.color }}>{m.valeur} <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>{kpi?.unit}</span></div>
+                          {mesureToDelete === m.id ? (
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button onClick={() => setMesureToDelete(null)}
+                                style={{ padding: '4px 10px', borderRadius: 8, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer' }}>Annuler</button>
+                              <button onClick={() => adminDeleteMesure(j, m.id)}
+                                style={{ padding: '4px 10px', borderRadius: 8, border: 'none', background: C.red, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Supprimer</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setMesureToDelete(m.id)} title="Supprimer cette saisie"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, padding: 0 }}>🗑️</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid ' + C.border }}>
               {deleteConfirm?.userId === j.user_id ? (
