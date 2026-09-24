@@ -94,3 +94,6 @@ export const RADAR_AXES = [
 
 // Couleurs des courbes par joueur (graphiques d'équipe).
 export const PLAYER_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#14b8a6','#ec4899']
+
+// Code jour du programme → jour de la semaine JS (Date.getDay()).
+export const DAY_MAP = { LUN: 1, MAR: 2, MER: 3, JEU: 4, VEN: 5, SAM: 6, DIM: 0 }

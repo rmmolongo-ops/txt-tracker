@@ -27,7 +27,9 @@ txt-tracker/
 │   │   ├── EquipeCoachScreen.js ← Onglet Équipe, vue coach / admin (effectif, perfs, suivi, programmes)
 │   │   ├── EquipeJoueurScreen.js ← Onglet Équipe, vue joueur (coéquipiers, programmes)
 │   │   ├── AdminScreen.js     ← Onglet Admin (vue d'ensemble, détail d'équipe, cartes joueurs)
-│   │   └── App.js             ← Reste de l'application (découpage en cours)
+│   │   ├── DashboardCoach.js  ← Accueil coach (récap, calendrier, séances et matchs du jour)
+│   │   ├── DashboardJoueur.js ← Accueil joueur (assiduité, séance du jour, KPIs clés)
+│   │   └── App.js             ← Chargement des données, actions Supabase, navigation
 │   ├── hooks/
 │   │   └── useChatUnread.js   ← Compteurs de messages non lus (pastilles du menu)
 │   └── index.js               ← Racine React, gestion session
