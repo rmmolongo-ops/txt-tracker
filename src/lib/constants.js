@@ -91,3 +91,6 @@ export const RADAR_AXES = [
   { id: 'scan', label: 'Vision' },
   { id: 'motivation', label: 'Mental' },
 ]
+
+// Couleurs des courbes par joueur (graphiques d'équipe).
+export const PLAYER_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#14b8a6','#ec4899']

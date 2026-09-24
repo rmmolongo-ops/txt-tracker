@@ -24,6 +24,8 @@ txt-tracker/
 │   │   ├── KpiScreen.js       ← Onglet Mesures (saisie des KPIs)
 │   │   ├── StatsScreen.js     ← Onglet Stats (évolution, historique)
 │   │   ├── SessionBlocs.js    ← Détail d'une séance (partagé accueil / programme)
+│   │   ├── EquipeCoachScreen.js ← Onglet Équipe, vue coach / admin (effectif, perfs, suivi, programmes)
+│   │   ├── EquipeJoueurScreen.js ← Onglet Équipe, vue joueur (coéquipiers, programmes)
 │   │   └── App.js             ← Reste de l'application (découpage en cours)
 │   ├── hooks/
 │   │   └── useChatUnread.js   ← Compteurs de messages non lus (pastilles du menu)
