@@ -16,7 +16,9 @@ txt-tracker/
 │   │   ├── Auth.js            ← Page login / inscription
 │   │   └── App.js             ← Application complète (toutes les vues)
 │   └── index.js               ← Racine React, gestion session
-├── supabase_setup.sql         ← Script BDD à lancer dans Supabase
+├── supabase/
+│   ├── README.md              ← Comment modifier la base (à lire avant tout changement)
+│   └── migrations/            ← Historique versionné du schéma (baseline + évolutions)
 ├── package.json
 └── GUIDE_DEPLOIEMENT.md
 ```
@@ -76,21 +78,17 @@ txt-tracker/
 
 ---
 
-## ✅ Correctifs sécurité appliqués (2026-09-08)
+## ✅ Sécurité de la base
 
-`supabase_rls_fix.sql` documente 4 correctifs déjà appliqués en base
-(projet Supabase `TxT_tracker`) :
-1. **Critique** : la vue `admin_dashboard` exposait publiquement (sans
-   connexion) les données de tous les joueurs — corrigée.
-2. **Élevé** : un joueur pouvait s'auto-promouvoir coach/capitaine d'une
-   équipe en modifiant lui-même son rôle — corrigé.
-3. **Moyen** : les programmes d'entraînement de toutes les équipes
-   étaient lisibles par tout utilisateur connecté — corrigé.
-4. **Mineur** : `search_path` non fixé sur la fonction `is_admin` —
-   corrigé.
+Le schéma complet (tables, règles d'accès RLS, fonctions, stockage) est versionné
+dans `supabase/migrations/`. Historique des correctifs :
+- 08/09/2026 : fuite publique de la vue `admin_dashboard`, auto-promotion de rôle,
+  lecture des programmes par tous, `search_path` de `is_admin` — corrigés.
+- 24/09/2026 : les fonctions admin (`delete_user_as_admin`, `get_user_emails_for_admins`…)
+  ne sont plus appelables sans être connecté.
 
-Reste à faire manuellement dans le dashboard Supabase (Authentication →
-Providers → Email) : activer **"Leaked password protection"**.
+Reste à faire manuellement dans le dashboard Supabase : voir `supabase/README.md`
+(protection des mots de passe piratés, sauvegardes).
 
 ---
 
@@ -100,47 +98,14 @@ Providers → Email) : activer **"Leaked password protection"**.
 1. Va sur https://supabase.com → **New project**
 2. Note bien l'**URL** et la **clé anon** (Settings → API)
 
-### 1.2 — Lancer le script SQL principal
+### 1.2 — Créer toute la structure de la base
 1. Supabase → **SQL Editor** → **New Query**
-2. Colle le contenu de `supabase_setup.sql` → **Run**
+2. Colle le contenu de **tous** les fichiers de `supabase/migrations/`, dans l'ordre
+   de leur nom (le premier est `…_baseline.sql`) → **Run**
 
-Ce script crée :
-- Table `profils` (nom, prénom, surnom, club, division, postes, photo_url)
-- Table `mesures` (kpi_id, valeur, date, user_id)
-- Table `seances` (jour, date, user_id)
-- RLS activé, chaque joueur ne voit que ses données
-- Bucket Storage `photos` avec policies upload/lecture
-
-### 1.3 — Créer la table admins + policies admin
-
-Dans **SQL Editor** → **New Query**, colle et exécute :
-
-```sql
--- Table admins
-CREATE TABLE admins (
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY
-);
-
-ALTER TABLE admins ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Admin voit son propre enregistrement" ON admins
-  FOR SELECT USING (auth.uid() = user_id);
-
--- Policies lecture globale pour les admins
-CREATE POLICY "Admin lit tous les profils" ON profils
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM admins WHERE admins.user_id = auth.uid())
-  );
-
-CREATE POLICY "Admin lit toutes les mesures" ON mesures
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM admins WHERE admins.user_id = auth.uid())
-  );
-
-CREATE POLICY "Admin lit toutes les séances" ON seances
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM admins WHERE admins.user_id = auth.uid())
-  );
-```
+La baseline crée les 13 tables (profils, mesures, séances, équipes, matchs, chat…),
+les règles d'accès RLS, les fonctions admin, le bucket Storage `photos` et le
+temps réel du chat.
 
 ### 1.4 — Te donner les droits admin
 
@@ -246,7 +211,7 @@ Tout `git push` sur `main` redéploie automatiquement.
 → Vérifier que ton `user_id` est bien dans la table `admins` (voir étape 1.4).
 
 **L'admin voit 0 mesures / séances pour les joueurs**
-→ Les policies "Admin lit toutes les mesures/séances" ne sont pas créées. Relancer le SQL de l'étape 1.3.
+→ Les règles d'accès admin ne sont pas créées. Vérifier que les migrations de l'étape 1.2 ont toutes été exécutées.
 
 **Erreur upload photo**
 → Vérifier que le bucket `photos` existe dans Supabase Storage et qu'il est public.
