@@ -11,10 +11,13 @@ txt-tracker/
 │   └── index.html
 ├── src/
 │   ├── lib/
-│   │   └── supabase.js        ← Client Supabase (URL + clé anon)
+│   │   ├── supabase.js        ← Client Supabase (URL + clé anon)
+│   │   ├── constants.js       ← Configuration partagée (couleurs, KPIs, rôles, séances types)
+│   │   └── stats.js           ← Calculs purs testés (KPIs, radar, matchs, dates)
 │   ├── components/
 │   │   ├── Auth.js            ← Page login / inscription
-│   │   └── App.js             ← Application complète (toutes les vues)
+│   │   ├── FicheJoueur.js     ← Fiche joueur (modale scouting)
+│   │   └── App.js             ← Reste de l'application (découpage en cours)
 │   └── index.js               ← Racine React, gestion session
 ├── supabase/
 │   ├── README.md              ← Comment modifier la base (à lire avant tout changement)
