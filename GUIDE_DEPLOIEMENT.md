@@ -118,7 +118,8 @@ Une PR dont la CI est rouge ne doit pas être mergée.
 En local :
 - `npm test` : lance les tests (fichiers `*.test.js`) ;
 - `CI=true npm run build` : compile comme la CI, où tout avertissement fait échouer.
-- `npm run lint` : contrôle ESLint ; une erreur (ex. variable non définie) fait échouer la CI.
+- `npm run lint` : contrôle ESLint ; toute erreur ou tout avertissement (variable non définie,
+  dépendance de hook manquante…) fait échouer la CI.
 
 Les calculs (KPIs, radar, bilan de matchs, dates) sont dans `src/lib/stats.js`
 et testés dans `src/lib/stats.test.js`.
