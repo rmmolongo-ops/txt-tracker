@@ -92,6 +92,21 @@ Reste à faire manuellement dans le dashboard Supabase : voir `supabase/README.m
 
 ---
 
+## ✅ Vérification automatique (CI)
+
+À chaque pull request (et à chaque mise à jour de `main`), GitHub Actions
+(`.github/workflows/ci.yml`) installe les dépendances, lance les tests puis le build.
+Une PR dont la CI est rouge ne doit pas être mergée.
+
+En local :
+- `npm test` : lance les tests (fichiers `*.test.js`) ;
+- `CI=true npm run build` : compile comme la CI, où tout avertissement fait échouer.
+
+Les calculs (KPIs, radar, bilan de matchs, dates) sont dans `src/lib/stats.js`
+et testés dans `src/lib/stats.test.js`.
+
+---
+
 ## ÉTAPE 1 — Configurer Supabase
 
 ### 1.1 — Créer le projet
