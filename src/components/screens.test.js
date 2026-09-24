@@ -5,6 +5,9 @@ import { createRoot } from 'react-dom/client'
 import ChatScreen from './ChatScreen'
 import BibliothequeScreen from './BibliothequeScreen'
 import ProfilScreen from './ProfilScreen'
+import KpiScreen from './KpiScreen'
+import StatsScreen from './StatsScreen'
+import SeancesScreen from './SeancesScreen'
 
 const MESSAGES = [
   { id: 'msg1', team_id: 't1', user_id: 'u2', content: 'Entraînement à 18h', sender_prenom: 'Kenji', created_at: '2026-09-24T10:00:00Z' },
@@ -20,7 +23,6 @@ jest.mock('../lib/supabase', () => {
   return { supabase: { from: () => query(), channel: () => channel, removeChannel: () => {} } }
 })
 
-global.IS_REACT_ACT_ENVIRONMENT = true
 
 let container, root
 beforeEach(() => {
@@ -97,5 +99,56 @@ describe('ProfilScreen', () => {
     await render(<ProfilScreen {...props} />)
     await act(async () => { buttonWithText('U12 B').click() })
     expect(props.toggleMyTeam).toHaveBeenCalledWith('t1')
+  })
+})
+
+describe('KpiScreen', () => {
+  test('saisie d’une mesure : enregistre la valeur du KPI', async () => {
+    const saveMesure = jest.fn()
+    await render(<KpiScreen isMobile={false} inputValues={{ sprint30: '4.6' }} setInputValues={jest.fn()} getLatest={() => 4.9} saveMesure={saveMesure} />)
+    expect(container.textContent).toContain('Sprint 30m')
+    const saveBtn = container.querySelector('input[placeholder="Valeur en sec"]').parentElement.querySelector('button')
+    await act(async () => { saveBtn.click() })
+    expect(saveMesure).toHaveBeenCalledWith('sprint30', '4.6')
+  })
+
+  test('changer de catégorie affiche les KPIs techniques', async () => {
+    await render(<KpiScreen isMobile={false} inputValues={{}} setInputValues={jest.fn()} getLatest={() => null} saveMesure={jest.fn()} />)
+    expect(container.textContent).not.toContain('Jonglerie Gauche')
+    await act(async () => { buttonWithText('Technique').click() })
+    expect(container.textContent).toContain('Jonglerie Gauche')
+  })
+})
+
+describe('StatsScreen', () => {
+  const mesures = [
+    { id: 'me1', kpi_id: 'sprint30', valeur: 5.0, date: '2026-09-01' },
+    { id: 'me2', kpi_id: 'sprint30', valeur: 4.8, date: '2026-09-15' },
+  ]
+  const getMesuresForKpi = (id) => mesures.filter(m => m.kpi_id === id)
+
+  test('suppression d’une mesure en deux temps (🗑️ puis confirmation)', async () => {
+    const onDeleteMesure = jest.fn(() => Promise.resolve())
+    await render(<StatsScreen isMobile={false} mesures={mesures} selectedKpi="sprint30" setSelectedKpi={jest.fn()}
+      getLatest={() => 4.8} getMesuresForKpi={getMesuresForKpi} getProgress={() => '4.0'} onDeleteMesure={onDeleteMesure} />)
+    expect(container.textContent).toContain('4.8 sec')
+    const trash = [...container.querySelectorAll('button')].filter(b => b.textContent === '🗑️')
+    expect(trash).toHaveLength(2)
+    await act(async () => { trash[0].click() })
+    expect(onDeleteMesure).not.toHaveBeenCalled()
+    const confirm = [...container.querySelectorAll('button')].find(b => b.style.background === 'rgb(239, 68, 68)')
+    await act(async () => { confirm.click() })
+    expect(onDeleteMesure).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('SeancesScreen', () => {
+  test('sans programme d’équipe : programme perso de la semaine, validation d’une séance', async () => {
+    const toggleSeance = jest.fn()
+    await render(<SeancesScreen myTeams={[]} getProgramForDate={() => null} getProgramsForTeam={() => []} isSeanceDone={() => false} toggleSeance={toggleSeance} />)
+    expect(container.textContent).toContain('LUN — Explosivité & Vitesse')
+    await act(async () => { container.querySelector('[style*="cursor: pointer"]').click() })
+    await act(async () => { buttonWithText('Valider cette séance').click() })
+    expect(toggleSeance).toHaveBeenCalledWith('LUN')
   })
 })

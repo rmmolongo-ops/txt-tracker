@@ -7,6 +7,10 @@ import FicheJoueur from './FicheJoueur'
 import ChatScreen from './ChatScreen'
 import BibliothequeScreen from './BibliothequeScreen'
 import ProfilScreen from './ProfilScreen'
+import KpiScreen from './KpiScreen'
+import StatsScreen from './StatsScreen'
+import SeancesScreen from './SeancesScreen'
+import { renderSessionBlocs } from './SessionBlocs'
 import useChatUnread from '../hooks/useChatUnread'
 import { LineChart, Line, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
@@ -19,9 +23,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [selectedKpi, setSelectedKpi] = useState('sprint30')
   const [toast, setToast] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [activeCategory, setActiveCategory] = useState('physique')
-  const [expandedDay, setExpandedDay] = useState(null)
-  const [confirmDelete, setConfirmDelete] = useState(null)
   const [expandedDayDashboard, setExpandedDayDashboard] = useState(null)
   const [editingDashboardKpis, setEditingDashboardKpis] = useState(false)
   const [dashboardKpisDraft, setDashboardKpisDraft] = useState([])
@@ -68,7 +69,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [editingProg, setEditingProg] = useState(false)
   const [progDraft, setProgDraft] = useState(null)
   const [editingProgramId, setEditingProgramId] = useState(null)
-  const [seancesWeekOffset, setSeancesWeekOffset] = useState(0)
   const [canInstall, setCanInstall] = useState(!!getDeferredPrompt())
   const [isStandalone] = useState(() => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true)
   const [isIOS] = useState(() => /iphone|ipad|ipod/i.test(window.navigator.userAgent) && !window.MSStream)
@@ -465,7 +465,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     await supabase.from('mesures').delete().eq('id', id)
     setMesures(prev => prev.filter(m => m.id !== id))
     showToast('🗑️ Mesure supprimée')
-    setConfirmDelete(null)
   }
 
   const toggleSeance = async (day, dateStr, teamId) => {
@@ -807,34 +806,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const PLAYER_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#14b8a6','#ec4899']
 
   const openFiche = (j, pool) => setFicheJoueur({ ...j, __pool: pool || [] })
-
-  const renderSessionBlocs = (s, expanded, done, onToggle) => expanded && (
-    <div style={{ background: C.card, padding: '0 16px 16px' }}>
-      <div style={{ background: s.color + '15', borderRadius: 10, padding: '8px 12px', margin: '12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 14 }}>🎯</span>
-        <span style={{ fontSize: 13, color: s.color, fontWeight: 700 }}>Objectif : {s.objectif}</span>
-      </div>
-      {s.blocs.map((bloc, bi) => (
-        <div key={bi} style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>{bloc.titre}</div>
-            <div style={{ fontSize: 11, color: s.color, background: s.color + '20', padding: '2px 8px', borderRadius: 8, fontWeight: 600 }}>{bloc.duree}</div>
-          </div>
-          {bloc.exercices.map((ex, ei) => (
-            <div key={ei} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, marginTop: 6, flexShrink: 0 }} />
-              <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.4 }}>{ex}</div>
-            </div>
-          ))}
-          {bi < s.blocs.length - 1 && <div style={{ height: 1, background: C.border, marginTop: 12 }} />}
-        </div>
-      ))}
-      <button onClick={(e) => { e.stopPropagation(); onToggle() }}
-        style={{ width: '100%', padding: 12, borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, marginTop: 4, background: done ? C.surface : 'linear-gradient(135deg, ' + s.color + ', ' + s.color + 'cc)', color: done ? C.muted : '#fff' }}>
-        {done ? '✓ Séance validée' : 'Valider cette séance'}
-      </button>
-    </div>
-  )
 
   const adminDeleteMesure = async (target, mesureId) => {
     const { error } = await supabase.from('mesures').delete().eq('id', mesureId)
@@ -1889,231 +1860,20 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       )}
 
       {/* ── SEANCES ── */}
-      {tab === 'seances' && (() => {
-        const myTeamsWithProgram = availableTeams.filter(t => myTeamIds.has(t.id) && getProgramsForTeam(t.id).length > 0)
-
-        if (myTeamsWithProgram.length === 0) {
-          return (
-            <div>
-              <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Programme de la semaine</div>
-              {SESSIONS.map(s => {
-                const done = isSeanceDone(s.day); const expanded = expandedDay === s.day
-                return (
-                  <div key={s.day} style={{ marginBottom: 10, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
-                    <div onClick={() => setExpandedDay(expanded ? null : s.day)}
-                      style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '18' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                      <div style={{ width: 42, height: 42, borderRadius: 12, background: done ? C.green + '30' : s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{s.day} — {s.label}</div>
-                        <div style={{ fontSize: 12, color: C.muted }}>{s.duration} • {s.blocs.length} blocs</div>
-                      </div>
-                      <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
-                    </div>
-                    {renderSessionBlocs(s, expanded, done, () => toggleSeance(s.day))}
-                  </div>
-                )
-              })}
-            </div>
-          )
-        }
-
-        const allProgs = myTeamsWithProgram.flatMap(t => getProgramsForTeam(t.id))
-        const minDate = allProgs.reduce((acc, p) => p.start_date < acc ? p.start_date : acc, allProgs[0].start_date)
-        const maxDate = allProgs.reduce((acc, p) => p.end_date > acc ? p.end_date : acc, allProgs[0].end_date)
-
-        const weekMonday = getMonday(new Date())
-        weekMonday.setDate(weekMonday.getDate() + seancesWeekOffset * 7)
-        const weekDates = DAY_ORDER.map((day, i) => {
-          const d = new Date(weekMonday); d.setDate(d.getDate() + i)
-          return { day, date: d, dateStr: toDateStr(d) }
-        })
-
-        const firstWeekMondayStr = toDateStr(getMonday(new Date(minDate + 'T00:00:00')))
-        const lastWeekMondayStr = toDateStr(getMonday(new Date(maxDate + 'T00:00:00')))
-        const currentWeekMondayStr = toDateStr(weekMonday)
-        const canGoPrev = currentWeekMondayStr > firstWeekMondayStr
-        const canGoNext = currentWeekMondayStr < lastWeekMondayStr
-
-        return (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <button onClick={() => canGoPrev && setSeancesWeekOffset(o => o - 1)} disabled={!canGoPrev}
-                style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid ' + C.border, background: C.card, color: canGoPrev ? C.text : C.border, fontSize: 16, cursor: canGoPrev ? 'pointer' : 'default' }}>‹</button>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>
-                  {weekDates[0].date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} — {weekDates[6].date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                </div>
-                {seancesWeekOffset !== 0 && (
-                  <button onClick={() => setSeancesWeekOffset(0)} style={{ background: 'none', border: 'none', color: C.accent, fontSize: 11, cursor: 'pointer', padding: 0, marginTop: 2 }}>Revenir à aujourd'hui</button>
-                )}
-              </div>
-              <button onClick={() => canGoNext && setSeancesWeekOffset(o => o + 1)} disabled={!canGoNext}
-                style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid ' + C.border, background: C.card, color: canGoNext ? C.text : C.border, fontSize: 16, cursor: canGoNext ? 'pointer' : 'default' }}>›</button>
-            </div>
-
-            {weekDates.map(({ day, date, dateStr }) => {
-              const dateLabel = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })
-              const entries = myTeamsWithProgram
-                .map(team => {
-                  const program = getProgramForDate(team.id, dateStr)
-                  const s = program?.sessions.find(x => x.day === day)
-                  return s ? { team, program, s } : null
-                })
-                .filter(Boolean)
-
-              if (entries.length === 0) {
-                return (
-                  <div key={dateStr} style={{ marginBottom: 10, borderRadius: 16, border: '1px dashed ' + C.border, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, opacity: 0.55 }}>
-                    <div style={{ fontSize: 20 }}>💤</div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 13, textTransform: 'capitalize' }}>{dateLabel}</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Hors programme</div>
-                    </div>
-                  </div>
-                )
-              }
-
-              return (
-                <div key={dateStr} style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 12, color: C.muted, fontWeight: 700, marginBottom: 6, textTransform: 'capitalize' }}>{dateLabel}</div>
-                  {entries.map(({ team, program, s }) => {
-                    const cardKey = dateStr + '_' + team.id
-                    const done = isSeanceDone(day, dateStr, team.id); const expanded = expandedDay === cardKey
-                    return (
-                      <div key={cardKey} style={{ marginBottom: 10, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
-                        <div onClick={() => setExpandedDay(expanded ? null : cardKey)}
-                          style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '18' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                          <div style={{ width: 42, height: 42, borderRadius: 12, background: done ? C.green + '30' : s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 700, fontSize: 14 }}>{s.label}</div>
-                            <div style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                              <span>{s.duration}</span>
-                              <span>•</span>
-                              <span style={{ color: team.color, fontWeight: 700 }}>{team.name}</span>
-                              <span>•</span>
-                              <span>{program.name}</span>
-                            </div>
-                          </div>
-                          <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
-                        </div>
-                        {renderSessionBlocs(s, expanded, done, () => toggleSeance(day, dateStr, team.id))}
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })}
-          </div>
-        )
-      })()}
+      {tab === 'seances' && (
+        <SeancesScreen myTeams={myTeams} getProgramForDate={getProgramForDate} getProgramsForTeam={getProgramsForTeam}
+          isSeanceDone={isSeanceDone} toggleSeance={toggleSeance} />
+      )}
 
       {/* ── KPI ── */}
       {tab === 'kpi' && (
-        <div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }}>
-            {['physique', 'technique', 'mental'].map(cat => (
-              <button key={cat} onClick={() => setActiveCategory(cat)}
-                style={{ padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', background: activeCategory === cat ? C.accent : C.surface, color: activeCategory === cat ? '#fff' : C.muted }}>
-                {cat.charAt(0).toUpperCase() + cat.slice(1)}
-              </button>
-            ))}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
-            {KPI_CONFIG.filter(k => k.category === activeCategory).map(kpi => {
-              const val = getLatest(kpi.id)
-              return (
-                <div key={kpi.id} style={{ background: C.card, borderRadius: 14, padding: 16, border: '1px solid ' + C.border }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                    <span style={{ fontSize: 24 }}>{kpi.icon}</span>
-                    <div>
-                      <div style={{ fontWeight: 700 }}>{kpi.label}</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Dernière : {val !== null ? val + ' ' + kpi.unit : 'Non renseigné'}</div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <input type="number" placeholder={'Valeur en ' + kpi.unit} value={inputValues[kpi.id] || ''}
-                      onChange={e => setInputValues(v => ({ ...v, [kpi.id]: e.target.value }))}
-                      style={{ flex: 1, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 14px', color: C.text, fontSize: 16, outline: 'none' }} />
-                    <button onClick={() => inputValues[kpi.id] && saveMesure(kpi.id, inputValues[kpi.id])}
-                      style={{ padding: '10px 18px', background: inputValues[kpi.id] ? kpi.color : C.surface, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>✓</button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+        <KpiScreen isMobile={isMobile} inputValues={inputValues} setInputValues={setInputValues} getLatest={getLatest} saveMesure={saveMesure} />
       )}
 
       {/* ── STATS ── */}
       {tab === 'stats' && (
-        <div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }}>
-            {KPI_CONFIG.map(kpi => (
-              <button key={kpi.id} onClick={() => setSelectedKpi(kpi.id)}
-                style={{ padding: '6px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', background: selectedKpi === kpi.id ? kpi.color : C.surface, color: '#fff', opacity: selectedKpi === kpi.id ? 1 : 0.6 }}>
-                {kpi.icon} {kpi.label.split(' ')[0]}
-              </button>
-            ))}
-          </div>
-          {(() => {
-            const kpi = KPI_CONFIG.find(k => k.id === selectedKpi)
-            const arr = getMesuresForKpi(selectedKpi)
-            const chartData = arr.slice(-12).map(d => ({ date: d.date.slice(5), val: d.valeur }))
-            const prog = getProgress(selectedKpi); const val = getLatest(selectedKpi)
-            return (
-              <div>
-                <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 14, border: '1px solid ' + C.border }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                    <div>
-                      <div style={{ fontSize: 12, color: C.muted }}>{kpi.label.toUpperCase()}</div>
-                      <div style={{ fontSize: 36, fontWeight: 900, color: kpi.color }}>{val !== null ? val : '—'}<span style={{ fontSize: 16, color: C.muted }}> {kpi.unit}</span></div>
-                    </div>
-                    {prog !== null && (
-                      <div style={{ background: parseFloat(prog) >= 0 ? C.green + '20' : C.red + '20', borderRadius: 10, padding: '8px 14px', textAlign: 'center' }}>
-                        <div style={{ fontSize: 20, fontWeight: 900, color: parseFloat(prog) >= 0 ? C.green : C.red }}>{parseFloat(prog) >= 0 ? '+' : ''}{prog}%</div>
-                        <div style={{ fontSize: 10, color: C.muted }}>progression</div>
-                      </div>
-                    )}
-                  </div>
-                  {chartData.length > 1 ? (
-                    <ResponsiveContainer width="100%" height={isMobile ? 160 : 220}>
-                      <LineChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.muted }} />
-                        <YAxis tick={{ fontSize: 10, fill: C.muted }} />
-                        <Tooltip contentStyle={{ background: C.card, border: '1px solid ' + C.border, borderRadius: 8, color: C.text }} />
-                        <Line type="monotone" dataKey="val" stroke={kpi.color} strokeWidth={2.5} dot={{ fill: kpi.color, r: 4 }} activeDot={{ r: 6 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 13 }}>Enregistre au moins 2 mesures pour voir le graphique</div>
-                  )}
-                </div>
-                <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Historique</div>
-                {arr.slice().reverse().slice(0, 10).map(entry => {
-                  const isConf = confirmDelete && confirmDelete.id === entry.id
-                  return (
-                    <div key={entry.id} style={{ background: isConf ? '#3f0f0f' : C.card, borderRadius: 10, padding: '10px 14px', marginBottom: 8, border: '1px solid ' + (isConf ? C.red + '60' : C.border), display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ color: C.muted, fontSize: 13 }}>{new Date(entry.date).toLocaleDateString('fr-FR')}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ color: kpi.color, fontWeight: 700 }}>{entry.valeur} {kpi.unit}</span>
-                        {isConf ? (
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => deleteMesure(entry.id)} style={{ background: C.red, color: '#fff', border: 'none', borderRadius: 8, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Confirmer</button>
-                            <button onClick={() => setConfirmDelete(null)} style={{ background: C.surface, color: C.muted, border: 'none', borderRadius: 8, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Annuler</button>
-                          </div>
-                        ) : (
-                          <button onClick={() => setConfirmDelete({ id: entry.id })} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, opacity: 0.4 }}>🗑️</button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-                {arr.length === 0 && <div style={{ textAlign: 'center', color: C.muted, padding: 20, fontSize: 13 }}>Aucune donnée pour l'instant</div>}
-              </div>
-            )
-          })()}
-        </div>
+        <StatsScreen isMobile={isMobile} mesures={mesures} selectedKpi={selectedKpi} setSelectedKpi={setSelectedKpi}
+          getLatest={getLatest} getMesuresForKpi={getMesuresForKpi} getProgress={getProgress} onDeleteMesure={deleteMesure} />
       )}
 
       {/* ── CHAT ── */}
