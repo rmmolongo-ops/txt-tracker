@@ -1,3 +1,5 @@
+// Rendu React direct (sans Testing Library) : act() est nécessaire autour de root.render.
+/* eslint-disable testing-library/no-unnecessary-act */
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import FicheJoueur from './FicheJoueur'

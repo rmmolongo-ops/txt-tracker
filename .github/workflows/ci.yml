@@ -27,6 +27,9 @@ jobs:
       - name: Installer les dépendances
         run: npm ci --no-audit --no-fund
 
+      - name: Lint (variables non définies, erreurs React)
+        run: npm run lint
+
       - name: Tests
         run: npm test -- --watchAll=false
 

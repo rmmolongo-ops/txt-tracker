@@ -1,9 +1,13 @@
-import { Fragment, useState, useEffect, useCallback, useRef } from 'react'
+import { Fragment, useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { getDeferredPrompt, onPromptAvailable } from '../lib/installPrompt'
 import { toDateStr, getMonday, latestKpis, MATCH_RESULTS, hasScore, resultFromScore } from '../lib/stats'
-import { C, TEAM_COLORS, DAY_ORDER, ROLE_CONFIG, KPI_CONFIG, SESSIONS, DEFAULT_PROFIL, DASHBOARD_KPIS_MAX, LEADERSHIP_ROLES, DEFAULT_TEMPLATE_BLOCS, GHOST_PREFIX, isGhostId, ghostRealId, seanceRowKey } from '../lib/constants'
+import { C, TEAM_COLORS, DAY_ORDER, ROLE_CONFIG, KPI_CONFIG, SESSIONS, DEFAULT_PROFIL, DASHBOARD_KPIS_MAX, LEADERSHIP_ROLES, GHOST_PREFIX, isGhostId, ghostRealId, seanceRowKey } from '../lib/constants'
 import FicheJoueur from './FicheJoueur'
+import ChatScreen from './ChatScreen'
+import BibliothequeScreen from './BibliothequeScreen'
+import ProfilScreen from './ProfilScreen'
+import useChatUnread from '../hooks/useChatUnread'
 import { LineChart, Line, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 export default function App({ user, onSignOut, inviteTeamId }) {
@@ -11,8 +15,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [mesures, setMesures] = useState([])
   const [seances, setSeances] = useState([])
   const [profil, setProfil] = useState(DEFAULT_PROFIL)
-  const [profilEdit, setProfilEdit] = useState(DEFAULT_PROFIL)
-  const [editMode, setEditMode] = useState(false)
   const [inputValues, setInputValues] = useState({})
   const [selectedKpi, setSelectedKpi] = useState('sprint30')
   const [toast, setToast] = useState(null)
@@ -20,7 +22,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [activeCategory, setActiveCategory] = useState('physique')
   const [expandedDay, setExpandedDay] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
-  const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [expandedDayDashboard, setExpandedDayDashboard] = useState(null)
   const [editingDashboardKpis, setEditingDashboardKpis] = useState(false)
   const [dashboardKpisDraft, setDashboardKpisDraft] = useState([])
@@ -72,18 +73,12 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [isStandalone] = useState(() => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true)
   const [isIOS] = useState(() => /iphone|ipad|ipod/i.test(window.navigator.userAgent) && !window.MSStream)
   const [chatTeamId, setChatTeamId] = useState(null)
-  const [chatMessages, setChatMessages] = useState([])
-  const [chatInput, setChatInput] = useState('')
-  const [unreadCounts, setUnreadCounts] = useState({})
-  const activeChatTeamRef = useRef(null)
+  const myTeams = useMemo(() => availableTeams.filter(t => myTeamIds.has(t.id)), [availableTeams, myTeamIds])
+  const { unreadCounts, totalUnread, markChatRead } = useChatUnread({ userId: user.id, availableTeams, myTeamIds, openTeamId: tab === 'chat' ? chatTeamId : null })
   const [rosterTeamId, setRosterTeamId] = useState(null)
   const [equipePlayerTab, setEquipePlayerTab] = useState('joueurs')
   const [seanceTemplates, setSeanceTemplates] = useState([])
   const [seanceTemplatesLoading, setSeanceTemplatesLoading] = useState(false)
-  const [editingTemplate, setEditingTemplate] = useState(false)
-  const [templateDraft, setTemplateDraft] = useState(null)
-  const [editingTemplateId, setEditingTemplateId] = useState(null)
-  const [expandedTemplateId, setExpandedTemplateId] = useState(null)
   const [libraryPickerFor, setLibraryPickerFor] = useState(null)
   const [viewDay, setViewDay] = useState(null)
   const [dailySessions, setDailySessions] = useState([])
@@ -217,12 +212,12 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     }
     if (progs) setProgramsCatalog(progs)
     if (cl) setClubs(cl)
-    if (p) { setProfil(p); setProfilEdit(p) }
+    if (p) setProfil(p)
     else {
       const meta = user.user_metadata || {}
       const initial = { ...DEFAULT_PROFIL, nom: meta.nom || '', prenom: meta.prenom || '', club: meta.club || '', poste1: meta.poste1 || '', poste2: meta.poste2 || '' }
       const { data: newP } = await supabase.from('profils').upsert({ user_id: user.id, ...initial }, { onConflict: 'user_id' }).select().single()
-      if (newP) { setProfil(newP); setProfilEdit(newP) }
+      if (newP) setProfil(newP)
       if (meta.equipe) {
         const { error: joinError } = await supabase.from('team_members').insert({ user_id: user.id, team_id: meta.equipe })
         if (!joinError) setMyTeamIds(prev => new Set([...prev, meta.equipe]))
@@ -261,71 +256,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
-
-  useEffect(() => {
-    if (tab !== 'chat' || chatTeamId) return
-    const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
-    if (myTeams.length > 0) setChatTeamId(myTeams[0].id)
-  }, [tab, availableTeams, myTeamIds, chatTeamId])
-
-  useEffect(() => {
-    if (tab !== 'chat' || !chatTeamId) return
-    let active = true
-    supabase.from('team_messages').select('*').eq('team_id', chatTeamId).order('created_at').limit(200)
-      .then(({ data }) => { if (active && data) setChatMessages(data) })
-    const channel = supabase.channel('team_messages_' + chatTeamId)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_messages', filter: 'team_id=eq.' + chatTeamId }, payload => {
-        setChatMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new])
-      })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'team_messages', filter: 'team_id=eq.' + chatTeamId }, payload => {
-        setChatMessages(prev => prev.filter(m => m.id !== payload.old.id))
-      })
-      .subscribe()
-    markChatRead(chatTeamId)
-    return () => { active = false; supabase.removeChannel(channel) }
-  }, [tab, chatTeamId])
-
-  useEffect(() => {
-    activeChatTeamRef.current = (tab === 'chat') ? chatTeamId : null
-  }, [tab, chatTeamId])
-
-  useEffect(() => {
-    const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
-    if (myTeams.length === 0) return
-    let active = true
-    ;(async () => {
-      const { data: reads } = await supabase.from('chat_reads').select('team_id, last_read_at').eq('user_id', user.id)
-      const readMap = {}
-      ;(reads || []).forEach(r => { readMap[r.team_id] = r.last_read_at })
-      const counts = {}
-      await Promise.all(myTeams.map(async team => {
-        const since = readMap[team.id] || '1970-01-01T00:00:00Z'
-        const { count } = await supabase.from('team_messages').select('id', { count: 'exact', head: true }).eq('team_id', team.id).gt('created_at', since).neq('user_id', user.id)
-        counts[team.id] = count || 0
-      }))
-      if (active) setUnreadCounts(counts)
-    })()
-    return () => { active = false }
-  }, [availableTeams, myTeamIds, user.id])
-
-  useEffect(() => {
-    const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
-    if (myTeams.length === 0) return
-    const channels = myTeams.map(team => supabase.channel('unread_' + team.id)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_messages', filter: 'team_id=eq.' + team.id }, payload => {
-        if (payload.new.user_id === user.id) return
-        if (activeChatTeamRef.current === team.id) { markChatRead(team.id); return }
-        setUnreadCounts(prev => ({ ...prev, [team.id]: (prev[team.id] || 0) + 1 }))
-      })
-      .subscribe())
-    return () => { channels.forEach(c => supabase.removeChannel(c)) }
-  }, [availableTeams, myTeamIds, user.id])
-
-  const markChatRead = async (teamId) => {
-    const now = new Date().toISOString()
-    setUnreadCounts(prev => ({ ...prev, [teamId]: 0 }))
-    await supabase.from('chat_reads').upsert({ user_id: user.id, team_id: teamId, last_read_at: now }, { onConflict: 'user_id,team_id' })
-  }
 
   useEffect(() => {
     if (tab !== 'equipe' || isAdmin || rosterTeamId) return
@@ -472,33 +402,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     loadSeanceTemplates()
   }, [tab, availableTeams, myTeamIds, myTeamRoles])
 
-  const saveTemplate = async (draft, templateId) => {
-    if (!draft.label.trim()) { showToast('❌ Donne un nom à la séance'); return }
-    const clean = {
-      label: draft.label.trim(), icon: draft.icon, color: draft.color, duration: draft.duration.trim() || '1h', objectif: draft.objectif.trim(),
-      blocs: draft.blocs.map(b => ({ ...b, exercices: b.exercices.filter(e => e.trim() !== '') })),
-    }
-    if (templateId) {
-      const { data, error } = await supabase.from('seance_templates').update({ ...clean, updated_at: new Date().toISOString() }).eq('id', templateId).select().single()
-      if (error) { showToast('❌ ' + error.message); return }
-      setSeanceTemplates(prev => prev.map(t => t.id === templateId ? data : t))
-    } else {
-      const { data, error } = await supabase.from('seance_templates').insert({ ...clean, created_by: user.id }).select().single()
-      if (error) { showToast('❌ ' + error.message); return }
-      setSeanceTemplates(prev => [data, ...prev])
-    }
-    setEditingTemplate(false)
-    setTemplateDraft(null)
-    setEditingTemplateId(null)
-    showToast('✅ Séance enregistrée dans la bibliothèque !')
-  }
-
-  const deleteTemplate = async (id) => {
-    await supabase.from('seance_templates').delete().eq('id', id)
-    setSeanceTemplates(prev => prev.filter(t => t.id !== id))
-    showToast('🗑️ Séance supprimée de la bibliothèque')
-  }
-
   const applyTemplateToDay = (template) => {
     const { si } = libraryPickerFor
     setProgDraft(d => {
@@ -551,27 +454,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     })
   }
 
-  const sendChatMessage = async () => {
-    if (!chatInput.trim() || !chatTeamId) return
-    const content = chatInput.trim()
-    setChatInput('')
-    const { error } = await supabase.from('team_messages').insert({
-      team_id: chatTeamId,
-      user_id: user.id,
-      content,
-      sender_prenom: profil.prenom || '',
-      sender_nom: profil.nom || '',
-      sender_surnom: profil.surnom || '',
-      sender_photo_url: profil.photo_url || '',
-    })
-    if (error) showToast('❌ ' + error.message)
-  }
-
-  const deleteChatMessage = async (id) => {
-    await supabase.from('team_messages').delete().eq('id', id)
-    setChatMessages(prev => prev.filter(m => m.id !== id))
-  }
-
   const saveMesure = async (kpiId, value) => {
     const today = new Date().toISOString().split('T')[0]
     const { data } = await supabase.from('mesures').insert({ user_id: user.id, kpi_id: kpiId, valeur: parseFloat(value), date: today }).select().single()
@@ -602,16 +484,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const saveDashboardKpis = async (ids) => {
     await supabase.from('profils').update({ dashboard_kpis: ids }).eq('user_id', user.id)
     setProfil(p => ({ ...p, dashboard_kpis: ids }))
-    setProfilEdit(p => ({ ...p, dashboard_kpis: ids }))
     setEditingDashboardKpis(false)
     showToast('✅ Performances clés mises à jour !')
-  }
-
-  const saveProfil = async () => {
-    await supabase.from('profils').update({ ...profilEdit, updated_at: new Date().toISOString() }).eq('user_id', user.id)
-    setProfil(profilEdit)
-    setEditMode(false)
-    showToast('✅ Profil mis à jour !')
   }
 
   const toggleMyTeam = async (teamId) => {
@@ -627,41 +501,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     }
     const team = availableTeams.find(t => t.id === teamId)
     showToast(isIn ? `Retiré de "${team?.name}"` : `✅ Ajouté à "${team?.name}" !`)
-  }
-
-  const uploadPhoto = async (file) => {
-    setUploadingPhoto(true)
-    try {
-      const img = await createImageBitmap(file)
-      const canvas = document.createElement('canvas')
-      const MAX = 300
-      const ratio = Math.min(MAX / img.width, MAX / img.height)
-      canvas.width = img.width * ratio; canvas.height = img.height * ratio
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
-      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.8))
-      const path = `${user.id}/avatar.jpg`
-      await supabase.storage.from('photos').upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
-      const { data: { publicUrl } } = supabase.storage.from('photos').getPublicUrl(path)
-      const url = publicUrl + '?t=' + Date.now()
-      await supabase.from('profils').update({ photo_url: url }).eq('user_id', user.id)
-      setProfil(p => ({ ...p, photo_url: url }))
-      setProfilEdit(p => ({ ...p, photo_url: url }))
-      showToast('📷 Photo mise à jour !')
-    } catch (e) { showToast('❌ Erreur upload photo') }
-    setUploadingPhoto(false)
-  }
-
-  const deletePhoto = async () => {
-    setUploadingPhoto(true)
-    try {
-      const path = `${user.id}/avatar.jpg`
-      await supabase.storage.from('photos').remove([path])
-      await supabase.from('profils').update({ photo_url: '' }).eq('user_id', user.id)
-      setProfil(p => ({ ...p, photo_url: '' }))
-      setProfilEdit(p => ({ ...p, photo_url: '' }))
-      showToast('🗑️ Photo supprimée')
-    } catch (e) { showToast('❌ Erreur suppression photo') }
-    setUploadingPhoto(false)
   }
 
   const uploadTeamPhoto = async (teamId, file) => {
@@ -949,7 +788,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     </div>
   )
 
-  const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0)
 
   const NAV_ITEMS = [
     { id: 'dashboard', icon: '🏠', label: 'Accueil' },
@@ -2279,80 +2117,10 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       )}
 
       {/* ── CHAT ── */}
-      {tab === 'chat' && (() => {
-        const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
-        if (myTeams.length === 0) {
-          return (
-            <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
-              <div style={{ fontSize: 32, marginBottom: 10 }}>💬</div>
-              Rejoins une équipe pour accéder à son tchat
-            </div>
-          )
-        }
-        const activeTeamId = myTeams.some(t => t.id === chatTeamId) ? chatTeamId : myTeams[0].id
-        const activeTeam = myTeams.find(t => t.id === activeTeamId)
-        return (
-          <div>
-            {myTeams.length > 1 && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-                {myTeams.map(team => {
-                  const sel = activeTeamId === team.id
-                  const unread = unreadCounts[team.id] || 0
-                  return (
-                    <button key={team.id} onClick={() => setChatTeamId(team.id)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 13, cursor: 'pointer' }}>
-                      {team.name}
-                      {unread > 0 && (
-                        <span style={{ background: C.red, color: '#fff', fontSize: 10, fontWeight: 800, borderRadius: 8, padding: '1px 6px', minWidth: 14, textAlign: 'center', lineHeight: '13px' }}>{unread > 9 ? '9+' : unread}</span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-
-            <div style={{ maxHeight: isMobile ? '50vh' : 500, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, padding: '4px 2px', marginBottom: 12 }}>
-              {chatMessages.length === 0 && (
-                <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, marginTop: 30 }}>
-                  Aucun message pour l'instant — lance la discussion !
-                </div>
-              )}
-              {chatMessages.map(m => {
-                const mine = m.user_id === user.id
-                return (
-                  <div key={m.id} style={{ display: 'flex', flexDirection: mine ? 'row-reverse' : 'row', gap: 8, alignItems: 'flex-end' }}>
-                    <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>
-                      {m.sender_photo_url ? <img src={m.sender_photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
-                    </div>
-                    <div style={{ maxWidth: '72%' }}>
-                      {!mine && <div style={{ fontSize: 11, color: C.muted, marginBottom: 2, marginLeft: 4 }}>{m.sender_prenom}{m.sender_surnom ? ' "' + m.sender_surnom + '"' : ''}</div>}
-                      <div style={{ background: mine ? C.accent : C.card, color: mine ? '#fff' : C.text, border: mine ? 'none' : '1px solid ' + C.border, borderRadius: 14, padding: '8px 12px', fontSize: 14, lineHeight: 1.4, wordBreak: 'break-word' }}>
-                        {m.content}
-                      </div>
-                      <div style={{ fontSize: 10, color: C.muted, marginTop: 2, textAlign: mine ? 'right' : 'left' }}>
-                        {new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
-                    {(mine || isAdmin) && (
-                      <button onClick={() => deleteChatMessage(m.id)}
-                        style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 12, opacity: 0.5, flexShrink: 0 }}>🗑️</button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, paddingTop: 10, borderTop: '1px solid ' + C.border }}>
-              <input value={chatInput} onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && sendChatMessage()}
-                placeholder={'Écrire à ' + (activeTeam?.name || '...')}
-                style={{ flex: 1, background: C.surface, border: '1px solid ' + C.border, borderRadius: 20, padding: '10px 16px', color: C.text, fontSize: 14, outline: 'none', minWidth: 0 }} />
-              <button onClick={sendChatMessage} disabled={!chatInput.trim()}
-                style={{ width: 42, height: 42, borderRadius: '50%', border: 'none', background: chatInput.trim() ? C.accent : C.surface, color: '#fff', cursor: 'pointer', fontSize: 18, flexShrink: 0 }}>➤</button>
-            </div>
-          </div>
-        )
-      })()}
+      {tab === 'chat' && (
+        <ChatScreen user={user} profil={profil} isAdmin={isAdmin} isMobile={isMobile} myTeams={myTeams}
+          chatTeamId={chatTeamId} onSelectTeam={setChatTeamId} unreadCounts={unreadCounts} markChatRead={markChatRead} showToast={showToast} />
+      )}
 
       {/* ── ÉQUIPE (ADMIN / COACH) ── */}
       {tab === 'equipe' && (isAdmin || hasLeadership) && (() => {
@@ -2867,130 +2635,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
       {/* ── BIBLIOTHÈQUE DE SÉANCES ── */}
       {tab === 'bibliotheque' && hasLeadership && (
-        <div>
-          {!editingTemplate ? (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Mes séances types</div>
-                <button onClick={() => { setTemplateDraft({ label: '', icon: '💪', color: '#3b82f6', duration: '1h30', objectif: '', blocs: JSON.parse(JSON.stringify(DEFAULT_TEMPLATE_BLOCS)) }); setEditingTemplateId(null); setEditingTemplate(true) }}
-                  style={{ padding: '9px 16px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                  + Nouvelle séance
-                </button>
-              </div>
-
-              {seanceTemplatesLoading ? (
-                <div style={{ textAlign: 'center', color: C.muted, padding: 24 }}>Chargement...</div>
-              ) : seanceTemplates.length === 0 ? (
-                <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
-                  <div style={{ fontSize: 32, marginBottom: 10 }}>📚</div>
-                  Aucune séance dans ta bibliothèque pour le moment
-                  <div style={{ fontSize: 12, marginTop: 6 }}>Prépare des modèles de séances réutilisables pour tes entraînements</div>
-                </div>
-              ) : seanceTemplates.map(t => {
-                const expanded = expandedTemplateId === t.id
-                return (
-                  <div key={t.id} style={{ background: C.card, borderRadius: 16, marginBottom: 10, border: '1px solid ' + (expanded ? t.color + '60' : C.border), overflow: 'hidden' }}>
-                    <div onClick={() => setExpandedTemplateId(expanded ? null : t.id)} style={{ padding: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 42, height: 42, borderRadius: 12, background: t.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{t.icon}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: 15 }}>{t.label}</div>
-                        <div style={{ fontSize: 12, color: C.muted }}>{t.duration}{t.objectif ? ' · ' + t.objectif : ''}</div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                        <button onClick={e => { e.stopPropagation(); setTemplateDraft({ label: t.label, icon: t.icon, color: t.color, duration: t.duration, objectif: t.objectif, blocs: JSON.parse(JSON.stringify(t.blocs)) }); setEditingTemplateId(t.id); setEditingTemplate(true) }}
-                          style={{ padding: '7px 10px', background: C.surface, color: C.text, border: '1px solid ' + C.border, borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>✏️</button>
-                        <button onClick={e => { e.stopPropagation(); deleteTemplate(t.id) }}
-                          style={{ padding: '7px 10px', background: 'transparent', color: C.red, border: '1px solid ' + C.red + '40', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>🗑️</button>
-                      </div>
-                    </div>
-                    {expanded && (
-                      <div style={{ padding: '0 16px 16px' }}>
-                        {(t.blocs || []).map((bloc, bi) => (
-                          <div key={bi} style={{ marginBottom: 10 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                              <div style={{ fontSize: 13, fontWeight: 700 }}>{bloc.titre}</div>
-                              <div style={{ fontSize: 11, color: t.color, background: t.color + '20', padding: '2px 8px', borderRadius: 8, fontWeight: 600 }}>{bloc.duree}</div>
-                            </div>
-                            {(bloc.exercices || []).map((ex, ei) => (
-                              <div key={ei} style={{ display: 'flex', gap: 8, marginBottom: 4, alignItems: 'flex-start' }}>
-                                <div style={{ width: 6, height: 6, borderRadius: '50%', background: t.color, marginTop: 6, flexShrink: 0 }} />
-                                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.4 }}>{ex}</div>
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </>
-          ) : (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{editingTemplateId ? 'Modifier la séance' : 'Nouvelle séance'}</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => { setEditingTemplate(false); setTemplateDraft(null); setEditingTemplateId(null) }}
-                    style={{ padding: '9px 14px', background: C.surface, color: C.muted, border: '1px solid ' + C.border, borderRadius: 10, fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
-                    Annuler
-                  </button>
-                  <button onClick={() => saveTemplate(templateDraft, editingTemplateId)}
-                    style={{ padding: '9px 18px', background: C.green, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                    ✓ Sauvegarder
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ background: C.card, borderRadius: 14, padding: 16, marginBottom: 16, border: '1px solid ' + C.border }}>
-                <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>NOM DE LA SÉANCE</div>
-                    <input value={templateDraft.label} onChange={e => setTemplateDraft(d => ({ ...d, label: e.target.value }))} placeholder="Ex : Passes courtes"
-                      style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
-                  </div>
-                  <div style={{ width: 90 }}>
-                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>DURÉE</div>
-                    <input value={templateDraft.duration} onChange={e => setTemplateDraft(d => ({ ...d, duration: e.target.value }))}
-                      style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
-                  </div>
-                  <div style={{ width: 56 }}>
-                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>ICÔNE</div>
-                    <input value={templateDraft.icon} onChange={e => setTemplateDraft(d => ({ ...d, icon: e.target.value }))}
-                      style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 16, outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
-                  </div>
-                </div>
-                <input value={templateDraft.objectif} onChange={e => setTemplateDraft(d => ({ ...d, objectif: e.target.value }))} placeholder="Objectif de la séance..."
-                  style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
-              </div>
-
-              <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Blocs d'exercices</div>
-              {templateDraft.blocs.map((bloc, bi) => (
-                <div key={bi} style={{ background: C.card, borderRadius: 14, padding: 14, marginBottom: 10, border: '1px solid ' + C.border }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                    <input value={bloc.titre} placeholder="Titre du bloc"
-                      onChange={e => { const d = JSON.parse(JSON.stringify(templateDraft)); d.blocs[bi].titre = e.target.value; setTemplateDraft(d) }}
-                      style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid ' + C.border, color: C.text, fontSize: 13, fontWeight: 700, outline: 'none' }} />
-                    <input value={bloc.duree} placeholder="Durée"
-                      onChange={e => { const d = JSON.parse(JSON.stringify(templateDraft)); d.blocs[bi].duree = e.target.value; setTemplateDraft(d) }}
-                      style={{ background: 'transparent', border: '1px solid ' + C.border, borderRadius: 6, color: templateDraft.color, fontSize: 11, padding: '2px 6px', outline: 'none', width: 70, textAlign: 'center' }} />
-                    {templateDraft.blocs.length > 1 && (
-                      <button onClick={() => setTemplateDraft(d => ({ ...d, blocs: d.blocs.filter((_, i) => i !== bi) }))}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.red, fontSize: 14 }}>🗑️</button>
-                    )}
-                  </div>
-                  <textarea value={bloc.exercices.join('\n')} placeholder="Un exercice par ligne..."
-                    onChange={e => { const d = JSON.parse(JSON.stringify(templateDraft)); d.blocs[bi].exercices = e.target.value.split('\n'); setTemplateDraft(d) }}
-                    rows={Math.max(3, bloc.exercices.length + 1)}
-                    style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.7, boxSizing: 'border-box' }} />
-                </div>
-              ))}
-              <button onClick={() => setTemplateDraft(d => ({ ...d, blocs: [...d.blocs, { titre: '', duree: '15 min', exercices: [''] }] }))}
-                style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px dashed ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
-                + Ajouter un bloc
-              </button>
-            </div>
-          )}
-        </div>
+        <BibliothequeScreen user={user} templates={seanceTemplates} loading={seanceTemplatesLoading} setTemplates={setSeanceTemplates} showToast={showToast} />
       )}
 
       {/* ── ADMIN : VUE OVERVIEW ── */}
@@ -3308,128 +2953,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
       {/* ── PROFIL ── */}
       {tab === 'profil' && (
-        <div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24, paddingTop: 8 }}>
-            <div style={{ position: 'relative', marginBottom: 12 }}>
-              <div style={{ width: 90, height: 90, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, boxShadow: '0 0 30px rgba(59,130,246,0.4)' }}>
-                {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
-              </div>
-              <label style={{ position: 'absolute', bottom: 0, right: 0, width: 30, height: 30, borderRadius: '50%', background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', fontSize: 15 }}>
-                {uploadingPhoto ? '⏳' : '📷'}
-                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => e.target.files[0] && uploadPhoto(e.target.files[0])} />
-              </label>
-              {profil.photo_url && (
-                <button onClick={deletePhoto} disabled={uploadingPhoto} title="Supprimer la photo"
-                  style={{ position: 'absolute', bottom: 0, left: 0, width: 30, height: 30, borderRadius: '50%', background: C.red, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: uploadingPhoto ? 'default' : 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', fontSize: 13, opacity: uploadingPhoto ? 0.6 : 1 }}>
-                  🗑️
-                </button>
-              )}
-            </div>
-            {!editMode && (
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 24, fontWeight: 900 }}>{profil.prenom} {profil.nom}</div>
-                <div style={{ fontSize: 16, color: C.gold, fontWeight: 700, marginTop: 2 }}>"{profil.surnom || 'TxT'}"</div>
-                <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>{profil.poste1}{profil.poste2 ? ' · ' + profil.poste2 : ''}</div>
-              </div>
-            )}
-          </div>
-
-          {!editMode ? (
-            <div style={{ maxWidth: isMobile ? '100%' : 480, margin: '0 auto' }}>
-              {[
-                { label: 'Nom', value: profil.nom, icon: '👤' },
-                { label: 'Prénom', value: profil.prenom, icon: '🏷️' },
-                { label: 'Surnom', value: profil.surnom, icon: '⚡' },
-                { label: 'Club', value: profil.club, icon: '🏟️' },
-                { label: 'Division', value: profil.division, icon: '🏆' },
-                { label: 'Poste 1', value: profil.poste1, icon: '📍' },
-                { label: 'Poste 2', value: profil.poste2, icon: '📍' },
-              ].map(f => (
-                <div key={f.label} style={{ background: C.card, borderRadius: 12, padding: '12px 16px', marginBottom: 8, border: '1px solid ' + C.border, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ fontSize: 18 }}>{f.icon}</span>
-                  <div>
-                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>{f.label.toUpperCase()}</div>
-                    <div style={{ fontSize: 15, fontWeight: 600 }}>{f.value || '—'}</div>
-                  </div>
-                </div>
-              ))}
-
-              {/* Sélecteur d'équipes (multi) pour l'utilisateur */}
-              {availableTeams.length > 0 && (
-                <div style={{ background: C.card, borderRadius: 12, padding: '12px 16px', marginBottom: 8, border: '1px solid ' + C.border }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                    <span style={{ fontSize: 18 }}>🏟️</span>
-                    <div style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>MES ÉQUIPES</div>
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {availableTeams.map(team => {
-                      const selected = myTeamIds.has(team.id)
-                      return (
-                        <button key={team.id} onClick={() => toggleMyTeam(team.id)}
-                          style={{ padding: '6px 14px', borderRadius: 16, border: '2px solid ' + (selected ? team.color : C.border), background: selected ? team.color + '25' : 'transparent', color: selected ? team.color : C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {team.photo_url
-                            ? <img src={team.photo_url} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover' }} />
-                            : <span style={{ width: 8, height: 8, borderRadius: '50%', background: team.color, display: 'inline-block' }} />}
-                          {selected ? '✓ ' : ''}{team.name}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  {myTeamIds.size === 0 && <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>Appuie sur une équipe pour la rejoindre</div>}
-                </div>
-              )}
-
-              <button onClick={() => setEditMode(true)}
-                style={{ width: '100%', padding: 14, borderRadius: 14, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 15, background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', marginTop: 8 }}>
-                ✏️ Modifier le profil
-              </button>
-              {!isStandalone && (
-                <button onClick={handleInstall}
-                  style={{ width: '100%', padding: 14, borderRadius: 14, border: '1px solid ' + C.accent + '50', cursor: 'pointer', fontWeight: 700, fontSize: 15, background: C.accent + '15', color: C.accentGlow, marginTop: 10 }}>
-                  📲 Installer l'application
-                </button>
-              )}
-              <button onClick={onSignOut}
-                style={{ width: '100%', padding: 12, borderRadius: 14, border: '1px solid ' + C.border, cursor: 'pointer', fontWeight: 600, fontSize: 14, background: 'transparent', color: C.muted, marginTop: 10 }}>
-                Déconnexion
-              </button>
-            </div>
-          ) : (
-            <div style={{ maxWidth: isMobile ? '100%' : 480, margin: '0 auto' }}>
-              {[
-                { key: 'nom', label: 'Nom', placeholder: 'Nom de famille' },
-                { key: 'prenom', label: 'Prénom', placeholder: 'Prénom' },
-                { key: 'surnom', label: 'Surnom', placeholder: 'Ex: TxT' },
-                { key: 'club', label: 'Club', placeholder: 'Nom du club' },
-                { key: 'division', label: 'Division', placeholder: 'Ex: U17 D1' },
-                { key: 'poste1', label: 'Poste 1', placeholder: 'Ex: Milieu Gauche' },
-                { key: 'poste2', label: 'Poste 2', placeholder: 'Ex: Attaquant' },
-              ].map(f => (
-                <div key={f.key} style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 6, fontWeight: 600 }}>{f.label.toUpperCase()}</div>
-                  {f.key === 'club' ? (
-                    <select value={profilEdit.club || ''} onChange={e => setProfilEdit(p => ({ ...p, club: e.target.value }))}
-                      style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 14px', color: C.text, fontSize: 15, outline: 'none', boxSizing: 'border-box' }}>
-                      <option value="">Sélectionne un club...</option>
-                      {profilEdit.club && !clubs.some(c => c.name === profilEdit.club) && <option value={profilEdit.club}>{profilEdit.club}</option>}
-                      {clubs.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                    </select>
-                  ) : (
-                    <input type="text" placeholder={f.placeholder} value={profilEdit[f.key] || ''}
-                      onChange={e => setProfilEdit(p => ({ ...p, [f.key]: e.target.value }))}
-                      style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 14px', color: C.text, fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
-                  )}
-                </div>
-              ))}
-              <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-                <button onClick={() => { setProfilEdit(profil); setEditMode(false) }}
-                  style={{ flex: 1, padding: 14, borderRadius: 14, border: '1px solid ' + C.border, cursor: 'pointer', fontWeight: 700, fontSize: 15, background: C.surface, color: C.muted }}>Annuler</button>
-                <button onClick={saveProfil}
-                  style={{ flex: 2, padding: 14, borderRadius: 14, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 15, background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff' }}>✓ Enregistrer</button>
-              </div>
-            </div>
-          )}
-        </div>
+        <ProfilScreen user={user} onSignOut={onSignOut} profil={profil} setProfil={setProfil} clubs={clubs} availableTeams={availableTeams} myTeamIds={myTeamIds}
+          toggleMyTeam={toggleMyTeam} isStandalone={isStandalone} handleInstall={handleInstall} isMobile={isMobile} showToast={showToast} />
       )}
     </div>
   )
