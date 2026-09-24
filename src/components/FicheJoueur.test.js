@@ -17,8 +17,6 @@ jest.mock('../lib/supabase', () => {
   return { supabase: { from: () => query({ data: MATCHES }) } }
 })
 
-global.IS_REACT_ACT_ENVIRONMENT = true
-global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} }
 
 let container, root
 

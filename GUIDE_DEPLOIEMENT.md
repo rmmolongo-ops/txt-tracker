@@ -20,6 +20,10 @@ txt-tracker/
 │   │   ├── ChatScreen.js      ← Onglet Chat (tchat d'équipe temps réel)
 │   │   ├── BibliothequeScreen.js ← Onglet Bibliothèque (séances types des coachs)
 │   │   ├── ProfilScreen.js    ← Onglet Profil
+│   │   ├── SeancesScreen.js   ← Onglet Programme (semaine d'entraînement)
+│   │   ├── KpiScreen.js       ← Onglet Mesures (saisie des KPIs)
+│   │   ├── StatsScreen.js     ← Onglet Stats (évolution, historique)
+│   │   ├── SessionBlocs.js    ← Détail d'une séance (partagé accueil / programme)
 │   │   └── App.js             ← Reste de l'application (découpage en cours)
 │   ├── hooks/
 │   │   └── useChatUnread.js   ← Compteurs de messages non lus (pastilles du menu)
