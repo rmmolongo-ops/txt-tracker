@@ -9,7 +9,7 @@ export default function AdminScreen({
   addManagedPlayer, addingManagedPlayer, adminData, adminDeleteMesure, adminError, adminLoading,
   adminManagedPlayers, adminView, clubs, coachRosterData, createClub, createTeam,
   deleteClub, deleteManagedPlayer, deleteTeam, deleteUserAccount, isAdmin, isMobile,
-  loadAdminData, managedPlayerDraft, managedPlayers, openFiche, renderProgrammeCatalog, resendConfirmation,
+  loadAdminOverview, loadAdminTeamDetail, managedPlayerDraft, managedPlayers, openFiche, renderProgrammeCatalog, resendConfirmation,
   selectedAdminTeam, setAddingManagedPlayer, setAdminView, setEditingProg, setEditingProgramId, setManagedPlayerDraft,
   setPlayerRole, setProgDraft, setSelectedAdminTeam, shareInviteLink, teams, togglePlayerTeam,
   unconfirmedSignups, uploadTeamPhoto, uploadingTeamPhoto,
@@ -354,7 +354,7 @@ export default function AdminScreen({
                 }, null)
                 return (
                   <div key={team.id}
-                    onClick={() => { setSelectedAdminTeam(team); setAdminView('team_detail'); setExpandedAdmin(null); setAdminDetailTab('joueurs'); setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
+                    onClick={() => { setSelectedAdminTeam(team); setAdminView('team_detail'); setExpandedAdmin(null); setAdminDetailTab('joueurs'); setEditingProg(false); setProgDraft(null); setEditingProgramId(null); loadAdminTeamDetail(team.id) }}
                     style={{ background: C.card, borderRadius: 16, border: '1px solid ' + team.color + '40', overflow: 'hidden', cursor: 'pointer' }}>
                     <div style={{ height: 4, background: 'linear-gradient(90deg, ' + team.color + ', ' + team.color + '50)' }} />
                     <div style={{ padding: '16px 16px 14px' }}>
@@ -418,7 +418,7 @@ export default function AdminScreen({
         )}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-          <button onClick={loadAdminData} disabled={adminLoading}
+          <button onClick={loadAdminOverview} disabled={adminLoading}
             style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '6px 14px', fontSize: 13, color: C.muted, cursor: 'pointer', fontWeight: 600 }}>
             {adminLoading ? '...' : '↻ Actualiser'}
           </button>
@@ -439,7 +439,7 @@ export default function AdminScreen({
           <div style={{ fontSize: 12, color: C.muted }}>›</div>
           <div style={{ fontSize: 13, fontWeight: 700, color: selectedAdminTeam.color }}>{selectedAdminTeam.name}</div>
           <div style={{ marginLeft: 'auto' }}>
-            <button onClick={loadAdminData} disabled={adminLoading}
+            <button onClick={() => loadAdminTeamDetail(selectedAdminTeam.id)} disabled={adminLoading}
               style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '6px 12px', fontSize: 13, color: C.muted, cursor: 'pointer' }}>
               {adminLoading ? '...' : '↻'}
             </button>

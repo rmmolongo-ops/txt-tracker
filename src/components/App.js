@@ -91,32 +91,24 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     setTab(newTab)
   }
 
-  const loadAdminData = async () => {
+  const loadAdminOverview = async () => {
     setAdminLoading(true)
     setAdminError(null)
     try {
       const [
         { data: allProfils, error: errP },
-        { data: allMesures },
-        { data: allSeances },
         { data: allEmails },
         { data: allTeams },
         { data: allTeamMembers },
         { data: unconfirmed },
         { data: allManagedPlayers },
-        { data: allManagedMesures },
-        { data: allManagedSeances },
       ] = await Promise.all([
         supabase.from('profils').select('*'),
-        supabase.from('mesures').select('id, user_id, kpi_id, valeur, date'),
-        supabase.from('seances').select('user_id, date, jour'),
         supabase.rpc('get_user_emails_for_admins'),
         supabase.from('teams').select('*').order('created_at'),
         supabase.from('team_members').select('user_id, team_id, role'),
         supabase.rpc('get_unconfirmed_signups_for_admins'),
         supabase.from('managed_players').select('*'),
-        supabase.from('mesures').select('id, managed_player_id, kpi_id, valeur, date').not('managed_player_id', 'is', null),
-        supabase.from('seances').select('managed_player_id, date').not('managed_player_id', 'is', null),
       ])
       if (errP) { setAdminError('Erreur lecture profils : ' + errP.message); setAdminLoading(false); return }
       setTeams(allTeams || [])
@@ -125,35 +117,75 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       ;(allEmails || []).forEach(e => { emailMap[e.user_id] = e.email })
       const teamMap = {}
       ;(allTeams || []).forEach(t => { teamMap[t.id] = t })
-      const enrichedManaged = (allManagedPlayers || []).map(mp => {
-        const mes = (allManagedMesures || []).filter(m => m.managed_player_id === mp.id)
-        const sea = (allManagedSeances || []).filter(s => s.managed_player_id === mp.id)
-        const kpis = latestKpis(mes, KPI_CONFIG)
-        return {
-          user_id: GHOST_PREFIX + mp.id, managed_player_id: mp.id, isManaged: true, team_id: mp.team_id,
-          nom: mp.nom, prenom: mp.prenom, surnom: mp.surnom, poste1: mp.poste1, poste2: mp.poste2, photo_url: mp.photo_url,
-          teams: teamMap[mp.team_id] ? [{ ...teamMap[mp.team_id], role: 'joueur' }] : [],
-          mesuresData: mes, nb_mesures: mes.length, nb_seances: sea.length,
-          derniere_seance: sea.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null,
-          derniere_mesure: mes.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null,
-          kpis,
-        }
-      })
+      const enrichedManaged = (allManagedPlayers || []).map(mp => ({
+        user_id: GHOST_PREFIX + mp.id, managed_player_id: mp.id, isManaged: true, team_id: mp.team_id,
+        nom: mp.nom, prenom: mp.prenom, surnom: mp.surnom, poste1: mp.poste1, poste2: mp.poste2, photo_url: mp.photo_url,
+        teams: teamMap[mp.team_id] ? [{ ...teamMap[mp.team_id], role: 'joueur' }] : [],
+        mesuresData: [], nb_mesures: 0, nb_seances: 0, derniere_seance: null, derniere_mesure: null, kpis: {},
+      }))
       setAdminManagedPlayers(enrichedManaged)
       const playerTeamsMap = {}
       ;(allTeamMembers || []).forEach(tm => {
         if (!playerTeamsMap[tm.user_id]) playerTeamsMap[tm.user_id] = []
         if (teamMap[tm.team_id]) playerTeamsMap[tm.user_id].push({ ...teamMap[tm.team_id], role: tm.role })
       })
-      const enriched = (allProfils || []).map(p => {
-        const mes = (allMesures || []).filter(m => m.user_id === p.user_id)
-        const sea = (allSeances || []).filter(s => s.user_id === p.user_id)
-        const derniereSeance = sea.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
-        const derniereMesure = mes.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
-        const kpis = latestKpis(mes, KPI_CONFIG)
-        return { ...p, email: emailMap[p.user_id] || null, teams: playerTeamsMap[p.user_id] || [], mesuresData: mes, nb_mesures: mes.length, nb_seances: sea.length, derniere_seance: derniereSeance, derniere_mesure: derniereMesure, kpis }
-      })
+      const enriched = (allProfils || []).map(p => ({
+        ...p, email: emailMap[p.user_id] || null, teams: playerTeamsMap[p.user_id] || [],
+        mesuresData: [], nb_mesures: 0, nb_seances: 0, derniere_seance: null, derniere_mesure: null, kpis: {},
+      }))
       setAdminData(enriched)
+    } catch (e) { setAdminError('Erreur inattendue : ' + e.message) }
+    setAdminLoading(false)
+  }
+
+  const loadAdminTeamDetail = async (teamId) => {
+    setAdminLoading(true)
+    setAdminError(null)
+    try {
+      const { data: members } = await supabase.from('team_members').select('user_id').eq('team_id', teamId)
+      const userIds = (members || []).map(m => m.user_id)
+      const { data: managedForTeam } = await supabase.from('managed_players').select('*').eq('team_id', teamId)
+      const managedIds = (managedForTeam || []).map(mp => mp.id)
+      const [
+        { data: playerMesures },
+        { data: playerSeances },
+        { data: managedMesures },
+        { data: managedSeances },
+      ] = await Promise.all([
+        userIds.length > 0 ? supabase.from('mesures').select('id, user_id, kpi_id, valeur, date').in('user_id', userIds) : Promise.resolve({ data: [] }),
+        userIds.length > 0 ? supabase.from('seances').select('user_id, date, jour').in('user_id', userIds) : Promise.resolve({ data: [] }),
+        managedIds.length > 0 ? supabase.from('mesures').select('id, managed_player_id, kpi_id, valeur, date').in('managed_player_id', managedIds) : Promise.resolve({ data: [] }),
+        managedIds.length > 0 ? supabase.from('seances').select('managed_player_id, date').in('managed_player_id', managedIds) : Promise.resolve({ data: [] }),
+      ])
+      const userIdSet = new Set(userIds)
+      setAdminData(prev => prev.map(p => {
+        if (!userIdSet.has(p.user_id)) return p
+        const mes = (playerMesures || []).filter(m => m.user_id === p.user_id)
+        const sea = (playerSeances || []).filter(s => s.user_id === p.user_id)
+        return {
+          ...p,
+          mesuresData: mes, nb_mesures: mes.length, nb_seances: sea.length,
+          derniere_seance: sea.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null,
+          derniere_mesure: mes.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null,
+          kpis: latestKpis(mes, KPI_CONFIG),
+        }
+      }))
+      const currentTeamMap = {}
+      teams.forEach(t => { currentTeamMap[t.id] = t })
+      const enrichedManaged = (managedForTeam || []).map(mp => {
+        const mes = (managedMesures || []).filter(m => m.managed_player_id === mp.id)
+        const sea = (managedSeances || []).filter(s => s.managed_player_id === mp.id)
+        return {
+          user_id: GHOST_PREFIX + mp.id, managed_player_id: mp.id, isManaged: true, team_id: mp.team_id,
+          nom: mp.nom, prenom: mp.prenom, surnom: mp.surnom, poste1: mp.poste1, poste2: mp.poste2, photo_url: mp.photo_url,
+          teams: currentTeamMap[mp.team_id] ? [{ ...currentTeamMap[mp.team_id], role: 'joueur' }] : [],
+          mesuresData: mes, nb_mesures: mes.length, nb_seances: sea.length,
+          derniere_seance: sea.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null,
+          derniere_mesure: mes.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null,
+          kpis: latestKpis(mes, KPI_CONFIG),
+        }
+      })
+      setAdminManagedPlayers(prev => [...prev.filter(mp => mp.team_id !== teamId), ...enrichedManaged])
     } catch (e) { setAdminError('Erreur inattendue : ' + e.message) }
     setAdminLoading(false)
   }
@@ -197,7 +229,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     }
     try {
       const { data: adminCheck } = await supabase.from('admins').select('user_id').eq('user_id', user.id).single()
-      if (adminCheck) { setIsAdmin(true); await loadAdminData() }
+      if (adminCheck) { setIsAdmin(true); await loadAdminOverview() }
     } catch (e) {}
     setLoading(false)
   }, [user.id])
@@ -1005,7 +1037,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
           addManagedPlayer={addManagedPlayer} addingManagedPlayer={addingManagedPlayer} adminData={adminData} adminDeleteMesure={adminDeleteMesure} adminError={adminError}
           adminLoading={adminLoading} adminManagedPlayers={adminManagedPlayers} adminView={adminView} clubs={clubs} coachRosterData={coachRosterData}
           createClub={createClub} createTeam={createTeam} deleteClub={deleteClub} deleteManagedPlayer={deleteManagedPlayer} deleteTeam={deleteTeam}
-          deleteUserAccount={deleteUserAccount} isAdmin={isAdmin} isMobile={isMobile} loadAdminData={loadAdminData} managedPlayerDraft={managedPlayerDraft}
+          deleteUserAccount={deleteUserAccount} isAdmin={isAdmin} isMobile={isMobile} loadAdminOverview={loadAdminOverview} loadAdminTeamDetail={loadAdminTeamDetail} managedPlayerDraft={managedPlayerDraft}
           managedPlayers={managedPlayers} openFiche={openFiche} renderProgrammeCatalog={renderProgrammeCatalog} resendConfirmation={resendConfirmation} selectedAdminTeam={selectedAdminTeam}
           setAddingManagedPlayer={setAddingManagedPlayer} setAdminView={setAdminView} setEditingProg={setEditingProg} setEditingProgramId={setEditingProgramId} setManagedPlayerDraft={setManagedPlayerDraft}
           setPlayerRole={setPlayerRole} setProgDraft={setProgDraft} setSelectedAdminTeam={setSelectedAdminTeam} shareInviteLink={shareInviteLink} teams={teams}
