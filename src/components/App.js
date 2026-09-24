@@ -579,9 +579,9 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     showToast('✅ Rôle mis à jour')
   }
 
-  const getProgramsForTeam = (teamId) => programsCatalog.filter(p => p.team_id === teamId).sort((a, b) => a.start_date.localeCompare(b.start_date))
+  const getProgramsForTeam = useCallback((teamId) => programsCatalog.filter(p => p.team_id === teamId).sort((a, b) => a.start_date.localeCompare(b.start_date)), [programsCatalog])
 
-  const getProgramForDate = (teamId, dateStr) => programsCatalog.find(p => p.team_id === teamId && dateStr >= p.start_date && dateStr <= p.end_date)
+  const getProgramForDate = useCallback((teamId, dateStr) => programsCatalog.find(p => p.team_id === teamId && dateStr >= p.start_date && dateStr <= p.end_date), [programsCatalog])
 
   const loadDailySessions = async (teamId) => {
     const { data } = await supabase.from('team_daily_sessions').select('*').eq('team_id', teamId)
@@ -719,23 +719,23 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     return false
   }
 
-  const getMesuresForKpi = (kpiId) => mesures.filter(m => m.kpi_id === kpiId).sort((a, b) => a.date.localeCompare(b.date))
-  const getLatest = (kpiId) => { const arr = getMesuresForKpi(kpiId); return arr.length > 0 ? arr[arr.length - 1].valeur : null }
-  const getProgress = (kpiId) => {
-    const arr = getMesuresForKpi(kpiId)
+  const getMesuresForKpi = useCallback((kpiId) => mesures.filter(m => m.kpi_id === kpiId).sort((a, b) => a.date.localeCompare(b.date)), [mesures])
+  const getLatest = useCallback((kpiId) => { const arr = mesures.filter(m => m.kpi_id === kpiId).sort((a, b) => a.date.localeCompare(b.date)); return arr.length > 0 ? arr[arr.length - 1].valeur : null }, [mesures])
+  const getProgress = useCallback((kpiId) => {
+    const arr = mesures.filter(m => m.kpi_id === kpiId).sort((a, b) => a.date.localeCompare(b.date))
     if (arr.length < 2) return null
     const cfg = KPI_CONFIG.find(k => k.id === kpiId)
     const diff = cfg.lower ? ((arr[0].valeur - arr[arr.length-1].valeur) / arr[0].valeur) * 100 : ((arr[arr.length-1].valeur - arr[0].valeur) / arr[0].valeur) * 100
     return diff.toFixed(1)
-  }
-  const getDashboardKpiIds = () => {
+  }, [mesures])
+  const getDashboardKpiIds = useCallback(() => {
     if (profil.dashboard_kpis && profil.dashboard_kpis.length > 0) return profil.dashboard_kpis
     const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
     const withConfig = myTeams.find(t => t.dashboard_kpis && t.dashboard_kpis.length > 0)
     return withConfig ? withConfig.dashboard_kpis : ['sprint30', 'jonglerie_g', 'precision', 'scan']
-  }
-  const isSeanceDone = (day, dateStr, teamId) => { const targetDate = dateStr || new Date().toISOString().split('T')[0]; const targetTeamId = teamId || null; return seances.some(s => s.jour === day && s.date === targetDate && s.team_id === targetTeamId) }
-  const getWeekCompliance = () => {
+  }, [profil.dashboard_kpis, availableTeams, myTeamIds])
+  const isSeanceDone = useCallback((day, dateStr, teamId) => { const targetDate = dateStr || new Date().toISOString().split('T')[0]; const targetTeamId = teamId || null; return seances.some(s => s.jour === day && s.date === targetDate && s.team_id === targetTeamId) }, [seances])
+  const getWeekCompliance = useCallback(() => {
     let done = 0, total = 0
     for (let i = 0; i < 7; i++) {
       const d = new Date(); d.setDate(d.getDate() - i)
@@ -746,15 +746,30 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       }
     }
     return Math.round((done / total) * 100)
-  }
+  }, [seances])
   const todayStr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
 
-  const myTeamsWithRole = availableTeams.filter(t => myTeamIds.has(t.id)).map(t => ({ ...t, myRole: myTeamRoles[t.id] || 'joueur' }))
-  const leadershipTeams = myTeamsWithRole.filter(t => LEADERSHIP_ROLES.includes(t.myRole))
+  const leadershipTeams = useMemo(() => {
+    const withRole = availableTeams.filter(t => myTeamIds.has(t.id)).map(t => ({ ...t, myRole: myTeamRoles[t.id] || 'joueur' }))
+    return withRole.filter(t => LEADERSHIP_ROLES.includes(t.myRole))
+  }, [availableTeams, myTeamIds, myTeamRoles])
   const hasLeadership = leadershipTeams.length > 0
-  const hasPlayerRole = myTeamsWithRole.some(t => !LEADERSHIP_ROLES.includes(t.myRole)) || myTeamsWithRole.length === 0
+  const hasPlayerRole = useMemo(() => {
+    const withRole = availableTeams.filter(t => myTeamIds.has(t.id)).map(t => ({ ...t, myRole: myTeamRoles[t.id] || 'joueur' }))
+    return withRole.some(t => !LEADERSHIP_ROLES.includes(t.myRole)) || withRole.length === 0
+  }, [availableTeams, myTeamIds, myTeamRoles])
   const effectiveHomeView = !hasLeadership ? 'joueur' : (!hasPlayerRole ? 'coach' : homeViewMode)
-  const activeCoachTeam = leadershipTeams.find(t => t.id === coachTeamId) || leadershipTeams[0]
+  const activeCoachTeam = useMemo(() => leadershipTeams.find(t => t.id === coachTeamId) || leadershipTeams[0], [leadershipTeams, coachTeamId])
+  const NAV_ITEMS = useMemo(() => [
+    { id: 'dashboard', icon: '🏠', label: 'Accueil' },
+    { id: 'seances', icon: '💪', label: 'Programme' },
+    { id: 'kpi', icon: '📊', label: 'Mesures' },
+    { id: 'stats', icon: '📈', label: 'Stats' },
+    { id: 'chat', icon: '💬', label: 'Chat' },
+    { id: 'equipe', icon: '⚽', label: 'Équipe' },
+    ...(hasLeadership ? [{ id: 'bibliotheque', icon: '📚', label: 'Bibliothèque' }] : []),
+    ...(isAdmin ? [{ id: 'admin', icon: '🛡️', label: 'Admin' }] : []),
+  ], [hasLeadership, isAdmin])
 
   if (loading) return (
     <div style={{ background: C.bg, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -762,21 +777,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     </div>
   )
 
-
-  const NAV_ITEMS = [
-    { id: 'dashboard', icon: '🏠', label: 'Accueil' },
-    { id: 'seances', icon: '💪', label: 'Programme' },
-    { id: 'kpi', icon: '📊', label: 'Mesures' },
-    { id: 'stats', icon: '📈', label: 'Stats' },
-    { id: 'chat', icon: '💬', label: 'Chat' },
-    { id: 'equipe', icon: '⚽', label: 'Équipe' },
-    ...(hasLeadership ? [
-      { id: 'bibliotheque', icon: '📚', label: 'Bibliothèque' },
-    ] : []),
-    ...(isAdmin ? [
-      { id: 'admin', icon: '🛡️', label: 'Admin' },
-    ] : []),
-  ]
 
   const openFiche = (j, pool) => setFicheJoueur({ ...j, __pool: pool || [] })
 
