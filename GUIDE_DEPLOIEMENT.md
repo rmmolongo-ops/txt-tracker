@@ -17,7 +17,12 @@ txt-tracker/
 │   ├── components/
 │   │   ├── Auth.js            ← Page login / inscription
 │   │   ├── FicheJoueur.js     ← Fiche joueur (modale scouting)
+│   │   ├── ChatScreen.js      ← Onglet Chat (tchat d'équipe temps réel)
+│   │   ├── BibliothequeScreen.js ← Onglet Bibliothèque (séances types des coachs)
+│   │   ├── ProfilScreen.js    ← Onglet Profil
 │   │   └── App.js             ← Reste de l'application (découpage en cours)
+│   ├── hooks/
+│   │   └── useChatUnread.js   ← Compteurs de messages non lus (pastilles du menu)
 │   └── index.js               ← Racine React, gestion session
 ├── supabase/
 │   ├── README.md              ← Comment modifier la base (à lire avant tout changement)
@@ -104,6 +109,7 @@ Une PR dont la CI est rouge ne doit pas être mergée.
 En local :
 - `npm test` : lance les tests (fichiers `*.test.js`) ;
 - `CI=true npm run build` : compile comme la CI, où tout avertissement fait échouer.
+- `npm run lint` : contrôle ESLint ; une erreur (ex. variable non définie) fait échouer la CI.
 
 Les calculs (KPIs, radar, bilan de matchs, dates) sont dans `src/lib/stats.js`
 et testés dans `src/lib/stats.test.js`.
