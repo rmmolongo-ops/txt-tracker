@@ -37,7 +37,7 @@ const baseProps = {
   adminError: null, adminLoading: false, adminManagedPlayers: [], adminView: 'overview', clubs: [{ id: 'c1', name: 'FO Plaisir' }],
   coachRosterData: [], createClub: jest.fn(() => Promise.resolve(true)), createTeam: jest.fn(() => Promise.resolve(true)),
   deleteClub: jest.fn(), deleteManagedPlayer: jest.fn(), deleteTeam: jest.fn(), deleteUserAccount: jest.fn(() => Promise.resolve(true)),
-  isAdmin: true, isMobile: false, loadAdminData: jest.fn(), managedPlayerDraft: { prenom: '', nom: '', poste1: '' }, managedPlayers: [],
+  isAdmin: true, isMobile: false, loadAdminOverview: jest.fn(), loadAdminTeamDetail: jest.fn(), managedPlayerDraft: { prenom: '', nom: '', poste1: '' }, managedPlayers: [],
   openFiche: jest.fn(), renderProgrammeCatalog: () => null, resendConfirmation: jest.fn(() => Promise.resolve()), selectedAdminTeam: null,
   setAddingManagedPlayer: jest.fn(), setAdminView: jest.fn(), setEditingProg: jest.fn(), setEditingProgramId: jest.fn(),
   setManagedPlayerDraft: jest.fn(), setPlayerRole: jest.fn(), setProgDraft: jest.fn(), setSelectedAdminTeam: jest.fn(),
