@@ -1,92 +1,10 @@
 import { Fragment, useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { getDeferredPrompt, onPromptAvailable } from '../lib/installPrompt'
-import { toDateStr, getMonday, latestKpis, kpiProgression, buildRadarData as computeRadarData, MATCH_RESULTS, hasScore, resultFromScore, playerMatchStats } from '../lib/stats'
-import { LineChart, Line, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts'
-
-const C = {
-  bg: '#0a0e1a', card: '#111827', border: '#1e293b',
-  accent: '#3b82f6', accentGlow: '#60a5fa', gold: '#f59e0b',
-  green: '#10b981', red: '#ef4444', text: '#f1f5f9',
-  muted: '#64748b', surface: '#1e293b',
-}
-
-const TEAM_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#14b8a6','#ec4899']
-
-const DAY_ORDER = ['LUN','MAR','MER','JEU','VEN','SAM','DIM']
-
-const ROLE_CONFIG = {
-  joueur: { label: 'Joueur', color: '#64748b' },
-  coach: { label: 'Coach', color: '#3b82f6' },
-  dirigeant: { label: 'Dirigeant', color: '#8b5cf6' },
-  capitaine: { label: 'Capitaine', color: '#f59e0b' },
-  invite: { label: 'Invité', color: '#14b8a6' },
-}
-
-const KPI_CONFIG = [
-  { id: 'sprint30', label: 'Sprint 30m', unit: 'sec', icon: '⚡', color: '#f59e0b', lower: true, category: 'physique' },
-  { id: 'sprint10', label: 'Sprint 10m', unit: 'sec', icon: '💥', color: '#ef4444', lower: true, category: 'physique' },
-  { id: 'jonglerie_g', label: 'Jonglerie Gauche', unit: 'touches', icon: '🦶', color: '#3b82f6', lower: false, category: 'technique' },
-  { id: 'jonglerie_d', label: 'Jonglerie Droite', unit: 'touches', icon: '👟', color: '#8b5cf6', lower: false, category: 'technique' },
-  { id: 'jonglerie_alt', label: 'Jonglerie Alternée', unit: 'touches', icon: '🔀', color: '#0ea5e9', lower: false, category: 'technique' },
-  { id: 'precision', label: 'Précision Frappe', unit: '/10', icon: '🎯', color: '#10b981', lower: false, category: 'technique' },
-  { id: 'slalom', label: 'Slalom 20m', unit: 'sec', icon: '🔄', color: '#f97316', lower: true, category: 'technique' },
-  { id: 'scan', label: 'Scan Ballon/Mvt', unit: '/10', icon: '👁️', color: '#14b8a6', lower: false, category: 'technique' },
-  { id: 'motivation', label: 'Motivation', unit: '/10', icon: '🔥', color: '#ec4899', lower: false, category: 'mental' },
-  { id: 'sommeil', label: 'Qualité Sommeil', unit: '/10', icon: '😴', color: '#06b6d4', lower: false, category: 'mental' },
-]
-
-const SESSIONS = [
-  { day: 'LUN', label: 'Explosivité & Vitesse', duration: '1h15', icon: '💥', color: '#f59e0b', objectif: 'Explosivité et vitesse', blocs: [
-    { titre: 'Séance collective simulée', duree: '30 min', exercices: ['Passes courtes en mouvement — pied droit / pied gauche', 'Réception et contrôle orienté vers l\'avant'] },
-    { titre: 'Sprints et accélérations', duree: '15 min', exercices: ['6 × 20m départ arrêté', '6 × 30m départ en mouvement', 'Récupération 45 sec entre chaque'] },
-    { titre: 'Conduite de balle rapide', duree: '30 min', exercices: ['Slalom entre plots sur 20m', 'Conduite gauche / droite en alternance', 'Accélération finale après le dernier plot'] },
-  ]},
-  { day: 'MAR', label: 'Élimination & Duel', duration: '1h', icon: '⚔️', color: '#ef4444', objectif: 'Élimination et duel', blocs: [
-    { titre: 'Technique individuelle', duree: '30 min', exercices: ['Travail de crochets intérieur / extérieur', 'Feintes de corps devant un plot fixe', 'Roulette et changements de direction'] },
-    { titre: 'Travail 1v1', duree: '15 min', exercices: ['Face à un plot ou simulation défenseur', 'Élimination côté gauche en priorité', 'Variante : élimination côté droit'] },
-    { titre: 'Dribbles haute intensité', duree: '15 min', exercices: ['Circuit de dribbles avec 6 plots', 'Vitesse d\'exécution progressive', 'Chrono sur chaque passage'] },
-  ]},
-  { day: 'MER', label: 'Agilité & Appuis', duration: '45min', icon: '🔄', color: '#3b82f6', objectif: 'Agilité et appuis', blocs: [
-    { titre: 'Exercices d\'agilité', duree: '20 min', exercices: ['Échelle de rythme : pas chassés, un pied / deux pieds', 'Sauts latéraux sur ligne', 'Changements de direction en T (5m × 5m)'] },
-    { titre: 'Renforcement bas du corps', duree: '15 min', exercices: ['Squats sans charge : 3 × 15', 'Fentes avant alternées : 3 × 10', 'Mollets : 3 × 20'] },
-    { titre: 'Technique individuelle', duree: '10 min', exercices: ['Jonglerie pied droit / pied gauche', 'Pieds uniquement — pas d\'épaule jusqu\'au 17 juin'] },
-  ]},
-  { day: 'JEU', label: 'Finition & Efficacité', duration: '1h', icon: '🎯', color: '#10b981', objectif: 'Finition et efficacité', blocs: [
-    { titre: 'Séance collective simulée', duree: '30 min', exercices: ['Passes et combinaisons à 2 ou 3 joueurs', 'Appels de balle et décrochages'] },
-    { titre: 'Répétition devant le but', duree: '20 min', exercices: ['Frappes en mouvement depuis 16m', 'Alternance pied droit / pied gauche', 'Centres rentrés côté gauche'] },
-    { titre: 'Placements et appels', duree: '10 min', exercices: ['Marche rapide sur terrain — visualiser les déplacements', 'Timing des appels en profondeur'] },
-  ]},
-  { day: 'VEN', label: 'Prise de Décision', duration: '1h', icon: '🧠', color: '#8b5cf6', objectif: 'Prise de décision rapide', blocs: [
-    { titre: 'Séance collective', duree: '20 min', exercices: ['Rondos à 4-5 joueurs si possible', 'Jeu à une touche — vitesse de décision'] },
-    { titre: 'Matchs à effectif réduit', duree: '20 min', exercices: ['2v2 ou 3v3 sans contact physique', 'Accent sur vitesse de passe et premier contrôle'] },
-    { titre: 'Passes et premier contrôle', duree: '20 min', exercices: ['Passes contre un mur : contrôle orienté vers l\'avant', 'Enchaînement contrôle + frappe en 2 touches'] },
-  ]},
-  { day: 'SAM', label: 'Performance', duration: '45min', icon: '🏆', color: '#f97316', objectif: 'Performance en compétition', blocs: [
-    { titre: 'Échauffement intense', duree: '20 min', exercices: ['Footing léger 10 min', 'Étirements dynamiques', 'Touches de balle légères'] },
-    { titre: 'Match ou simulation', duree: '25 min', exercices: ['Jeu libre à effectif réduit sans contact', 'OU analyse vidéo des déplacements de son poste'] },
-  ]},
-  { day: 'DIM', label: 'Récupération Active', duration: '30min', icon: '🧘', color: '#06b6d4', objectif: 'Récupération active', blocs: [
-    { titre: 'Récupération douce', duree: '30 min', exercices: ['Marche rapide ou vélo léger : 15 min', 'Étirements doux complets : 10 min', 'Mobilité épaule légère si autorisée : 5 min'] },
-  ]},
-]
-
-const DEFAULT_PROFIL = { nom: '', prenom: '', surnom: 'TxT', club: '', division: '', poste1: '', poste2: '', photo_url: '', dashboard_kpis: null }
-const DASHBOARD_KPIS_MAX = 4
-const LEADERSHIP_ROLES = ['coach', 'dirigeant']
-const DEFAULT_TEMPLATE_BLOCS = [
-  { titre: 'Mise en route & causerie', duree: '10 min', exercices: [''] },
-  { titre: 'Échauffement', duree: '15 min', exercices: [''] },
-  { titre: 'Jeu thème', duree: '20 min', exercices: [''] },
-  { titre: 'Exercice', duree: '20 min', exercices: [''] },
-  { titre: 'Jeu libre', duree: '20 min', exercices: [''] },
-  { titre: 'Retour au calme', duree: '5 min', exercices: [''] },
-]
-const GHOST_PREFIX = 'ghost:'
-
-const isGhostId = (id) => typeof id === 'string' && id.startsWith(GHOST_PREFIX)
-const ghostRealId = (id) => id.slice(GHOST_PREFIX.length)
-const seanceRowKey = (r) => r.user_id || (r.managed_player_id ? GHOST_PREFIX + r.managed_player_id : null)
+import { toDateStr, getMonday, latestKpis, MATCH_RESULTS, hasScore, resultFromScore } from '../lib/stats'
+import { C, TEAM_COLORS, DAY_ORDER, ROLE_CONFIG, KPI_CONFIG, SESSIONS, DEFAULT_PROFIL, DASHBOARD_KPIS_MAX, LEADERSHIP_ROLES, DEFAULT_TEMPLATE_BLOCS, GHOST_PREFIX, isGhostId, ghostRealId, seanceRowKey } from '../lib/constants'
+import FicheJoueur from './FicheJoueur'
+import { LineChart, Line, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 export default function App({ user, onSignOut, inviteTeamId }) {
   const [tab, setTab] = useState(() => localStorage.getItem('txt_tab') || 'dashboard')
@@ -180,7 +98,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [annotationDraft, setAnnotationDraft] = useState({ note_coach: '', rating_deroule: 0, rating_ressenti: 0 })
   const [editingMatchId, setEditingMatchId] = useState(null)
   const [matchDraft, setMatchDraft] = useState({ resultat: null, buts: {}, presents: [], score_pour: '', score_contre: '' })
-  const [ficheMatches, setFicheMatches] = useState([])
   const [expandedPlayerProgramId, setExpandedPlayerProgramId] = useState(null)
   const [rosterPlayers, setRosterPlayers] = useState([])
   const [suiviWeekOffset, setSuiviWeekOffset] = useState(0)
@@ -853,8 +770,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
   const getProgramForDate = (teamId, dateStr) => programsCatalog.find(p => p.team_id === teamId && dateStr >= p.start_date && dateStr <= p.end_date)
 
-  const sessionHasContent = (s) => !!(s && s.blocs && s.blocs.length > 0)
-
   const loadDailySessions = async (teamId) => {
     const { data } = await supabase.from('team_daily_sessions').select('*').eq('team_id', teamId)
     setDailySessions(data || [])
@@ -945,26 +860,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     setEditingMatchId(null)
     showToast('✅ Résultat enregistré')
   }
-
-  useEffect(() => {
-    if (!ficheJoueur) { setFicheMatches([]); return }
-    let active = true
-    const j = ficheJoueur
-    ;(async () => {
-      let teamIds = (j.teams || []).map(t => t.id)
-      if (j.team_id) teamIds.push(j.team_id)
-      if (teamIds.length === 0) {
-        const { data } = j.isManaged
-          ? await supabase.from('managed_players').select('team_id').eq('id', j.managed_player_id)
-          : await supabase.from('team_members').select('team_id').eq('user_id', j.user_id)
-        teamIds = (data || []).map(r => r.team_id)
-      }
-      if (teamIds.length === 0) return
-      const { data } = await supabase.from('team_daily_sessions').select('id, team_id, date, label, resultat, buts, presents, score_pour, score_contre').eq('type', 'match').in('team_id', [...new Set(teamIds)]).order('date', { ascending: false })
-      if (active) setFicheMatches(data || [])
-    })()
-    return () => { active = false }
-  }, [ficheJoueur])
 
   const saveProgram = async (teamId, draft, programId) => {
     if (!draft.name.trim()) { showToast('❌ Donne un nom au programme'); return }
@@ -1073,17 +968,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
   const PLAYER_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#14b8a6','#ec4899']
 
-  const RADAR_AXES = [
-    { id: 'sprint30', label: 'Vitesse' },
-    { id: 'jonglerie_g', label: 'Jonglerie' },
-    { id: 'precision', label: 'Précision' },
-    { id: 'scan', label: 'Vision' },
-    { id: 'motivation', label: 'Mental' },
-  ]
-
   const openFiche = (j, pool) => setFicheJoueur({ ...j, __pool: pool || [] })
-
-  const buildRadarData = (j) => computeRadarData(j, j.__pool, RADAR_AXES, KPI_CONFIG)
 
   const renderSessionBlocs = (s, expanded, done, onToggle) => expanded && (
     <div style={{ background: C.card, padding: '0 16px 16px' }}>
@@ -1549,7 +1434,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                     const weekSundayStr = toDateStr(weekSunday)
                     const todayStr = toDateStr(new Date())
                     const weekPlanned = dailySessions.filter(d => d.team_id === activeCoachTeam.id && d.date >= weekMondayStr && d.date <= weekSundayStr)
-                    const trainings = weekPlanned.filter(d => d.type !== 'match')
                     const matches = weekPlanned.filter(d => d.type === 'match')
                     const realized = weekPlanned.filter(d => d.date <= todayStr)
 
@@ -2514,7 +2398,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
               {activeEquipeTeamId && (() => {
                 const equipeTeamId = activeEquipeTeamId
-                const team = equipeViewTeams.find(t => t.id === equipeTeamId)
                 const realPlayers = isAdmin ? adminData.filter(j => (j.teams || []).some(t => t.id === equipeTeamId)) : coachRosterData
                 const teamPlayers = [...realPlayers, ...managedPlayers]
                 const canManagePlayers = isAdmin || LEADERSHIP_ROLES.includes(myTeamRoles[equipeTeamId])
@@ -3560,132 +3443,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
         </div>
       )}
 
-      {ficheJoueur && (() => {
-        const j = ficheJoueur
-        const radarData = buildRadarData(j)
-        const semaine = j.seancesSemaine
-        return (
-          <div onClick={() => setFicheJoueur(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
-            <div onClick={e => e.stopPropagation()} id="fiche-joueur-print" style={{ background: C.card, borderRadius: 18, padding: 20, maxWidth: 460, width: '100%', maxHeight: '88vh', overflowY: 'auto', border: '1px solid ' + C.border }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 58, height: 58, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, flexShrink: 0 }}>
-                    {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 900, fontSize: 18 }}>{j.prenom || '—'} {j.nom || ''}</div>
-                    <div style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}>"{j.surnom || 'TxT'}"</div>
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{j.poste1 || '—'}{j.poste2 ? ' / ' + j.poste2 : ''} {j.club ? '· ' + j.club : ''}</div>
-                  </div>
-                </div>
-                <button onClick={() => setFicheJoueur(null)} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', padding: 0 }}>✕</button>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-                <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>SÉANCES VALIDÉES</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>{j.nb_seances || 0}</div>
-                </div>
-                <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
-                  <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>DERNIÈRE SÉANCE</div>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>
-                    {(j.derniereSeance || j.derniere_seance) ? new Date(j.derniereSeance || j.derniere_seance).toLocaleDateString('fr-FR') : '—'}
-                  </div>
-                </div>
-                {semaine != null && (
-                  <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px', gridColumn: '1 / -1' }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>SÉANCES SUR LES 7 DERNIERS JOURS</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: C.accent }}>{semaine}</div>
-                  </div>
-                )}
-              </div>
-
-              {(() => {
-                const { teamMatches, played, totalButs, bilan, butsOf, isAbsent } = playerMatchStats(ficheMatches, j.user_id)
-                if (teamMatches.length === 0) return null
-                return (
-                  <>
-                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Matchs</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
-                      <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
-                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>JOUÉS</div>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: C.accent }}>{played.length}<span style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}> / {teamMatches.length}</span></div>
-                      </div>
-                      <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
-                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>BUTS</div>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: '#eab308' }}>⚽ {totalButs}</div>
-                      </div>
-                      <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
-                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>BILAN</div>
-                        <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3 }}>
-                          {played.length === 0 ? <span style={{ color: C.muted }}>—</span> : MATCH_RESULTS.map((r, i) => <span key={r.id} style={{ color: r.color }}>{i > 0 ? ' · ' : ''}{bilan[r.id]}{r.short}</span>)}
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ background: C.surface, borderRadius: 10, padding: '6px 12px', marginBottom: 16 }}>
-                      {teamMatches.slice(0, 8).map(m => {
-                        const r = MATCH_RESULTS.find(x => x.id === m.resultat)
-                        const n = butsOf(m)
-                        const absent = isAbsent(m)
-                        return (
-                          <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 12, opacity: absent ? 0.5 : 1 }}>
-                            <div style={{ width: 20, height: 20, borderRadius: 6, background: r ? r.color : C.border, color: '#fff', fontWeight: 800, fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{r ? r.short : '?'}</div>
-                            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</div>
-                            {hasScore(m) && <div style={{ fontWeight: 800 }}>{m.score_pour}-{m.score_contre}</div>}
-                            <div style={{ color: C.muted }}>{new Date(m.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</div>
-                            <div style={{ width: 44, textAlign: 'right', fontWeight: 700, color: n > 0 ? '#eab308' : C.muted }}>{absent ? 'Absent' : n > 0 ? `⚽ ${n}` : '—'}</div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </>
-                )
-              })()}
-
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Profil</div>
-              <div style={{ background: C.surface, borderRadius: 12, padding: 8, marginBottom: 16 }}>
-                <ResponsiveContainer width="100%" height={220}>
-                  <RadarChart data={radarData}>
-                    <PolarGrid stroke={C.border} />
-                    <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11, fill: C.muted }} />
-                    <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-                    <Radar dataKey="value" stroke={C.accent} fill={C.accent} fillOpacity={0.35} />
-                  </RadarChart>
-                </ResponsiveContainer>
-                <div style={{ fontSize: 10, color: C.muted, textAlign: 'center' }}>Position relative à l'équipe (0 = plus faible, 100 = plus fort)</div>
-              </div>
-
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Performances & progression</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-                {KPI_CONFIG.map(kpi => {
-                  const arr = (j.mesuresData || []).filter(m => m.kpi_id === kpi.id).sort((a, b) => a.date.localeCompare(b.date))
-                  const latest = arr.length > 0 ? arr[arr.length - 1].valeur : null
-                  const prog = kpiProgression(arr.map(m => m.valeur), kpi.lower)
-                  return (
-                    <div key={kpi.id} style={{ background: C.surface, borderRadius: 10, padding: '8px 10px' }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>{kpi.icon} {kpi.label}</div>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                        <div style={{ fontSize: 15, fontWeight: 800, color: latest != null ? kpi.color : C.muted }}>{latest != null ? latest : '—'}</div>
-                        {latest != null && <div style={{ fontSize: 10, color: C.muted }}>{kpi.unit}</div>}
-                        {prog != null && (
-                          <div style={{ fontSize: 10, fontWeight: 700, color: parseFloat(prog) >= 0 ? C.green : C.red, marginLeft: 'auto' }}>
-                            {parseFloat(prog) >= 0 ? '▲' : '▼'}{Math.abs(prog)}%
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              <button onClick={() => window.print()}
-                style={{ width: '100%', padding: 12, borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                🖨️ Exporter / Imprimer la fiche
-              </button>
-            </div>
-          </div>
-        )
-      })()}
+      {ficheJoueur && <FicheJoueur player={ficheJoueur} onClose={() => setFicheJoueur(null)} />}
 
       {/* Header */}
       <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)', padding: '16px 20px', borderBottom: '1px solid ' + C.border, position: 'sticky', top: 0, zIndex: 50 }}>
