@@ -1,6 +1,7 @@
 import { Fragment, useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { getDeferredPrompt, onPromptAvailable } from '../lib/installPrompt'
+import { toDateStr, getMonday, latestKpis, kpiProgression, buildRadarData as computeRadarData, MATCH_RESULTS, hasScore, resultFromScore, playerMatchStats } from '../lib/stats'
 import { LineChart, Line, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts'
 
 const C = {
@@ -13,8 +14,6 @@ const C = {
 const TEAM_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#14b8a6','#ec4899']
 
 const DAY_ORDER = ['LUN','MAR','MER','JEU','VEN','SAM','DIM']
-const toDateStr = (d) => { const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${day}` }
-const getMonday = (d) => { const date = new Date(d); const dow = date.getDay(); date.setDate(date.getDate() - dow + (dow === 0 ? -6 : 1)); date.setHours(0, 0, 0, 0); return date }
 
 const ROLE_CONFIG = {
   joueur: { label: 'Joueur', color: '#64748b' },
@@ -85,20 +84,6 @@ const DEFAULT_TEMPLATE_BLOCS = [
 ]
 const GHOST_PREFIX = 'ghost:'
 
-const hasScore = (m) => m.score_pour != null && m.score_contre != null
-
-const resultFromScore = (pour, contre) => {
-  if (pour === '' || contre === '' || pour == null || contre == null) return null
-  const a = parseInt(pour, 10), b = parseInt(contre, 10)
-  if (isNaN(a) || isNaN(b)) return null
-  return a > b ? 'victoire' : a < b ? 'defaite' : 'nul'
-}
-
-const MATCH_RESULTS = [
-  { id: 'victoire', label: 'Victoire', short: 'V', color: '#10b981' },
-  { id: 'nul', label: 'Nul', short: 'N', color: '#64748b' },
-  { id: 'defaite', label: 'Défaite', short: 'D', color: '#ef4444' },
-]
 const isGhostId = (id) => typeof id === 'string' && id.startsWith(GHOST_PREFIX)
 const ghostRealId = (id) => id.slice(GHOST_PREFIX.length)
 const seanceRowKey = (r) => r.user_id || (r.managed_player_id ? GHOST_PREFIX + r.managed_player_id : null)
@@ -264,11 +249,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       const enrichedManaged = (allManagedPlayers || []).map(mp => {
         const mes = (allManagedMesures || []).filter(m => m.managed_player_id === mp.id)
         const sea = (allManagedSeances || []).filter(s => s.managed_player_id === mp.id)
-        const kpis = {}
-        KPI_CONFIG.forEach(k => {
-          const arr = mes.filter(m => m.kpi_id === k.id).sort((a, b) => a.date.localeCompare(b.date))
-          kpis[k.id] = arr.length > 0 ? arr[arr.length - 1].valeur : null
-        })
+        const kpis = latestKpis(mes, KPI_CONFIG)
         return {
           user_id: GHOST_PREFIX + mp.id, managed_player_id: mp.id, isManaged: true, team_id: mp.team_id,
           nom: mp.nom, prenom: mp.prenom, surnom: mp.surnom, poste1: mp.poste1, poste2: mp.poste2, photo_url: mp.photo_url,
@@ -290,11 +271,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
         const sea = (allSeances || []).filter(s => s.user_id === p.user_id)
         const derniereSeance = sea.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
         const derniereMesure = mes.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
-        const kpis = {}
-        KPI_CONFIG.forEach(k => {
-          const arr = mes.filter(m => m.kpi_id === k.id).sort((a, b) => a.date.localeCompare(b.date))
-          kpis[k.id] = arr.length > 0 ? arr[arr.length - 1].valeur : null
-        })
+        const kpis = latestKpis(mes, KPI_CONFIG)
         return { ...p, email: emailMap[p.user_id] || null, teams: playerTeamsMap[p.user_id] || [], mesuresData: mes, nb_mesures: mes.length, nb_seances: sea.length, derniere_seance: derniereSeance, derniere_mesure: derniereMesure, kpis }
       })
       setAdminData(enriched)
@@ -477,11 +454,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       const seancesSemaine = mySeances.filter(s => s.date >= weekAgoStr).length
       const myMesures = (mes || []).filter(m => m.user_id === uid)
       const derniereMesure = myMesures.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
-      const kpis = {}
-      KPI_CONFIG.forEach(k => {
-        const arr = myMesures.filter(m => m.kpi_id === k.id).sort((a, b) => a.date.localeCompare(b.date))
-        kpis[k.id] = arr.length > 0 ? arr[arr.length - 1].valeur : null
-      })
+      const kpis = latestKpis(myMesures, KPI_CONFIG)
       return { user_id: uid, ...prof, role: roleMap[uid] || 'joueur', derniereSeance, seancesSemaine, derniereMesure, mesuresData: myMesures, nb_mesures: myMesures.length, nb_seances: mySeances.length, kpis }
     })
     setCoachRosterData(roster)
@@ -516,11 +489,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       const derniereSeance = mySeances.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
       const seancesSemaine = mySeances.filter(s => s.date >= weekAgoStr).length
       const derniereMesure = myMesures.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
-      const kpis = {}
-      KPI_CONFIG.forEach(k => {
-        const arr = myMesures.filter(m => m.kpi_id === k.id).sort((a, b) => a.date.localeCompare(b.date))
-        kpis[k.id] = arr.length > 0 ? arr[arr.length - 1].valeur : null
-      })
+      const kpis = latestKpis(myMesures, KPI_CONFIG)
       return { user_id: GHOST_PREFIX + p.id, managed_player_id: p.id, isManaged: true, nom: p.nom, prenom: p.prenom, surnom: p.surnom, photo_url: p.photo_url, poste1: p.poste1, poste2: p.poste2, role: 'joueur', mesuresData: myMesures, nb_mesures: myMesures.length, nb_seances: mySeances.length, kpis, derniereSeance, seancesSemaine, derniereMesure }
     })
     setManagedPlayers(enriched)
@@ -1114,20 +1083,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
   const openFiche = (j, pool) => setFicheJoueur({ ...j, __pool: pool || [] })
 
-  const buildRadarData = (j) => {
-    const pool = (j.__pool || []).filter(p => p.user_id !== j.user_id)
-    return RADAR_AXES.map(axis => {
-      const kpi = KPI_CONFIG.find(k => k.id === axis.id)
-      const val = j.kpis?.[axis.id]
-      if (val == null) return { axis: axis.label, value: 0 }
-      const others = pool.map(p => p.kpis?.[axis.id]).filter(v => v != null)
-      const all = [val, ...others]
-      const min = Math.min(...all), max = Math.max(...all)
-      let pct = 50
-      if (max > min) pct = kpi.lower ? ((max - val) / (max - min)) * 100 : ((val - min) / (max - min)) * 100
-      return { axis: axis.label, value: Math.round(pct) }
-    })
-  }
+  const buildRadarData = (j) => computeRadarData(j, j.__pool, RADAR_AXES, KPI_CONFIG)
 
   const renderSessionBlocs = (s, expanded, done, onToggle) => expanded && (
     <div style={{ background: C.card, padding: '0 16px 16px' }}>
@@ -1163,11 +1119,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     const strip = (p) => {
       if (p.user_id !== target.user_id) return p
       const mes = (p.mesuresData || []).filter(m => m.id !== mesureId)
-      const kpis = {}
-      KPI_CONFIG.forEach(k => {
-        const arr = mes.filter(m => m.kpi_id === k.id).sort((a, b) => a.date.localeCompare(b.date))
-        kpis[k.id] = arr.length > 0 ? arr[arr.length - 1].valeur : null
-      })
+      const kpis = latestKpis(mes, KPI_CONFIG)
       const derniere_mesure = mes.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
       return { ...p, mesuresData: mes, nb_mesures: mes.length, kpis, derniere_mesure }
     }
@@ -3649,14 +3601,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
               </div>
 
               {(() => {
-                const teamMatches = ficheMatches.filter(m => m.resultat || hasScore(m))
+                const { teamMatches, played, totalButs, bilan, butsOf, isAbsent } = playerMatchStats(ficheMatches, j.user_id)
                 if (teamMatches.length === 0) return null
-                const butsOf = (m) => (m.buts || {})[j.user_id] || 0
-                const isPresent = (m) => (m.presents || []).includes(j.user_id) || butsOf(m) > 0
-                const isAbsent = (m) => (m.presents || []).length > 0 && !isPresent(m)
-                const played = teamMatches.filter(isPresent)
-                const totalButs = played.reduce((a, m) => a + butsOf(m), 0)
-                const count = (id) => played.filter(m => m.resultat === id).length
                 return (
                   <>
                     <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Matchs</div>
@@ -3672,7 +3618,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                       <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
                         <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>BILAN</div>
                         <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3 }}>
-                          {played.length === 0 ? <span style={{ color: C.muted }}>—</span> : MATCH_RESULTS.map((r, i) => <span key={r.id} style={{ color: r.color }}>{i > 0 ? ' · ' : ''}{count(r.id)}{r.short}</span>)}
+                          {played.length === 0 ? <span style={{ color: C.muted }}>—</span> : MATCH_RESULTS.map((r, i) => <span key={r.id} style={{ color: r.color }}>{i > 0 ? ' · ' : ''}{bilan[r.id]}{r.short}</span>)}
                         </div>
                       </div>
                     </div>
@@ -3714,10 +3660,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                 {KPI_CONFIG.map(kpi => {
                   const arr = (j.mesuresData || []).filter(m => m.kpi_id === kpi.id).sort((a, b) => a.date.localeCompare(b.date))
                   const latest = arr.length > 0 ? arr[arr.length - 1].valeur : null
-                  const prog = arr.length >= 2 ? (kpi.lower
-                    ? ((arr[0].valeur - arr[arr.length - 1].valeur) / arr[0].valeur * 100).toFixed(1)
-                    : ((arr[arr.length - 1].valeur - arr[0].valeur) / arr[0].valeur * 100).toFixed(1)
-                  ) : null
+                  const prog = kpiProgression(arr.map(m => m.valeur), kpi.lower)
                   return (
                     <div key={kpi.id} style={{ background: C.surface, borderRadius: 10, padding: '8px 10px' }}>
                       <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>{kpi.icon} {kpi.label}</div>
