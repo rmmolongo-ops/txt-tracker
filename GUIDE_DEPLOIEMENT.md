@@ -26,6 +26,7 @@ txt-tracker/
 │   │   ├── SessionBlocs.js    ← Détail d'une séance (partagé accueil / programme)
 │   │   ├── EquipeCoachScreen.js ← Onglet Équipe, vue coach / admin (effectif, perfs, suivi, programmes)
 │   │   ├── EquipeJoueurScreen.js ← Onglet Équipe, vue joueur (coéquipiers, programmes)
+│   │   ├── AdminScreen.js     ← Onglet Admin (vue d'ensemble, détail d'équipe, cartes joueurs)
 │   │   └── App.js             ← Reste de l'application (découpage en cours)
 │   ├── hooks/
 │   │   └── useChatUnread.js   ← Compteurs de messages non lus (pastilles du menu)
