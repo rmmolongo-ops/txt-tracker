@@ -1,6 +1,6 @@
 import { Fragment, useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { getDeferredPrompt, onPromptAvailable } from '../lib/installPrompt'
+import { getDeferredPrompt } from '../lib/installPrompt'
 import { toDateStr, latestKpis } from '../lib/stats'
 import { C, TEAM_COLORS, KPI_CONFIG, SESSIONS, DEFAULT_PROFIL, LEADERSHIP_ROLES, GHOST_PREFIX, isGhostId, ghostRealId, seanceRowKey } from '../lib/constants'
 import FicheJoueur from './FicheJoueur'
@@ -42,7 +42,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [homeViewMode, setHomeViewMode] = useState(() => localStorage.getItem('txt_home_view') || 'joueur')
   const [coachTeamId, setCoachTeamId] = useState(null)
   const [coachRosterData, setCoachRosterData] = useState([])
-  const [coachRosterLoading, setCoachRosterLoading] = useState(false)
   const [managedPlayers, setManagedPlayers] = useState([])
   const [adminManagedPlayers, setAdminManagedPlayers] = useState([])
   const [addingManagedPlayer, setAddingManagedPlayer] = useState(false)
@@ -56,7 +55,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [editingProg, setEditingProg] = useState(false)
   const [progDraft, setProgDraft] = useState(null)
   const [editingProgramId, setEditingProgramId] = useState(null)
-  const [canInstall, setCanInstall] = useState(!!getDeferredPrompt())
   const [isStandalone] = useState(() => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true)
   const [isIOS] = useState(() => /iphone|ipad|ipod/i.test(window.navigator.userAgent) && !window.MSStream)
   const [chatTeamId, setChatTeamId] = useState(null)
@@ -73,15 +71,12 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
   const showToast = (msg, duration = 2500) => { setToast(msg); setTimeout(() => setToast(null), duration) }
 
-  useEffect(() => onPromptAvailable(() => setCanInstall(true)), [])
-
   const handleInstall = async () => {
     const prompt = getDeferredPrompt()
     if (prompt) {
       prompt.prompt()
       const choice = await prompt.userChoice
       if (choice.outcome === 'accepted') showToast('📲 Application installée !')
-      setCanInstall(false)
       return
     }
     if (isIOS) {
@@ -163,6 +158,11 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     setAdminLoading(false)
   }
 
+  // Métadonnées d'inscription lues via une ref : loadAll ne doit dépendre que de user.id,
+  // sinon chaque rafraîchissement de session (nouvel objet user) rechargerait toutes les données.
+  const userRef = useRef(user)
+  userRef.current = user
+
   const loadAll = useCallback(async () => {
     const [{ data: m }, { data: s }, { data: p }, { data: t }, { data: myMemberships }, { data: progs }, { data: cl }] = await Promise.all([
       supabase.from('mesures').select('*').eq('user_id', user.id).order('date', { ascending: true }),
@@ -186,7 +186,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     if (cl) setClubs(cl)
     if (p) setProfil(p)
     else {
-      const meta = user.user_metadata || {}
+      const meta = userRef.current.user_metadata || {}
       const initial = { ...DEFAULT_PROFIL, nom: meta.nom || '', prenom: meta.prenom || '', club: meta.club || '', poste1: meta.poste1 || '', poste2: meta.poste2 || '' }
       const { data: newP } = await supabase.from('profils').upsert({ user_id: user.id, ...initial }, { onConflict: 'user_id' }).select().single()
       if (newP) setProfil(newP)
@@ -232,10 +232,9 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const setHomeView = (mode) => { localStorage.setItem('txt_home_view', mode); setHomeViewMode(mode) }
 
   const loadCoachRoster = async (teamId) => {
-    setCoachRosterLoading(true)
     const { data: members } = await supabase.from('team_members').select('user_id, role').eq('team_id', teamId)
     const ids = (members || []).map(m => m.user_id)
-    if (ids.length === 0) { setCoachRosterData([]); setCoachRosterLoading(false); return }
+    if (ids.length === 0) { setCoachRosterData([]); return }
     const [{ data: profs }, { data: mes }, { data: sea }] = await Promise.all([
       supabase.from('profils').select('user_id, nom, prenom, surnom, photo_url, poste1').in('user_id', ids),
       supabase.from('mesures').select('user_id, kpi_id, valeur, date').in('user_id', ids),
@@ -256,7 +255,6 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       return { user_id: uid, ...prof, role: roleMap[uid] || 'joueur', derniereSeance, seancesSemaine, derniereMesure, mesuresData: myMesures, nb_mesures: myMesures.length, nb_seances: mySeances.length, kpis }
     })
     setCoachRosterData(roster)
-    setCoachRosterLoading(false)
   }
 
   useEffect(() => {
@@ -339,19 +337,19 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     showToast('✅ Performance enregistrée pour ' + (target.prenom || 'ce joueur') + ' !')
   }
 
-  const loadSeanceTemplates = async () => {
+  const loadSeanceTemplates = useCallback(async () => {
     setSeanceTemplatesLoading(true)
     const { data } = await supabase.from('seance_templates').select('*').eq('created_by', user.id).order('created_at', { ascending: false })
     setSeanceTemplates(data || [])
     setSeanceTemplatesLoading(false)
-  }
+  }, [user.id])
 
   useEffect(() => {
     if (tab !== 'bibliotheque' && tab !== 'equipe' && tab !== 'dashboard') return
     const isLeadershipNow = availableTeams.some(t => myTeamIds.has(t.id) && LEADERSHIP_ROLES.includes(myTeamRoles[t.id]))
     if (!isLeadershipNow) return
     loadSeanceTemplates()
-  }, [tab, availableTeams, myTeamIds, myTeamRoles])
+  }, [tab, availableTeams, myTeamIds, myTeamRoles, loadSeanceTemplates])
 
   const applyTemplateToDay = (template) => {
     const { si } = libraryPickerFor
@@ -710,7 +708,10 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     for (let i = 0; i < 7; i++) {
       const d = new Date(); d.setDate(d.getDate() - i)
       const dateStr = d.toISOString().split('T')[0]
-      SESSIONS.forEach(s => { total++; if (seances.some(x => x.jour === s.day && x.date === dateStr && x.team_id === null)) done++ })
+      for (const s of SESSIONS) {
+        total++
+        if (seances.some(x => x.jour === s.day && x.date === dateStr && x.team_id === null)) done++
+      }
     }
     return Math.round((done / total) * 100)
   }
