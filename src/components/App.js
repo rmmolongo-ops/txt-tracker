@@ -219,7 +219,15 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     if (p) setProfil(p)
     else {
       const meta = userRef.current.user_metadata || {}
-      const initial = { ...DEFAULT_PROFIL, nom: meta.nom || '', prenom: meta.prenom || '', club: meta.club || '', poste1: meta.poste1 || '', poste2: meta.poste2 || '' }
+      const initial = {
+        ...DEFAULT_PROFIL,
+        nom: meta.nom || meta.family_name || '',
+        prenom: meta.prenom || meta.given_name || '',
+        club: meta.club || '',
+        poste1: meta.poste1 || '',
+        poste2: meta.poste2 || '',
+        photo_url: meta.avatar_url || meta.picture || '',
+      }
       const { data: newP } = await supabase.from('profils').upsert({ user_id: user.id, ...initial }, { onConflict: 'user_id' }).select().single()
       if (newP) setProfil(newP)
       if (meta.equipe) {
