@@ -339,6 +339,17 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     loadEquipeManagedPlayers(activeTeamId)
   }, [tab, isAdmin, equipeTeamId, coachTeamId])
 
+  // Un admin lit les joueurs (mesures/séances) via adminData, chargé par équipe à la demande
+  // (voir loadAdminTeamDetail) : il faut donc aussi le déclencher quand l'admin consulte une
+  // équipe depuis l'onglet Équipe, pas seulement depuis l'espace Admin.
+  useEffect(() => {
+    if (!isAdmin) return
+    const activeTeamId = tab === 'equipe' ? equipeTeamId : (tab === 'admin' && adminView === 'team_detail' ? selectedAdminTeam?.id : null)
+    if (!activeTeamId) return
+    loadAdminTeamDetail(activeTeamId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, tab, equipeTeamId, adminView, selectedAdminTeam?.id])
+
   const addManagedPlayer = async (teamId) => {
     if (!managedPlayerDraft.prenom.trim() && !managedPlayerDraft.nom.trim()) { showToast('❌ Donne au moins un prénom ou un nom'); return }
     const { data, error } = await supabase.from('managed_players').insert({
