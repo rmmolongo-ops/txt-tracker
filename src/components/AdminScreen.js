@@ -354,7 +354,7 @@ export default function AdminScreen({
                 }, null)
                 return (
                   <div key={team.id}
-                    onClick={() => { setSelectedAdminTeam(team); setAdminView('team_detail'); setExpandedAdmin(null); setAdminDetailTab('joueurs'); setEditingProg(false); setProgDraft(null); setEditingProgramId(null); loadAdminTeamDetail(team.id) }}
+                    onClick={() => { setSelectedAdminTeam(team); setAdminView('team_detail'); setExpandedAdmin(null); setAdminDetailTab('joueurs'); setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
                     style={{ background: C.card, borderRadius: 16, border: '1px solid ' + team.color + '40', overflow: 'hidden', cursor: 'pointer' }}>
                     <div style={{ height: 4, background: 'linear-gradient(90deg, ' + team.color + ', ' + team.color + '50)' }} />
                     <div style={{ padding: '16px 16px 14px' }}>
