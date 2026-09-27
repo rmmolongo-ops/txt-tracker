@@ -4,8 +4,11 @@ import { C, DEFAULT_PROFIL } from '../lib/constants'
 
 // Onglet Profil : photo, infos joueur (consultation / édition), équipes rejointes, installation de l'appli.
 export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs, availableTeams, myTeamIds, toggleMyTeam, isStandalone, handleInstall, isMobile, showToast }) {
-  const [editMode, setEditMode] = useState(false)
-  const [profilEdit, setProfilEdit] = useState(DEFAULT_PROFIL)
+  // Profil incomplet (ex: inscription via Google, sans club/poste saisis au préalable) :
+  // on ouvre directement l'écran en mode édition pour guider la première saisie.
+  const [profilIncomplet] = useState(() => !profil.club || !profil.poste1)
+  const [editMode, setEditMode] = useState(profilIncomplet)
+  const [profilEdit, setProfilEdit] = useState(() => profilIncomplet ? profil : DEFAULT_PROFIL)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
 
   const saveProfil = async () => {
@@ -139,6 +142,11 @@ export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs
         </div>
       ) : (
         <div style={{ maxWidth: isMobile ? '100%' : 480, margin: '0 auto' }}>
+          {profilIncomplet && (
+            <div style={{ background: C.accent + '15', border: '1px solid ' + C.accent + '40', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: C.text }}>
+              👋 Bienvenue ! Complète ton profil pour continuer.
+            </div>
+          )}
           {[
             { key: 'nom', label: 'Nom', placeholder: 'Nom de famille' },
             { key: 'prenom', label: 'Prénom', placeholder: 'Prénom' },
