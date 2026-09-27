@@ -30,6 +30,8 @@ describe('DashboardCoach : saisie d’un match', () => {
   const coachRosterData = [
     { user_id: 'u1', prenom: 'Ralph', role: 'coach' }, // pas dans la liste des joueurs du match
     { user_id: 'u2', prenom: 'Kenji', role: 'joueur' },
+    { user_id: 'u3', prenom: 'Théo', role: 'capitaine' }, // capitaine = joueur, doit apparaître
+    { user_id: 'u4', prenom: 'Jenny', role: 'dirigeant' }, // dirigeant peut jouer, doit apparaître
   ]
   const managedPlayers = [{ user_id: 'ghost:m1', prenom: 'Siriman', role: 'joueur' }]
   const props = {
@@ -47,9 +49,11 @@ describe('DashboardCoach : saisie d’un match', () => {
     await render(<DashboardCoach {...props} saveMatchResult={saveMatchResult} />)
     await act(async () => { buttonWithText('Saisir le score').click() })
 
-    // Seuls les joueurs (pas le coach) sont proposés
+    // Joueurs, capitaine et dirigeant sont proposés ; seul le coach (encadrement pur) ne l'est pas
     expect(container.textContent).toContain('Kenji')
     expect(container.textContent).toContain('Siriman')
+    expect(container.textContent).toContain('Théo')
+    expect(container.textContent).toContain('Jenny')
     expect(container.textContent).not.toContain('Ralph')
 
     const [pour, contre] = container.querySelectorAll('input[type="number"]')
@@ -72,7 +76,7 @@ describe('DashboardCoach : saisie d’un match', () => {
     expect(draft.resultat).toBe('victoire') // déduit de 3-1
     expect(draft.score_pour).toBe('3')
     expect(draft.score_contre).toBe('1')
-    expect(draft.presents.sort()).toEqual(['ghost:m1', 'u2'])
+    expect(draft.presents.sort()).toEqual(['ghost:m1', 'u2', 'u3', 'u4'])
     expect(draft.buts).toEqual({ u2: 2 })
     // Après succès, l'éditeur se referme
     expect(buttonWithText('Tous présents')).toBeUndefined()
