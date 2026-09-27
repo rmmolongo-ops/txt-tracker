@@ -1,4 +1,4 @@
-import { toDateStr, getMonday, latestKpis, kpiProgression, buildRadarData, hasScore, resultFromScore, playerMatchStats } from './stats'
+import { toDateStr, getMonday, latestKpis, kpiProgression, buildRadarData, hasScore, resultFromScore, playerMatchStats, activeAdminTeamId } from './stats'
 
 const KPIS = [
   { id: 'sprint30', lower: true },
@@ -14,6 +14,35 @@ describe('dates', () => {
     expect(toDateStr(getMonday(new Date(2026, 8, 24)))).toBe('2026-09-21') // mercredi
     expect(toDateStr(getMonday(new Date(2026, 8, 27)))).toBe('2026-09-21') // dimanche
     expect(toDateStr(getMonday(new Date(2026, 8, 21)))).toBe('2026-09-21') // lundi
+  })
+})
+
+describe('activeAdminTeamId', () => {
+  // Régression #41 : un admin lit les mesures/séances d'une équipe via adminData, qui n'est
+  // enrichi que par équipe, à la demande (loadAdminTeamDetail). Cette fonction dit pour quelle
+  // équipe le déclencher — elle doit couvrir l'onglet Équipe ET l'espace Admin.
+  test('non-admin : jamais de chargement', () => {
+    expect(activeAdminTeamId({ isAdmin: false, tab: 'equipe', equipeTeamId: 't1', adminView: 'team_detail', selectedAdminTeamId: 't1' })).toBeNull()
+  })
+
+  test('admin sur l’onglet Équipe : l’équipe consultée là-bas', () => {
+    expect(activeAdminTeamId({ isAdmin: true, tab: 'equipe', equipeTeamId: 't1', adminView: 'overview', selectedAdminTeamId: null })).toBe('t1')
+  })
+
+  test('admin sur l’onglet Équipe sans équipe sélectionnée : rien à charger', () => {
+    expect(activeAdminTeamId({ isAdmin: true, tab: 'equipe', equipeTeamId: null, adminView: 'overview', selectedAdminTeamId: null })).toBeNull()
+  })
+
+  test('admin dans l’espace Admin, vue détail équipe : l’équipe ouverte là-bas', () => {
+    expect(activeAdminTeamId({ isAdmin: true, tab: 'admin', equipeTeamId: null, adminView: 'team_detail', selectedAdminTeamId: 't2' })).toBe('t2')
+  })
+
+  test('admin dans l’espace Admin, vue d’ensemble : rien à charger', () => {
+    expect(activeAdminTeamId({ isAdmin: true, tab: 'admin', equipeTeamId: null, adminView: 'overview', selectedAdminTeamId: null })).toBeNull()
+  })
+
+  test('admin sur un autre onglet : rien à charger', () => {
+    expect(activeAdminTeamId({ isAdmin: true, tab: 'dashboard', equipeTeamId: 't1', adminView: 'team_detail', selectedAdminTeamId: 't2' })).toBeNull()
   })
 })
 
