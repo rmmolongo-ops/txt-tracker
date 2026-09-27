@@ -232,6 +232,10 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       }
       const { data: newP } = await supabase.from('profils').upsert({ user_id: user.id, ...initial }, { onConflict: 'user_id' }).select().single()
       if (newP) setProfil(newP)
+      // Inscription via Google (pas de formulaire club/équipe/poste au préalable) : le profil
+      // vient d'être créé avec des champs manquants, on amène directement le joueur sur l'écran
+      // Profil pour qu'il les complète plutôt que de le laisser sur un accueil vide.
+      if (!initial.club || !initial.poste1) changeTab('profil')
       if (meta.equipe) {
         const { error: joinError } = await supabase.from('team_members').insert({ user_id: user.id, team_id: meta.equipe })
         if (!joinError) setMyTeamIds(prev => new Set([...prev, meta.equipe]))

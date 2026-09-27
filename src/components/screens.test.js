@@ -100,6 +100,14 @@ describe('ProfilScreen', () => {
     await act(async () => { buttonWithText('U12 B').click() })
     expect(props.toggleMyTeam).toHaveBeenCalledWith('t1')
   })
+
+  test('profil incomplet (ex : inscription Google) : s’ouvre directement en édition avec un message d’accueil', async () => {
+    const incompleteProfil = { nom: 'Kiluanzi', prenom: 'Léo', surnom: '', club: '', division: '', poste1: '', poste2: '', photo_url: '' }
+    await render(<ProfilScreen {...props} profil={incompleteProfil} />)
+    expect(container.textContent).toContain('Complète ton profil')
+    const values = [...container.querySelectorAll('input')].map(i => i.value)
+    expect(values).toEqual(expect.arrayContaining(['Kiluanzi', 'Léo']))
+  })
 })
 
 describe('KpiScreen', () => {
