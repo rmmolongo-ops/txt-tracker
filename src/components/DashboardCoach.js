@@ -296,7 +296,9 @@ export default function DashboardCoach({
                     )}
 
                     {!editingDailySession && viewDay.s.type === 'match' && (() => {
-                      const matchPlayers = [...coachRosterData.filter(p => p.role === 'joueur'), ...managedPlayers]
+                      // Le capitaine est un joueur par définition, et un dirigeant peut figurer sur la feuille
+                      // de match : seul le rôle coach (encadrement pur) est exclu de la liste des joueurs.
+                      const matchPlayers = [...coachRosterData.filter(p => p.role !== 'coach'), ...managedPlayers]
                       const nameOf = (key) => { const p = matchPlayers.find(pl => pl.user_id === key); return p ? `${p.prenom || '—'} ${p.nom || ''}`.trim() : 'Joueur retiré' }
                       const savedButs = Object.entries(viewDay.s.buts || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1])
                       const totalButs = savedButs.reduce((a, [, n]) => a + n, 0)
