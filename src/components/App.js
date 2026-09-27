@@ -138,7 +138,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     setAdminLoading(false)
   }
 
-  const loadAdminTeamDetail = async (teamId) => {
+  const loadAdminTeamDetail = useCallback(async (teamId) => {
     setAdminLoading(true)
     setAdminError(null)
     try {
@@ -188,7 +188,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       setAdminManagedPlayers(prev => [...prev.filter(mp => mp.team_id !== teamId), ...enrichedManaged])
     } catch (e) { setAdminError('Erreur inattendue : ' + e.message) }
     setAdminLoading(false)
-  }
+  }, [teams])
 
   // Métadonnées d'inscription lues via une ref : loadAll ne doit dépendre que de user.id,
   // sinon chaque rafraîchissement de session (nouvel objet user) rechargerait toutes les données.
@@ -346,8 +346,7 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     const teamId = activeAdminTeamId({ isAdmin, tab, equipeTeamId, adminView, selectedAdminTeamId: selectedAdminTeam?.id })
     if (!teamId) return
     loadAdminTeamDetail(teamId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, tab, equipeTeamId, adminView, selectedAdminTeam?.id])
+  }, [isAdmin, tab, equipeTeamId, adminView, selectedAdminTeam?.id, loadAdminTeamDetail])
 
   const addManagedPlayer = async (teamId) => {
     if (!managedPlayerDraft.prenom.trim() && !managedPlayerDraft.nom.trim()) { showToast('❌ Donne au moins un prénom ou un nom'); return }
