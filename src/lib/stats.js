@@ -32,6 +32,17 @@ export const kpiProgression = (sortedValues, lower) => {
   return ((lower ? first - last : last - first) / first * 100).toFixed(1)
 }
 
+// Équipe dont un admin doit charger les mesures/séances (adminData n'est enrichi que par
+// équipe, à la demande — voir loadAdminTeamDetail) : soit celle consultée dans l'onglet
+// Équipe, soit celle ouverte dans l'espace Admin. Régression couverte : sans cette fonction,
+// consulter une équipe depuis l'onglet Équipe ne déclenchait pas ce chargement (bug #41).
+export const activeAdminTeamId = ({ isAdmin, tab, equipeTeamId, adminView, selectedAdminTeamId }) => {
+  if (!isAdmin) return null
+  if (tab === 'equipe') return equipeTeamId || null
+  if (tab === 'admin' && adminView === 'team_detail') return selectedAdminTeamId || null
+  return null
+}
+
 // Position du joueur (0 à 100) sur chaque axe du radar, relativement aux autres joueurs du pool.
 export const buildRadarData = (player, pool, axes, kpiConfig) => {
   const others = (pool || []).filter(p => p.user_id !== player.user_id)

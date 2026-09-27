@@ -1,7 +1,7 @@
 import { Fragment, useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { getDeferredPrompt } from '../lib/installPrompt'
-import { toDateStr, latestKpis } from '../lib/stats'
+import { toDateStr, latestKpis, activeAdminTeamId } from '../lib/stats'
 import { C, TEAM_COLORS, KPI_CONFIG, SESSIONS, DEFAULT_PROFIL, LEADERSHIP_ROLES, GHOST_PREFIX, isGhostId, ghostRealId, seanceRowKey } from '../lib/constants'
 import FicheJoueur from './FicheJoueur'
 import ChatScreen from './ChatScreen'
@@ -343,10 +343,9 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   // (voir loadAdminTeamDetail) : il faut donc aussi le déclencher quand l'admin consulte une
   // équipe depuis l'onglet Équipe, pas seulement depuis l'espace Admin.
   useEffect(() => {
-    if (!isAdmin) return
-    const activeTeamId = tab === 'equipe' ? equipeTeamId : (tab === 'admin' && adminView === 'team_detail' ? selectedAdminTeam?.id : null)
-    if (!activeTeamId) return
-    loadAdminTeamDetail(activeTeamId)
+    const teamId = activeAdminTeamId({ isAdmin, tab, equipeTeamId, adminView, selectedAdminTeamId: selectedAdminTeam?.id })
+    if (!teamId) return
+    loadAdminTeamDetail(teamId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, tab, equipeTeamId, adminView, selectedAdminTeam?.id])
 
