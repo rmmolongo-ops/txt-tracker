@@ -16,4 +16,4 @@ yarn-debug.log*
 yarn-error.log*
 
 # editor/tooling
-.claude/
+.claude/settings.local.json

@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | { read -r f; case \"$f\" in */src/*.js) cd /home/user/txt-tracker && npm run lint && CI=true npm run build ;; esac; }",
+            "timeout": 120,
+            "statusMessage": "Vérification lint + build (CRA)…"
+          }
+        ]
+      }
+    ]
+  }
+}
