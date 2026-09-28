@@ -58,7 +58,9 @@ export default function AdminScreen({
     const currentRole = teamContextId && !j.isManaged ? ((j.teams || []).find(t => t.id === teamContextId)?.role || 'joueur') : null
     return (
       <div key={cardKey} style={{ background: C.card, borderRadius: 16, border: '1px solid ' + (expanded ? C.accent + '60' : C.border), overflow: 'hidden' }}>
-        <div onClick={() => setExpandedAdmin(expanded ? null : cardKey)} style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+        <div onClick={() => setExpandedAdmin(expanded ? null : cardKey)} role="button" tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedAdmin(expanded ? null : cardKey) } }}
+          style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
           <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
             {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
           </div>
@@ -332,6 +334,7 @@ export default function AdminScreen({
                 <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 6px 6px 12px', borderRadius: 16, background: C.surface, border: '1px solid ' + C.border, fontSize: 13 }}>
                   {c.name}
                   <button onClick={() => deleteClub(c.id)}
+                    aria-label={`Supprimer le club ${c.name}`}
                     style={{ width: 20, height: 20, borderRadius: '50%', border: 'none', background: 'transparent', color: C.red, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
                 </div>
               ))}
@@ -440,6 +443,7 @@ export default function AdminScreen({
           <div style={{ fontSize: 13, fontWeight: 700, color: selectedAdminTeam.color }}>{selectedAdminTeam.name}</div>
           <div style={{ marginLeft: 'auto' }}>
             <button onClick={() => loadAdminTeamDetail(selectedAdminTeam.id)} disabled={adminLoading}
+              aria-label="Actualiser les données de l'équipe"
               style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '6px 12px', fontSize: 13, color: C.muted, cursor: 'pointer' }}>
               {adminLoading ? '...' : '↻'}
             </button>

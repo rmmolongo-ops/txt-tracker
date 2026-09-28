@@ -111,7 +111,9 @@ export default function DashboardJoueur({
       const val = getLatest(kpi.id); const prog = getProgress(kpi.id)
       return (
         <div key={kpi.id} style={{ background: C.card, borderRadius: 14, padding: 14, border: '1px solid ' + C.border, minWidth: 0, overflow: 'hidden' }}>
-          <div onClick={() => { setSelectedKpi(kpi.id); changeTab('stats') }} style={{ cursor: 'pointer' }}>
+          <div onClick={() => { setSelectedKpi(kpi.id); changeTab('stats') }} role="button" tabIndex={0}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedKpi(kpi.id); changeTab('stats') } }}
+            style={{ cursor: 'pointer' }}>
             <div style={{ fontSize: 20, marginBottom: 6 }}>{kpi.icon}</div>
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{kpi.label}</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: kpi.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -176,7 +178,8 @@ export default function DashboardJoueur({
       const done = isSeanceDone(s.day, undefined, toggleTeamId); const expanded = expandedDayDashboard === s.day
       return (
         <div key={s.day} style={{ marginBottom: 10, borderRadius: 14, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
-          <div onClick={() => setExpandedDayDashboard(expanded ? null : s.day)}
+          <div onClick={() => setExpandedDayDashboard(expanded ? null : s.day)} role="button" tabIndex={0}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedDayDashboard(expanded ? null : s.day) } }}
             style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '15' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
             <div style={{ fontSize: 24 }}>{s.icon}</div>
             <div style={{ flex: 1 }}>

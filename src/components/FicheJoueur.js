@@ -46,7 +46,7 @@ export default function FicheJoueur({ player, onClose }) {
               <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{j.poste1 || '—'}{j.poste2 ? ' / ' + j.poste2 : ''} {j.club ? '· ' + j.club : ''}</div>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', padding: 0 }}>✕</button>
+          <button onClick={onClose} aria-label="Fermer la fiche joueur" style={{ background: 'none', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', padding: 0 }}>✕</button>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>

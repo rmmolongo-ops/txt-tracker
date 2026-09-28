@@ -246,6 +246,7 @@ export default function DashboardCoach({
                                 onChange={e => { const d = JSON.parse(JSON.stringify(dailySessionDraft)); d.blocs[bi].duree = e.target.value; setDailySessionDraft(d) }}
                                 style={{ background: 'transparent', border: '1px solid ' + C.border, borderRadius: 6, color: viewDay.s.color, fontSize: 11, padding: '2px 6px', outline: 'none', width: 70, textAlign: 'center' }} />
                               <button onClick={() => setDailySessionDraft(d => ({ ...d, blocs: d.blocs.filter((_, i) => i !== bi) }))}
+                                aria-label="Supprimer ce bloc"
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.red, fontSize: 14 }}>🗑️</button>
                             </div>
                             <textarea value={bloc.exercices.join('\n')} placeholder="Un exercice par ligne..."

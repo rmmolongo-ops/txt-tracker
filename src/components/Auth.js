@@ -142,6 +142,7 @@ export default function Auth({ inviteTeamId }) {
               onKeyDown={e => e.key === 'Enter' && handleAuth()}
               style={{ width: '100%', background: C.surface, border: borderFor(password), borderRadius: 10, padding: '12px 44px 12px 14px', color: C.text, fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
             <button onClick={() => setShowPassword(v => !v)}
+              aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
               style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: C.muted, padding: 0 }}>
               {showPassword ? '🙈' : '👁️'}
             </button>
