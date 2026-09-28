@@ -854,8 +854,10 @@ export default function App({ user, onSignOut, inviteTeamId }) {
                     </div>
                     <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                       <button onClick={() => { setProgDraft({ name: prog.name, start_date: prog.start_date, end_date: prog.end_date, sessions: JSON.parse(JSON.stringify(prog.sessions)) }); setEditingProgramId(prog.id); setEditingProg(true) }}
+                        aria-label={`Modifier le programme ${prog.name}`}
                         style={{ padding: '7px 10px', background: C.surface, color: C.text, border: '1px solid ' + C.border, borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>✏️</button>
                       <button onClick={() => deleteProgram(prog.id)}
+                        aria-label={`Supprimer le programme ${prog.name}`}
                         style={{ padding: '7px 10px', background: 'transparent', color: C.red, border: '1px solid ' + C.red + '40', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>🗑️</button>
                     </div>
                   </div>
@@ -1089,7 +1091,9 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       {/* Header */}
       <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)', padding: '16px 20px', borderBottom: '1px solid ' + C.border, position: 'sticky', top: 0, zIndex: 50 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div onClick={() => changeTab('dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+          <div onClick={() => changeTab('dashboard')} role="button" tabIndex={0}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); changeTab('dashboard') } }}
+            style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
             <div style={{ width: 44, height: 44, borderRadius: 12, overflow: 'hidden', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, boxShadow: '0 0 20px rgba(59,130,246,0.4)', flexShrink: 0 }}>
               {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
             </div>
@@ -1099,7 +1103,9 @@ export default function App({ user, onSignOut, inviteTeamId }) {
             </div>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div onClick={() => changeTab('profil')} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+            <div onClick={() => changeTab('profil')} role="button" tabIndex={0}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); changeTab('profil') } }}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 11, color: C.muted }}>{todayStr}</div>
                 <div style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}>{profil.division || '—'} • {profil.club || '—'}</div>

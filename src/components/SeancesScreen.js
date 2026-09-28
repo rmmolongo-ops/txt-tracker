@@ -19,7 +19,8 @@ export default function SeancesScreen({ myTeams, getProgramForDate, getProgramsF
           const done = isSeanceDone(s.day); const expanded = expandedDay === s.day
           return (
             <div key={s.day} style={{ marginBottom: 10, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
-              <div onClick={() => setExpandedDay(expanded ? null : s.day)}
+              <div onClick={() => setExpandedDay(expanded ? null : s.day)} role="button" tabIndex={0}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedDay(expanded ? null : s.day) } }}
                 style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '18' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
                 <div style={{ width: 42, height: 42, borderRadius: 12, background: done ? C.green + '30' : s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
                 <div style={{ flex: 1 }}>
@@ -100,7 +101,8 @@ export default function SeancesScreen({ myTeams, getProgramForDate, getProgramsF
               const done = isSeanceDone(day, dateStr, team.id); const expanded = expandedDay === cardKey
               return (
                 <div key={cardKey} style={{ marginBottom: 10, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
-                  <div onClick={() => setExpandedDay(expanded ? null : cardKey)}
+                  <div onClick={() => setExpandedDay(expanded ? null : cardKey)} role="button" tabIndex={0}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedDay(expanded ? null : cardKey) } }}
                     style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '18' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
                     <div style={{ width: 42, height: 42, borderRadius: 12, background: done ? C.green + '30' : s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>

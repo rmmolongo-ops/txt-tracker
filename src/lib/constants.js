@@ -4,7 +4,7 @@ export const C = {
   bg: '#0a0e1a', card: '#111827', border: '#1e293b',
   accent: '#3b82f6', accentGlow: '#60a5fa', gold: '#f59e0b',
   green: '#10b981', red: '#ef4444', text: '#f1f5f9',
-  muted: '#64748b', surface: '#1e293b',
+  muted: '#94a3b8', surface: '#1e293b',
 }
 
 export const TEAM_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#14b8a6','#ec4899']

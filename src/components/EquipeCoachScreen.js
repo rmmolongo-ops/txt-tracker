@@ -96,6 +96,7 @@ export default function EquipeCoachScreen({
                         <div key={p.managed_player_id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 16, background: C.surface, fontSize: 12 }}>
                           <span>{p.prenom || '—'} {p.nom || ''}</span>
                           <button onClick={() => deleteManagedPlayer(p.managed_player_id)}
+                            aria-label={`Supprimer ${p.prenom || 'le joueur'} ${p.nom || ''}`.trim()}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, opacity: 0.5, padding: 0 }}>🗑️</button>
                         </div>
                       ))}
@@ -372,6 +373,7 @@ export default function EquipeCoachScreen({
                                         {row.validated_by ? '✓ Validé' : '✓ Fait'}
                                       </span>
                                       <button onClick={(e) => { e.stopPropagation(); unvalidateSeance(row.id, cardKey, p.user_id) }}
+                                        aria-label="Annuler la validation de cette séance"
                                         style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, opacity: 0.4 }}>🗑️</button>
                                     </div>
                                   )}

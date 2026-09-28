@@ -69,7 +69,7 @@ export default function StatsScreen({ isMobile, mesures, selectedKpi, setSelecte
                         <button onClick={() => setConfirmDelete(null)} style={{ background: C.surface, color: C.muted, border: 'none', borderRadius: 8, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Annuler</button>
                       </div>
                     ) : (
-                      <button onClick={() => setConfirmDelete({ id: entry.id })} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, opacity: 0.4 }}>🗑️</button>
+                      <button onClick={() => setConfirmDelete({ id: entry.id })} aria-label="Supprimer cette mesure" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, opacity: 0.4 }}>🗑️</button>
                     )}
                   </div>
                 </div>

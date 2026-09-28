@@ -103,6 +103,7 @@ export default function ChatScreen({ user, profil, isAdmin, isMobile, myTeams, c
               </div>
               {(mine || isAdmin) && (
                 <button onClick={() => deleteChatMessage(m.id)}
+                  aria-label="Supprimer ce message"
                   style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 12, opacity: 0.5, flexShrink: 0 }}>🗑️</button>
               )}
             </div>

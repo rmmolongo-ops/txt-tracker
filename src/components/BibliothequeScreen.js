@@ -61,7 +61,9 @@ export default function BibliothequeScreen({ user, templates, loading, setTempla
             const expanded = expandedTemplateId === t.id
             return (
               <div key={t.id} style={{ background: C.card, borderRadius: 16, marginBottom: 10, border: '1px solid ' + (expanded ? t.color + '60' : C.border), overflow: 'hidden' }}>
-                <div onClick={() => setExpandedTemplateId(expanded ? null : t.id)} style={{ padding: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div onClick={() => setExpandedTemplateId(expanded ? null : t.id)} role="button" tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedTemplateId(expanded ? null : t.id) } }}
+                  style={{ padding: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 42, height: 42, borderRadius: 12, background: t.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{t.icon}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 15 }}>{t.label}</div>
@@ -69,8 +71,10 @@ export default function BibliothequeScreen({ user, templates, loading, setTempla
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                     <button onClick={e => { e.stopPropagation(); setTemplateDraft({ label: t.label, icon: t.icon, color: t.color, duration: t.duration, objectif: t.objectif, blocs: JSON.parse(JSON.stringify(t.blocs)) }); setEditingTemplateId(t.id); setEditingTemplate(true) }}
+                      aria-label={`Modifier le modèle ${t.label}`}
                       style={{ padding: '7px 10px', background: C.surface, color: C.text, border: '1px solid ' + C.border, borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>✏️</button>
                     <button onClick={e => { e.stopPropagation(); deleteTemplate(t.id) }}
+                      aria-label={`Supprimer le modèle ${t.label}`}
                       style={{ padding: '7px 10px', background: 'transparent', color: C.red, border: '1px solid ' + C.red + '40', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>🗑️</button>
                   </div>
                 </div>
@@ -146,6 +150,7 @@ export default function BibliothequeScreen({ user, templates, loading, setTempla
                   style={{ background: 'transparent', border: '1px solid ' + C.border, borderRadius: 6, color: templateDraft.color, fontSize: 11, padding: '2px 6px', outline: 'none', width: 70, textAlign: 'center' }} />
                 {templateDraft.blocs.length > 1 && (
                   <button onClick={() => setTemplateDraft(d => ({ ...d, blocs: d.blocs.filter((_, i) => i !== bi) }))}
+                    aria-label="Supprimer ce bloc"
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.red, fontSize: 14 }}>🗑️</button>
                 )}
               </div>

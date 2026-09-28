@@ -109,7 +109,8 @@ export default function EquipeJoueurScreen({ myTeams, getProgramsForTeam, isMobi
             const expanded = expandedPlayerProgramId === prog.id
             return (
               <div key={prog.id} style={{ background: C.card, borderRadius: 14, marginBottom: 10, border: '1px solid ' + (expanded ? C.accent + '60' : C.border), overflow: 'hidden' }}>
-                <div onClick={() => setExpandedPlayerProgramId(expanded ? null : prog.id)}
+                <div onClick={() => setExpandedPlayerProgramId(expanded ? null : prog.id)} role="button" tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedPlayerProgramId(expanded ? null : prog.id) } }}
                   style={{ padding: 16, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
