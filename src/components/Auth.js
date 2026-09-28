@@ -9,8 +9,8 @@ const rules = [
   { id: 'special', label: '1 caractère spécial (!@#$...)', test: p => /[^A-Za-z0-9]/.test(p) },
 ]
 
-export default function Auth({ inviteTeamId }) {
-  const [mode, setMode] = useState(inviteTeamId ? 'register' : 'login')
+export default function Auth({ inviteTeamId, clubInviteCode }) {
+  const [mode, setMode] = useState((inviteTeamId || clubInviteCode) ? 'register' : 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -36,7 +36,9 @@ export default function Auth({ inviteTeamId }) {
   }, [])
 
   const passwordValid = rules.every(r => r.test(password))
-  const profilValid = mode === 'login' || (nom.trim() && prenom.trim() && club && equipe && poste1.trim())
+  // Une invitation club (coach/dirigeant) ne rattache pas à une équipe précise à l'inscription
+  // (ce sera fait ensuite depuis l'espace admin du club) : l'équipe n'est alors pas obligatoire.
+  const profilValid = mode === 'login' || (nom.trim() && prenom.trim() && club && poste1.trim() && (equipe || clubInviteCode))
 
   const borderFor = (val) => '1px solid ' + (attemptedSubmit && !String(val).trim() ? C.red : C.border)
 
@@ -45,7 +47,9 @@ export default function Auth({ inviteTeamId }) {
   const handleGoogleAuth = async () => {
     setError(null)
     setSuccess(null)
-    const redirectTo = inviteTeamId ? `${window.location.origin}/?invite=${inviteTeamId}` : window.location.origin
+    const redirectTo = inviteTeamId ? `${window.location.origin}/?invite=${inviteTeamId}`
+      : clubInviteCode ? `${window.location.origin}/?club_invite=${clubInviteCode}`
+      : window.location.origin
     const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
     if (error) setError(error.message)
   }
@@ -112,6 +116,11 @@ export default function Auth({ inviteTeamId }) {
         {inviteTeam && (
           <div style={{ background: C.accent + '15', border: '1px solid ' + C.accent + '40', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: C.text }}>
             🎟️ Invitation à rejoindre l'équipe <strong>{inviteTeam.name}</strong>
+          </div>
+        )}
+        {clubInviteCode && (
+          <div style={{ background: C.accent + '15', border: '1px solid ' + C.accent + '40', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: C.text }}>
+            🎟️ Invitation à rejoindre l'équipe encadrante d'un club
           </div>
         )}
         <button onClick={handleGoogleAuth} type="button"
@@ -186,9 +195,9 @@ export default function Auth({ inviteTeamId }) {
               {clubs.length === 0 && <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>Aucun club disponible pour l'instant, contacte ton coach.</div>}
             </div>
             <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>ÉQUIPE</div>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>ÉQUIPE{clubInviteCode ? ' (optionnel)' : ''}</div>
               <select value={equipe} onChange={e => setEquipe(e.target.value)}
-                style={{ width: '100%', background: C.surface, border: borderFor(equipe), borderRadius: 10, padding: '10px 12px', color: equipe ? C.text : C.muted, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}>
+                style={{ width: '100%', background: C.surface, border: clubInviteCode ? '1px solid ' + C.border : borderFor(equipe), borderRadius: 10, padding: '10px 12px', color: equipe ? C.text : C.muted, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}>
                 <option value="">Sélectionne ton équipe...</option>
                 {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>

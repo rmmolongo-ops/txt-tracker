@@ -5,11 +5,21 @@ import { C, KPI_CONFIG, ROLE_CONFIG, GHOST_PREFIX } from '../lib/constants'
 // Onglet Admin : vue d'ensemble (stats, inscriptions, équipes, clubs, joueurs sans équipe)
 // et détail d'une équipe (joueurs, programmes). Les actions en base restent dans App ;
 // l'écran gère l'état d'interface (saisies, dépliages, confirmations).
+// Rôles qu'un admin/dirigeant de club peut proposer à l'invitation : un dirigeant ne peut
+// jamais inviter un admin (seul un admin peut créer un autre admin) — la policy applique déjà
+// cette même règle côté base, ce filtre ne fait qu'éviter de proposer une option qui serait
+// refusée.
+const CLUB_INVITE_ROLES = [
+  { id: 'admin', label: 'Administrateur', color: '#ef4444' },
+  { id: 'dirigeant', label: 'Dirigeant', color: '#f59e0b' },
+  { id: 'coach', label: 'Coach', color: '#3b82f6' },
+]
+
 export default function AdminScreen({
   addManagedPlayer, addingManagedPlayer, adminData, adminDeleteMesure, adminError, adminLoading,
-  adminManagedPlayers, adminView, clubs, coachRosterData, createClub, createTeam,
-  deleteClub, deleteManagedPlayer, deleteTeam, deleteUserAccount, isAdmin, isMobile,
-  loadAdminOverview, loadAdminTeamDetail, managedPlayerDraft, managedPlayers, openFiche, renderProgrammeCatalog, resendConfirmation,
+  adminManagedPlayers, adminView, clubs, coachRosterData, createClub, createClubInvite, createTeam,
+  deleteClub, deleteManagedPlayer, deleteTeam, deleteUserAccount, isAdmin, isClubManager, isMobile,
+  loadAdminOverview, loadAdminTeamDetail, managedPlayerDraft, managedPlayers, myClubId, myClubRole, openFiche, renderProgrammeCatalog, resendConfirmation,
   selectedAdminTeam, setAddingManagedPlayer, setAdminView, setEditingProg, setEditingProgramId, setManagedPlayerDraft,
   setPlayerRole, setProgDraft, setSelectedAdminTeam, shareInviteLink, teams, togglePlayerTeam,
   unconfirmedSignups, uploadTeamPhoto, uploadingTeamPhoto,
@@ -24,6 +34,15 @@ export default function AdminScreen({
   const [creatingTeam, setCreatingTeam] = useState(false)
   const [creatingClub, setCreatingClub] = useState(false)
   const [resendingEmail, setResendingEmail] = useState(null)
+  const [inviteClubId, setInviteClubId] = useState('')
+  const [inviteRole, setInviteRole] = useState('coach')
+  const [generatingInvite, setGeneratingInvite] = useState(false)
+
+  // Rôles que l'utilisateur courant peut proposer à l'invitation club-level, cf. commentaire
+  // CLUB_INVITE_ROLES ci-dessus. Un admin plateforme (venu gérer un club pour le compte de son
+  // propriétaire) peut tout proposer ; un dirigeant de club, seulement dirigeant/coach.
+  const invitableRoles = isAdmin || myClubRole === 'admin' ? CLUB_INVITE_ROLES : CLUB_INVITE_ROLES.filter(r => r.id !== 'admin')
+  const inviteTargetClubId = isClubManager ? myClubId : inviteClubId
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim()) return
@@ -37,6 +56,13 @@ export default function AdminScreen({
     setCreatingClub(true)
     if (await createClub(newClubName.trim())) setNewClubName('')
     setCreatingClub(false)
+  }
+
+  const handleGenerateInvite = async () => {
+    if (!inviteTargetClubId) return
+    setGeneratingInvite(true)
+    await createClubInvite(inviteTargetClubId, inviteRole)
+    setGeneratingInvite(false)
   }
 
   const handleResend = async (email) => {
@@ -186,7 +212,7 @@ export default function AdminScreen({
               <div style={{ fontSize: 10, color: C.muted, textAlign: 'center', marginTop: 6 }}>Cliquez sur un KPI pour changer le graphique</div>
             </div>
 
-            {isAdmin && (() => {
+            {(isAdmin || isClubManager) && (() => {
               const kpi = KPI_CONFIG.find(k => k.id === adminChartKpi)
               const entries = (j.mesuresData || []).filter(m => m.kpi_id === adminChartKpi && m.id).sort((a, b) => b.date.localeCompare(a.date))
               return (
@@ -221,6 +247,7 @@ export default function AdminScreen({
               )
             })()}
 
+            {(j.isManaged || isAdmin) && (
             <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid ' + C.border }}>
               {deleteConfirm?.userId === j.user_id ? (
                 deleteConfirm.step === 1 ? (
@@ -252,6 +279,7 @@ export default function AdminScreen({
                 </button>
               )}
             </div>
+            )}
           </div>
         )}
       </div>
@@ -315,7 +343,8 @@ export default function AdminScreen({
           </div>
         </div>
 
-        {/* Gérer les clubs (liste proposée à l'inscription) */}
+        {/* Gérer les clubs (liste proposée à l'inscription) — catalogue plateforme, pas un réglage de club */}
+        {isAdmin && (
         <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
           <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Clubs proposés à l'inscription</div>
           <div style={{ display: 'flex', gap: 8, marginBottom: clubs.length > 0 ? 12 : 0 }}>
@@ -341,6 +370,34 @@ export default function AdminScreen({
             </div>
           )}
         </div>
+        )}
+
+        {/* Inviter un membre de l'équipe encadrante du club (coach/dirigeant/admin) */}
+        {(isClubManager || isAdmin) && (
+        <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
+          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Inviter un coach ou dirigeant</div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
+            Génère un lien à usage unique, valable 7 jours, donnant accès à toutes les équipes du club.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {isAdmin && !isClubManager && (
+              <select value={inviteClubId} onChange={e => setInviteClubId(e.target.value)}
+                style={{ flex: 1, minWidth: 140, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: inviteClubId ? C.text : C.muted, fontSize: 14, outline: 'none' }}>
+                <option value="">Choisir un club...</option>
+                {clubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            )}
+            <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
+              style={{ minWidth: 140, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none' }}>
+              {invitableRoles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
+            <button onClick={handleGenerateInvite} disabled={generatingInvite || !inviteTargetClubId}
+              style={{ padding: '10px 18px', background: inviteTargetClubId ? C.accent : C.surface, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14, whiteSpace: 'nowrap', opacity: generatingInvite ? 0.6 : 1 }}>
+              🔗 Générer le lien
+            </button>
+          </div>
+        </div>
+        )}
 
         {/* Grille des équipes */}
         {teams.length > 0 && (
