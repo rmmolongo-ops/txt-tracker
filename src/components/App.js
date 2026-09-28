@@ -46,6 +46,8 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const [teams, setTeams] = useState([])
   const [clubs, setClubs] = useState([])
+  const [clubMembers, setClubMembers] = useState([])
+  const [clubInvites, setClubInvites] = useState([])
   const [uploadingTeamPhoto, setUploadingTeamPhoto] = useState(null)
   const [availableTeams, setAvailableTeams] = useState([])
   const [myTeamIds, setMyTeamIds] = useState(new Set())
@@ -113,6 +115,8 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
         { data: allTeamMembers },
         { data: unconfirmed },
         { data: allManagedPlayers },
+        { data: allClubMembers },
+        { data: allClubInvites },
       ] = await Promise.all([
         supabase.from('profils').select('*'),
         supabase.rpc('get_user_emails_for_admins'),
@@ -120,10 +124,16 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
         supabase.from('team_members').select('user_id, team_id, role'),
         supabase.rpc('get_unconfirmed_signups_for_admins'),
         supabase.from('managed_players').select('*'),
+        supabase.from('club_members').select('*'),
+        supabase.from('club_invites').select('*').order('created_at', { ascending: false }),
       ])
       if (errP) { setAdminError('Erreur lecture profils : ' + errP.message); setAdminLoading(false); return }
       setTeams(allTeams || [])
       setUnconfirmedSignups(unconfirmed || [])
+      // Scopé par la RLS : un admin plateforme voit tous les clubs, un admin/dirigeant
+      // de club ne voit que les membres et invitations de son propre club.
+      setClubMembers(allClubMembers || [])
+      setClubInvites(allClubInvites || [])
       const emailMap = {}
       ;(allEmails || []).forEach(e => { emailMap[e.user_id] = e.email })
       const teamMap = {}
@@ -646,6 +656,16 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
     showToast('🗑️ Club supprimé')
   }
 
+  // Rattache/détache une équipe à un club (clubId vide = détache). Utilisé pour les équipes
+  // dont le backfill de la migration multi-tenant n'a pas pu déduire le club automatiquement.
+  const assignTeamClub = async (teamId, clubId) => {
+    const { error } = await supabase.from('teams').update({ club_id: clubId || null }).eq('id', teamId)
+    if (error) { showToast('❌ ' + error.message); return false }
+    setTeams(prev => prev.map(t => t.id === teamId ? { ...t, club_id: clubId || null } : t))
+    showToast(clubId ? '✅ Équipe rattachée au club' : '↩️ Équipe détachée du club')
+    return true
+  }
+
   const togglePlayerTeam = async (playerUserId, teamId) => {
     const player = adminData.find(p => p.user_id === playerUserId)
     const isIn = (player?.teams || []).some(t => t.id === teamId)
@@ -1124,7 +1144,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
       {tab === 'admin' && canManageClub && (
         <AdminScreen
           addManagedPlayer={addManagedPlayer} addingManagedPlayer={addingManagedPlayer} adminData={adminData} adminDeleteMesure={adminDeleteMesure} adminError={adminError}
-          adminLoading={adminLoading} adminManagedPlayers={adminManagedPlayers} adminView={adminView} clubs={clubs} coachRosterData={coachRosterData}
+          adminLoading={adminLoading} adminManagedPlayers={adminManagedPlayers} adminView={adminView} assignTeamClub={assignTeamClub} clubInvites={clubInvites} clubMembers={clubMembers} clubs={clubs} coachRosterData={coachRosterData}
           createClub={createClub} createClubInvite={createClubInvite} createTeam={createTeam} deleteClub={deleteClub} deleteManagedPlayer={deleteManagedPlayer} deleteTeam={deleteTeam}
           deleteUserAccount={deleteUserAccount} isAdmin={isAdmin} isClubManager={isClubManager} isMobile={isMobile} loadAdminOverview={loadAdminOverview} loadAdminTeamDetail={loadAdminTeamDetail} managedPlayerDraft={managedPlayerDraft}
           managedPlayers={managedPlayers} myClubId={myClubId} myClubRole={myClubRole} openFiche={openFiche} renderProgrammeCatalog={renderProgrammeCatalog} resendConfirmation={resendConfirmation} selectedAdminTeam={selectedAdminTeam}

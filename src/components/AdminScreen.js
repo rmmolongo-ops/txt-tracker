@@ -17,7 +17,7 @@ const CLUB_INVITE_ROLES = [
 
 export default function AdminScreen({
   addManagedPlayer, addingManagedPlayer, adminData, adminDeleteMesure, adminError, adminLoading,
-  adminManagedPlayers, adminView, clubs, coachRosterData, createClub, createClubInvite, createTeam,
+  adminManagedPlayers, adminView, assignTeamClub, clubInvites = [], clubMembers = [], clubs, coachRosterData, createClub, createClubInvite, createTeam,
   deleteClub, deleteManagedPlayer, deleteTeam, deleteUserAccount, isAdmin, isClubManager, isMobile,
   loadAdminOverview, loadAdminTeamDetail, managedPlayerDraft, managedPlayers, myClubId, myClubRole, openFiche, renderProgrammeCatalog, resendConfirmation,
   selectedAdminTeam, setAddingManagedPlayer, setAdminView, setEditingProg, setEditingProgramId, setManagedPlayerDraft,
@@ -78,6 +78,15 @@ export default function AdminScreen({
   const handleDeleteMesure = async (target, mesureId) => {
     if (await adminDeleteMesure(target, mesureId)) setMesureToDelete(null)
   }
+
+  const memberDisplayName = userId => {
+    const p = adminData.find(j => j.user_id === userId)
+    return p ? `${p.prenom || ''} ${p.nom || ''}`.trim() || userId.slice(0, 8) : userId.slice(0, 8)
+  }
+
+  const clubRoleMeta = role => CLUB_INVITE_ROLES.find(r => r.id === role) || { label: role, color: C.muted }
+
+  const handleAssignTeamClub = async (teamId, clubId) => { await assignTeamClub(teamId, clubId) }
 
   const renderPlayerCard = (j, cardKey, teamContextId) => {
     const expanded = expandedAdmin === cardKey
@@ -369,6 +378,76 @@ export default function AdminScreen({
               ))}
             </div>
           )}
+        </div>
+        )}
+
+        {/* Vue par club : équipes, membres encadrants, joueurs, invitations en attente.
+            Un admin plateforme voit tous les clubs ; un admin/dirigeant de club ne voit
+            (RLS) que les membres/invitations du sien, mais la liste des clubs eux-mêmes
+            reste publique (catalogue d'inscription) — on la filtre donc ici au sien. */}
+        {(isAdmin || isClubManager) && clubs.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Vue par club</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {clubs.filter(c => isAdmin || c.id === myClubId).map(club => {
+              const clubTeams = teams.filter(t => t.club_id === club.id)
+              const clubTeamIds = new Set(clubTeams.map(t => t.id))
+              const clubPlayerCount = adminData.filter(j => (j.teams || []).some(t => clubTeamIds.has(t.id))).length
+                + adminManagedPlayers.filter(mp => clubTeamIds.has(mp.team_id)).length
+              const members = clubMembers.filter(cm => cm.club_id === club.id)
+              const pendingInvites = clubInvites.filter(ci => ci.club_id === club.id && !ci.used_at && new Date(ci.expires_at) > new Date())
+              return (
+                <div key={club.id} style={{ background: C.card, borderRadius: 16, padding: 16, border: '1px solid ' + C.border }}>
+                  <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 10 }}>{club.name}</div>
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+                    <div><span style={{ fontWeight: 800, color: C.accent }}>{clubTeams.length}</span> <span style={{ fontSize: 12, color: C.muted }}>équipe{clubTeams.length !== 1 ? 's' : ''}</span></div>
+                    <div><span style={{ fontWeight: 800, color: C.green }}>{clubPlayerCount}</span> <span style={{ fontSize: 12, color: C.muted }}>joueur{clubPlayerCount !== 1 ? 's' : ''}</span></div>
+                    <div><span style={{ fontWeight: 800, color: C.gold }}>{members.length}</span> <span style={{ fontSize: 12, color: C.muted }}>membre{members.length !== 1 ? 's' : ''}</span></div>
+                    <div><span style={{ fontWeight: 800, color: C.text }}>{pendingInvites.length}</span> <span style={{ fontSize: 12, color: C.muted }}>invitation{pendingInvites.length !== 1 ? 's' : ''} en attente</span></div>
+                  </div>
+                  {clubTeams.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: members.length > 0 ? 10 : 0 }}>
+                      {clubTeams.map(t => (
+                        <span key={t.id} style={{ fontSize: 11, fontWeight: 700, color: t.color, background: t.color + '20', padding: '3px 9px', borderRadius: 10 }}>{t.name}</span>
+                      ))}
+                    </div>
+                  )}
+                  {members.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {members.map(m => {
+                        const meta = clubRoleMeta(m.role)
+                        return (
+                          <span key={m.user_id} style={{ fontSize: 11, fontWeight: 700, color: meta.color, background: meta.color + '18', padding: '3px 9px', borderRadius: 10 }}>
+                            {memberDisplayName(m.user_id)} · {meta.label}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+        )}
+
+        {/* Équipes sans club : le backfill de la migration multi-tenant n'a pas pu déduire
+            leur club (profils.club vide ou sans correspondance) — assignation manuelle. */}
+        {isAdmin && teams.some(t => !t.club_id) && (
+        <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.gold + '50' }}>
+          <div style={{ fontSize: 12, color: C.gold, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>⚠️ Équipes sans club</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {teams.filter(t => !t.club_id).map(t => (
+              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: t.color }}>{t.name}</span>
+                <select defaultValue="" onChange={e => e.target.value && handleAssignTeamClub(t.id, e.target.value)}
+                  style={{ background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }}>
+                  <option value="">Assigner à un club...</option>
+                  {clubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
         </div>
         )}
 
