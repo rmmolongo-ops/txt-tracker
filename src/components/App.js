@@ -17,7 +17,7 @@ import DashboardCoach from './DashboardCoach'
 import DashboardJoueur from './DashboardJoueur'
 import useChatUnread from '../hooks/useChatUnread'
 
-export default function App({ user, onSignOut, inviteTeamId }) {
+export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
   const [tab, setTab] = useState(() => localStorage.getItem('txt_tab') || 'dashboard')
   const [mesures, setMesures] = useState([])
   const [seances, setSeances] = useState([])
@@ -27,6 +27,17 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   const [toast, setToast] = useState(null)
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [clubMemberships, setClubMemberships] = useState([])
+  // Rôle club-level le plus élevé de l'utilisateur (admin > dirigeant > coach), et son club :
+  // en phase d'onboarding manuel, chaque compte gère au plus un club à la fois.
+  const myClubMembership = useMemo(() => {
+    const order = { admin: 0, dirigeant: 1, coach: 2 }
+    return clubMemberships.slice().sort((a, b) => order[a.role] - order[b.role])[0] || null
+  }, [clubMemberships])
+  const myClubId = myClubMembership?.club_id || null
+  const myClubRole = myClubMembership?.role || null
+  const isClubManager = myClubRole === 'admin' || myClubRole === 'dirigeant'
+  const canManageClub = isAdmin || isClubManager
   const [adminData, setAdminData] = useState([])
   const [unconfirmedSignups, setUnconfirmedSignups] = useState([])
   const [ficheJoueur, setFicheJoueur] = useState(null)
@@ -241,10 +252,19 @@ export default function App({ user, onSignOut, inviteTeamId }) {
         if (!joinError) setMyTeamIds(prev => new Set([...prev, meta.equipe]))
       }
     }
+    let becameAdmin = false
     try {
       const { data: adminCheck } = await supabase.from('admins').select('user_id').eq('user_id', user.id).single()
-      if (adminCheck) { setIsAdmin(true); await loadAdminOverview() }
+      if (adminCheck) { becameAdmin = true; setIsAdmin(true) }
     } catch (e) {}
+    // Rôles club-level (admin/dirigeant/coach) : distincts de l'admin plateforme ci-dessus,
+    // ils donnent accès à l'espace Admin scopé à un seul club (RLS ajoutée par la migration
+    // multi-tenant, qui laisse déjà l'admin plateforme inchangé).
+    const { data: memberships } = await supabase.from('club_members').select('club_id, role').eq('user_id', user.id)
+    const clubManagerRoles = ['admin', 'dirigeant']
+    const becameClubManager = (memberships || []).some(cm => clubManagerRoles.includes(cm.role))
+    if (memberships) setClubMemberships(memberships)
+    if (becameAdmin || becameClubManager) await loadAdminOverview()
     setLoading(false)
   }, [user.id])
 
@@ -268,6 +288,24 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       window.history.replaceState({}, '', window.location.pathname)
     })()
   }, [inviteTeamId, availableTeams, myTeamIds, user.id])
+
+  const clubInviteHandledRef = useRef(false)
+  useEffect(() => {
+    if (!clubInviteCode || clubInviteHandledRef.current) return
+    clubInviteHandledRef.current = true
+    ;(async () => {
+      const { data: joinedClubId, error } = await supabase.rpc('redeem_club_invite', { p_code: clubInviteCode })
+      if (error) {
+        showToast('❌ ' + error.message)
+      } else if (joinedClubId) {
+        const { data: memberships } = await supabase.from('club_members').select('club_id, role').eq('user_id', user.id)
+        if (memberships) setClubMemberships(memberships)
+        await loadAdminOverview()
+        showToast('✅ Invitation acceptée, bienvenue dans le club !')
+      }
+      window.history.replaceState({}, '', window.location.pathname)
+    })()
+  }, [clubInviteCode, user.id])
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768)
@@ -347,10 +385,10 @@ export default function App({ user, onSignOut, inviteTeamId }) {
   // (voir loadAdminTeamDetail) : il faut donc aussi le déclencher quand l'admin consulte une
   // équipe depuis l'onglet Équipe, pas seulement depuis l'espace Admin.
   useEffect(() => {
-    const teamId = activeAdminTeamId({ isAdmin, tab, equipeTeamId, adminView, selectedAdminTeamId: selectedAdminTeam?.id })
+    const teamId = activeAdminTeamId({ isAdmin: canManageClub, tab, equipeTeamId, adminView, selectedAdminTeamId: selectedAdminTeam?.id })
     if (!teamId) return
     loadAdminTeamDetail(teamId)
-  }, [isAdmin, tab, equipeTeamId, adminView, selectedAdminTeam?.id, loadAdminTeamDetail])
+  }, [canManageClub, tab, equipeTeamId, adminView, selectedAdminTeam?.id, loadAdminTeamDetail])
 
   const addManagedPlayer = async (teamId) => {
     if (!managedPlayerDraft.prenom.trim() && !managedPlayerDraft.nom.trim()) { showToast('❌ Donne au moins un prénom ou un nom'); return }
@@ -532,7 +570,12 @@ export default function App({ user, onSignOut, inviteTeamId }) {
 
   const createTeam = async (name) => {
     const color = TEAM_COLORS[teams.length % TEAM_COLORS.length]
-    const { data, error } = await supabase.from('teams').insert({ name, admin_id: user.id, color }).select().single()
+    const payload = { name, admin_id: user.id, color }
+    // Un admin plateforme peut créer une équipe non rattachée à un club (comportement existant,
+    // inchangé) ; un admin/dirigeant de club rattache directement l'équipe à son propre club,
+    // seul moyen pour la nouvelle policy RLS club-level d'autoriser l'insertion.
+    if (!isAdmin && myClubId) payload.club_id = myClubId
+    const { data, error } = await supabase.from('teams').insert(payload).select().single()
     if (data) { setTeams(prev => [...prev, data]); setAvailableTeams(prev => [...prev, data]); showToast('✅ Équipe créée !'); return true }
     if (error) showToast('❌ ' + error.message)
     return false
@@ -558,6 +601,27 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     try {
       await navigator.clipboard.writeText(url)
       showToast('🔗 Lien d\'invitation copié !')
+    } catch (e) {
+      showToast('❌ Impossible de copier le lien')
+    }
+  }
+
+  // Invitation club-level (coach/dirigeant/admin) : code à usage unique et expirant généré
+  // côté base (create_club_invite), distinct du lien simple ci-dessus utilisé pour les joueurs —
+  // l'accès accordé ici couvre tout le club, d'où le mécanisme plus strict (voir migration
+  // 20260928000000_multi_tenant_clubs.sql).
+  const createClubInvite = async (clubId, role) => {
+    const { data: code, error } = await supabase.rpc('create_club_invite', { p_club_id: clubId, p_role: role })
+    if (error) { showToast('❌ ' + error.message); return }
+    const roleLabel = role === 'admin' ? 'administrateur' : role === 'dirigeant' ? 'dirigeant' : 'coach'
+    const url = `${window.location.origin}/?club_invite=${code}`
+    if (navigator.share) {
+      try { await navigator.share({ title: 'TxT Tracker', text: `Rejoins le club en tant que ${roleLabel} sur TxT Tracker !`, url }); return }
+      catch (e) { if (e.name === 'AbortError') return }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      showToast('🔗 Lien d\'invitation ' + roleLabel + ' copié !')
     } catch (e) {
       showToast('❌ Impossible de copier le lien')
     }
@@ -791,8 +855,8 @@ export default function App({ user, onSignOut, inviteTeamId }) {
     { id: 'chat', icon: '💬', label: 'Chat' },
     { id: 'equipe', icon: '⚽', label: 'Équipe' },
     ...(hasLeadership ? [{ id: 'bibliotheque', icon: '📚', label: 'Bibliothèque' }] : []),
-    ...(isAdmin ? [{ id: 'admin', icon: '🛡️', label: 'Admin' }] : []),
-  ], [hasLeadership, isAdmin])
+    ...(canManageClub ? [{ id: 'admin', icon: '🛡️', label: 'Admin' }] : []),
+  ], [hasLeadership, canManageClub])
 
   if (loading) return (
     <div style={{ background: C.bg, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1057,13 +1121,13 @@ export default function App({ user, onSignOut, inviteTeamId }) {
       )}
 
       {/* ── ADMIN : VUE OVERVIEW ── */}
-      {tab === 'admin' && isAdmin && (
+      {tab === 'admin' && canManageClub && (
         <AdminScreen
           addManagedPlayer={addManagedPlayer} addingManagedPlayer={addingManagedPlayer} adminData={adminData} adminDeleteMesure={adminDeleteMesure} adminError={adminError}
           adminLoading={adminLoading} adminManagedPlayers={adminManagedPlayers} adminView={adminView} clubs={clubs} coachRosterData={coachRosterData}
-          createClub={createClub} createTeam={createTeam} deleteClub={deleteClub} deleteManagedPlayer={deleteManagedPlayer} deleteTeam={deleteTeam}
-          deleteUserAccount={deleteUserAccount} isAdmin={isAdmin} isMobile={isMobile} loadAdminOverview={loadAdminOverview} loadAdminTeamDetail={loadAdminTeamDetail} managedPlayerDraft={managedPlayerDraft}
-          managedPlayers={managedPlayers} openFiche={openFiche} renderProgrammeCatalog={renderProgrammeCatalog} resendConfirmation={resendConfirmation} selectedAdminTeam={selectedAdminTeam}
+          createClub={createClub} createClubInvite={createClubInvite} createTeam={createTeam} deleteClub={deleteClub} deleteManagedPlayer={deleteManagedPlayer} deleteTeam={deleteTeam}
+          deleteUserAccount={deleteUserAccount} isAdmin={isAdmin} isClubManager={isClubManager} isMobile={isMobile} loadAdminOverview={loadAdminOverview} loadAdminTeamDetail={loadAdminTeamDetail} managedPlayerDraft={managedPlayerDraft}
+          managedPlayers={managedPlayers} myClubId={myClubId} myClubRole={myClubRole} openFiche={openFiche} renderProgrammeCatalog={renderProgrammeCatalog} resendConfirmation={resendConfirmation} selectedAdminTeam={selectedAdminTeam}
           setAddingManagedPlayer={setAddingManagedPlayer} setAdminView={setAdminView} setEditingProg={setEditingProg} setEditingProgramId={setEditingProgramId} setManagedPlayerDraft={setManagedPlayerDraft}
           setPlayerRole={setPlayerRole} setProgDraft={setProgDraft} setSelectedAdminTeam={setSelectedAdminTeam} shareInviteLink={shareInviteLink} teams={teams}
           togglePlayerTeam={togglePlayerTeam} unconfirmedSignups={unconfirmedSignups} uploadTeamPhoto={uploadTeamPhoto} uploadingTeamPhoto={uploadingTeamPhoto} />
