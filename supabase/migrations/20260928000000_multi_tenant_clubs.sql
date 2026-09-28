@@ -153,11 +153,15 @@ BEGIN
   SELECT role INTO caller_role FROM public.club_members
   WHERE club_id = p_club_id AND user_id = auth.uid();
 
-  -- Liste blanche explicite : si caller_role est NULL (appelant non membre
-  -- du club), chaque comparaison ci-dessous vaut false (jamais NULL), donc
-  -- l'ensemble du OR vaut false et l'exception est bien levée. Ne jamais
-  -- réécrire ce contrôle sous forme de négation d'un ET incluant caller_role,
-  -- la logique à trois valeurs de PL/pgSQL le laisserait passer silencieusement.
+  -- caller_role est NULL quand l'appelant n'est membre d'aucun club : en
+  -- SQL, `NULL = 'admin'` vaut NULL (pas false), donc ce cas doit être
+  -- exclu explicitement en premier, avant toute comparaison sur caller_role.
+  -- Ne jamais s'appuyer sur "NULL est traité comme false" dans un OR/AND :
+  -- seul un IF sur caller_role IS NULL / IS NOT NULL est sûr ici.
+  IF caller_role IS NULL AND NOT EXISTS (SELECT 1 FROM public.admins WHERE user_id = auth.uid()) THEN
+    RAISE EXCEPTION 'Accès refusé : réservé aux administrateurs ou dirigeants du club';
+  END IF;
+
   IF NOT (
     EXISTS (SELECT 1 FROM public.admins WHERE user_id = auth.uid())
     OR caller_role = 'admin'
