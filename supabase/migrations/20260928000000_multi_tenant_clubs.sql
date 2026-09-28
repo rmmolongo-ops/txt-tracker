@@ -113,7 +113,9 @@ create index club_invites_club_id_idx on public.club_invites (club_id);
 -- ---------------------------------------------------------------------
 
 -- Vrai si l'appelant est admin/dirigeant du club propriétaire de l'équipe
--- donnée (accès club-level), ou admin plateforme (accès global existant).
+-- donnée (accès club-level). Ne couvre pas l'admin plateforme : celui-ci
+-- garde son accès via les policies "admins" existantes du baseline,
+-- inchangées et déjà additives avec celles-ci.
 CREATE OR REPLACE FUNCTION public.is_club_manager(check_team_id uuid)
  RETURNS boolean
  LANGUAGE sql
@@ -151,9 +153,16 @@ BEGIN
   SELECT role INTO caller_role FROM public.club_members
   WHERE club_id = p_club_id AND user_id = auth.uid();
 
-  IF NOT EXISTS (SELECT 1 FROM public.admins WHERE user_id = auth.uid())
-     AND caller_role IS DISTINCT FROM 'admin'
-     AND NOT (caller_role = 'dirigeant' AND p_role <> 'admin') THEN
+  -- Liste blanche explicite : si caller_role est NULL (appelant non membre
+  -- du club), chaque comparaison ci-dessous vaut false (jamais NULL), donc
+  -- l'ensemble du OR vaut false et l'exception est bien levée. Ne jamais
+  -- réécrire ce contrôle sous forme de négation d'un ET incluant caller_role,
+  -- la logique à trois valeurs de PL/pgSQL le laisserait passer silencieusement.
+  IF NOT (
+    EXISTS (SELECT 1 FROM public.admins WHERE user_id = auth.uid())
+    OR caller_role = 'admin'
+    OR (caller_role = 'dirigeant' AND p_role IN ('dirigeant', 'coach'))
+  ) THEN
     RAISE EXCEPTION 'Accès refusé : réservé aux administrateurs ou dirigeants du club';
   END IF;
 
@@ -190,9 +199,17 @@ BEGIN
     RAISE EXCEPTION 'Ce code d''invitation a expiré';
   END IF;
 
+  -- En cas de nouvelle adhésion au même club, ne jamais rétrograder un rôle
+  -- déjà supérieur (ex. un admin qui redeem par erreur un code coach garde
+  -- son rôle admin) : admin > dirigeant > coach.
   INSERT INTO public.club_members (club_id, user_id, role)
   VALUES (inv.club_id, auth.uid(), inv.role)
-  ON CONFLICT (club_id, user_id) DO UPDATE SET role = excluded.role;
+  ON CONFLICT (club_id, user_id) DO UPDATE SET role =
+    CASE
+      WHEN club_members.role = 'admin' THEN 'admin'
+      WHEN club_members.role = 'dirigeant' AND excluded.role <> 'admin' THEN 'dirigeant'
+      ELSE excluded.role
+    END;
 
   UPDATE public.club_invites SET used_at = now(), used_by = auth.uid() WHERE id = inv.id;
 
