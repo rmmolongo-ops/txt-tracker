@@ -1,11 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-
-const C = {
-  bg: '#0a0e1a', card: '#111827', border: '#1e293b',
-  accent: '#3b82f6', green: '#10b981', red: '#ef4444',
-  text: '#f1f5f9', muted: '#64748b', surface: '#1e293b', gold: '#f59e0b'
-}
+import { C } from '../lib/constants'
 
 const rules = [
   { id: 'length', label: '8 caractères minimum', test: p => p.length >= 8 },
@@ -31,6 +26,7 @@ export default function Auth({ inviteTeamId }) {
   const [clubs, setClubs] = useState([])
   const [teams, setTeams] = useState([])
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
 
   const inviteTeam = teams.find(t => t.id === inviteTeamId)
 
@@ -68,6 +64,10 @@ export default function Auth({ inviteTeamId }) {
     }
     if (mode === 'register' && !profilValid) {
       setError('Merci de renseigner tous les champs en rouge.')
+      return
+    }
+    if (mode === 'register' && !acceptedTerms) {
+      setError("Merci d'accepter les CGU et la politique de confidentialité pour créer un compte.")
       return
     }
     setLoading(true)
@@ -208,6 +208,16 @@ export default function Auth({ inviteTeamId }) {
             </div>
           </div>
         )}
+        {mode === 'register' && (
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 16, fontSize: 12, color: C.muted, cursor: 'pointer' }}>
+            <input type="checkbox" checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)}
+              style={{ marginTop: 2, flexShrink: 0 }} />
+            <span>
+              J'accepte les <a href="/legal/cgu.html" target="_blank" rel="noopener noreferrer" style={{ color: C.accentGlow }}>CGU</a> et la{' '}
+              <a href="/legal/confidentialite.html" target="_blank" rel="noopener noreferrer" style={{ color: C.accentGlow }}>politique de confidentialité</a>.
+            </span>
+          </label>
+        )}
         {error && <div style={{ background: C.red + '20', border: '1px solid ' + C.red + '40', borderRadius: 10, padding: '10px 14px', color: C.red, fontSize: 13, marginBottom: 14 }}>{error}</div>}
         {success && <div style={{ background: C.green + '20', border: '1px solid ' + C.green + '40', borderRadius: 10, padding: '10px 14px', color: C.green, fontSize: 13, marginBottom: 14 }}>{success}</div>}
         <button onClick={handleAuth} disabled={loading}
@@ -217,6 +227,12 @@ export default function Auth({ inviteTeamId }) {
       </div>
       <div style={{ marginTop: 20, fontSize: 12, color: C.muted, textAlign: 'center' }}>
         Application réservée aux joueurs suivis par Coach Ralph 🎯
+      </div>
+      <div style={{ marginTop: 10, fontSize: 11, color: C.muted, textAlign: 'center', display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <a href="/legal/mentions-legales.html" target="_blank" rel="noopener noreferrer" style={{ color: C.muted }}>Mentions légales</a>
+        <a href="/legal/confidentialite.html" target="_blank" rel="noopener noreferrer" style={{ color: C.muted }}>Confidentialité</a>
+        <a href="/legal/cgu.html" target="_blank" rel="noopener noreferrer" style={{ color: C.muted }}>CGU</a>
+        <a href="/legal/cookies.html" target="_blank" rel="noopener noreferrer" style={{ color: C.muted }}>Cookies</a>
       </div>
     </div>
   )
