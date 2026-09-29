@@ -54,6 +54,12 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
     if (error) setError(error.message)
   }
 
+  // Le lien de confirmation d'email doit ramener sur l'invitation (équipe ou club) suivie,
+  // sinon le code est perdu et l'utilisateur n'est jamais rattaché.
+  const signupRedirect = inviteTeamId ? `${window.location.origin}/?invite=${inviteTeamId}`
+    : clubInviteCode ? `${window.location.origin}/?club_invite=${clubInviteCode}`
+    : window.location.origin
+
   const handleAuth = async () => {
     setAttemptedSubmit(true)
     setError(null)
@@ -84,7 +90,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
           email,
           password,
           options: {
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: signupRedirect,
             data: { nom: nom.trim(), prenom: prenom.trim(), club, equipe, poste1: poste1.trim(), poste2: poste2.trim() },
           },
         })
