@@ -251,10 +251,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
           {loading ? '...' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
         </button>
       </div>
-      <div style={{ marginTop: 20, fontSize: 12, color: C.muted, textAlign: 'center' }}>
-        Application réservée aux joueurs suivis par Coach Ralph 🎯
-      </div>
-      <div style={{ marginTop: 10, fontSize: 11, color: C.muted, textAlign: 'center', display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+      <div style={{ marginTop: 20, fontSize: 11, color: C.muted, textAlign: 'center', display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
         <a href="/legal/mentions-legales.html" target="_blank" rel="noopener noreferrer" style={{ color: C.muted }}>Mentions légales</a>
         <a href="/legal/confidentialite.html" target="_blank" rel="noopener noreferrer" style={{ color: C.muted }}>Confidentialité</a>
         <a href="/legal/cgu.html" target="_blank" rel="noopener noreferrer" style={{ color: C.muted }}>CGU</a>
