@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../lib/constants'
+import { teamsOfClub } from '../lib/stats'
 
 const rules = [
   { id: 'length', label: '8 caractères minimum', test: p => p.length >= 8 },
@@ -29,16 +30,26 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
   const [acceptedTerms, setAcceptedTerms] = useState(false)
 
   const inviteTeam = teams.find(t => t.id === inviteTeamId)
+  // Un lien d'invitation d'équipe présélectionne le club de cette équipe.
+  const inviteClubName = clubs.find(c => c.id === inviteTeam?.club_id)?.name || ''
+  const selectedClub = club || inviteClubName
+  const clubTeams = teamsOfClub(teams, clubs, selectedClub, inviteTeamId)
+
+  const changeClub = (name) => {
+    setClub(name)
+    // L'équipe choisie doit appartenir au club : on la réinitialise sinon.
+    setEquipe(prev => teamsOfClub(teams, clubs, name, inviteTeamId).some(t => t.id === prev) ? prev : '')
+  }
 
   useEffect(() => {
     supabase.from('clubs').select('*').order('name').then(({ data }) => { if (data) setClubs(data) })
-    supabase.from('teams').select('id, name').order('name').then(({ data }) => { if (data) setTeams(data) })
+    supabase.from('teams').select('id, name, club_id').order('name').then(({ data }) => { if (data) setTeams(data) })
   }, [])
 
   const passwordValid = rules.every(r => r.test(password))
   // Une invitation club (coach/dirigeant) ne rattache pas à une équipe précise à l'inscription
   // (ce sera fait ensuite depuis l'espace admin du club) : l'équipe n'est alors pas obligatoire.
-  const profilValid = mode === 'login' || (nom.trim() && prenom.trim() && club && poste1.trim() && (equipe || clubInviteCode))
+  const profilValid = mode === 'login' || (nom.trim() && prenom.trim() && selectedClub && poste1.trim() && (equipe || clubInviteCode))
 
   const borderFor = (val) => '1px solid ' + (attemptedSubmit && !String(val).trim() ? C.red : C.border)
 
@@ -91,7 +102,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
           password,
           options: {
             emailRedirectTo: signupRedirect,
-            data: { nom: nom.trim(), prenom: prenom.trim(), club, equipe, poste1: poste1.trim(), poste2: poste2.trim() },
+            data: { nom: nom.trim(), prenom: prenom.trim(), club: selectedClub, equipe, poste1: poste1.trim(), poste2: poste2.trim() },
           },
         })
         if (error) throw error
@@ -193,8 +204,8 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
             </div>
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>CLUB</div>
-              <select value={club} onChange={e => setClub(e.target.value)}
-                style={{ width: '100%', background: C.surface, border: borderFor(club), borderRadius: 10, padding: '10px 12px', color: club ? C.text : C.muted, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}>
+              <select value={selectedClub} onChange={e => changeClub(e.target.value)}
+                style={{ width: '100%', background: C.surface, border: borderFor(selectedClub), borderRadius: 10, padding: '10px 12px', color: selectedClub ? C.text : C.muted, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}>
                 <option value="">Sélectionne ton club...</option>
                 {clubs.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
               </select>
@@ -202,12 +213,12 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
             </div>
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>ÉQUIPE{clubInviteCode ? ' (optionnel)' : ''}</div>
-              <select value={equipe} onChange={e => setEquipe(e.target.value)}
+              <select value={equipe} onChange={e => setEquipe(e.target.value)} disabled={!selectedClub}
                 style={{ width: '100%', background: C.surface, border: clubInviteCode ? '1px solid ' + C.border : borderFor(equipe), borderRadius: 10, padding: '10px 12px', color: equipe ? C.text : C.muted, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}>
-                <option value="">Sélectionne ton équipe...</option>
-                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                <option value="">{selectedClub ? 'Sélectionne ton équipe...' : "Choisis d'abord ton club..."}</option>
+                {clubTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
-              {teams.length === 0 && <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>Aucune équipe disponible pour l'instant, contacte ton coach.</div>}
+              {selectedClub && clubTeams.length === 0 && <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>Aucune équipe disponible dans ce club pour l'instant, contacte ton coach.</div>}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <div style={{ flex: 1 }}>
