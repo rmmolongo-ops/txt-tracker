@@ -93,3 +93,12 @@ export const playerMatchStats = (matches, playerKey) => {
     isAbsent,
   }
 }
+
+// Équipes proposées à l'inscription : uniquement celles du club choisi (par son nom).
+// `keepTeamId` garde une équipe d'invitation qui n'aurait pas encore de club rattaché,
+// sinon le lien d'invitation deviendrait inutilisable.
+export const teamsOfClub = (teams, clubs, clubName, keepTeamId) => {
+  const club = clubs.find(c => c.name === clubName)
+  if (!club) return []
+  return teams.filter(t => t.club_id === club.id || (t.id === keepTeamId && !t.club_id))
+}

@@ -1,4 +1,4 @@
-import { toDateStr, getMonday, latestKpis, kpiProgression, buildRadarData, hasScore, resultFromScore, playerMatchStats, activeAdminTeamId } from './stats'
+import { toDateStr, getMonday, latestKpis, kpiProgression, buildRadarData, hasScore, resultFromScore, playerMatchStats, activeAdminTeamId, teamsOfClub } from './stats'
 
 const KPIS = [
   { id: 'sprint30', lower: true },
@@ -144,5 +144,29 @@ describe('playerMatchStats', () => {
     expect(s.played).toEqual([])
     expect(s.totalButs).toBe(0)
     expect(s.bilan).toEqual({ victoire: 0, nul: 0, defaite: 0 })
+  })
+})
+
+describe('teamsOfClub', () => {
+  const clubs = [{ id: 'c1', name: 'FO Plaisir' }, { id: 'c2', name: 'AS Meudon' }]
+  const teams = [
+    { id: 't1', name: 'U12 B', club_id: 'c1' },
+    { id: 't2', name: 'U14', club_id: 'c2' },
+    { id: 't3', name: 'Sans club', club_id: null },
+  ]
+
+  test('ne renvoie que les équipes du club choisi', () => {
+    expect(teamsOfClub(teams, clubs, 'FO Plaisir').map(t => t.id)).toEqual(['t1'])
+    expect(teamsOfClub(teams, clubs, 'AS Meudon').map(t => t.id)).toEqual(['t2'])
+  })
+
+  test('aucun club choisi ou inconnu : aucune équipe', () => {
+    expect(teamsOfClub(teams, clubs, '')).toEqual([])
+    expect(teamsOfClub(teams, clubs, 'Inconnu')).toEqual([])
+  })
+
+  test('une équipe sans club reste proposée seulement si c\'est l\'équipe de l\'invitation', () => {
+    expect(teamsOfClub(teams, clubs, 'FO Plaisir', 't3').map(t => t.id)).toEqual(['t1', 't3'])
+    expect(teamsOfClub(teams, clubs, 'FO Plaisir', 't2').map(t => t.id)).toEqual(['t1'])
   })
 })

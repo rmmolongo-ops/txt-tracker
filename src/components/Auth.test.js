@@ -5,7 +5,10 @@ import { createRoot } from 'react-dom/client'
 import Auth from './Auth'
 
 jest.mock('../lib/supabase', () => {
-  const tables = { clubs: [{ id: 'c1', name: 'FO Plaisir' }], teams: [{ id: 't1', name: 'U12 B' }] }
+  const tables = {
+    clubs: [{ id: 'c1', name: 'FO Plaisir' }, { id: 'c2', name: 'AS Meudon' }],
+    teams: [{ id: 't1', name: 'U12 B', club_id: 'c1' }, { id: 't2', name: 'U14', club_id: 'c2' }],
+  }
   const query = (table) => ({ select: () => ({ order: () => Promise.resolve({ data: tables[table] || [] }) }) })
   return { supabase: { from: query, auth: { signUp: jest.fn(() => Promise.resolve({ error: null })), signInWithPassword: jest.fn(), signInWithOAuth: jest.fn() } } }
 })
@@ -56,4 +59,32 @@ test('inscription : liens légaux présents, et la case CGU doit être cochée p
   await act(async () => { container.querySelector('input[type="checkbox"]').click() })
   await act(async () => { buttonWithText('Créer mon compte').click() })
   expect(supabase.auth.signUp).toHaveBeenCalledTimes(1)
+})
+
+const teamOptions = () => [...container.querySelectorAll('select')[1].querySelectorAll('option')].filter(o => o.value).map(o => o.value)
+
+test("inscription : l'équipe n'est proposée qu'après le choix du club, et seulement celles de ce club", async () => {
+  await render(<Auth />)
+  await act(async () => { buttonWithText('Inscription').click() })
+  const equipeSelect = () => container.querySelectorAll('select')[1]
+
+  expect(equipeSelect().disabled).toBe(true)
+  expect(teamOptions()).toEqual([])
+
+  await act(async () => { selectValue(container.querySelectorAll('select')[0], 'FO Plaisir') })
+  expect(equipeSelect().disabled).toBe(false)
+  expect(teamOptions()).toEqual(['t1'])
+
+  await act(async () => { selectValue(equipeSelect(), 't1') })
+  await act(async () => { selectValue(container.querySelectorAll('select')[0], 'AS Meudon') })
+  expect(teamOptions()).toEqual(['t2'])
+  expect(equipeSelect().value).toBe('')
+})
+
+test("invitation d'équipe : le club de l'équipe est présélectionné et l'équipe reste choisie", async () => {
+  await render(<Auth inviteTeamId="t1" />)
+  const selects = container.querySelectorAll('select')
+  expect(selects[0].value).toBe('FO Plaisir')
+  expect(teamOptions()).toEqual(['t1'])
+  expect(selects[1].value).toBe('t1')
 })
