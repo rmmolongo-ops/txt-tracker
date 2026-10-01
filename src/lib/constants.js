@@ -9,6 +9,9 @@ export const C = {
 
 export const TEAM_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#14b8a6','#ec4899']
 
+// Couleur dorée qui distingue un match d'un entraînement (calendrier coach).
+export const MATCH_COLOR = '#eab308'
+
 export const DAY_ORDER = ['LUN','MAR','MER','JEU','VEN','SAM','DIM']
 
 export const ROLE_CONFIG = {
