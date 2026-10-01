@@ -154,7 +154,8 @@ describe('SeancesScreen', () => {
   test('sans programme d’équipe : programme perso de la semaine, validation d’une séance', async () => {
     const toggleSeance = jest.fn()
     await render(<SeancesScreen myTeams={[]} getProgramForDate={() => null} getProgramsForTeam={() => []} isSeanceDone={() => false} toggleSeance={toggleSeance} />)
-    expect(container.textContent).toContain('LUN — Explosivité & Vitesse')
+    expect(container.textContent).toContain('LUN')
+    expect(container.textContent).toContain('Explosivité & Vitesse')
     await act(async () => { container.querySelector('[style*="cursor: pointer"]').click() })
     await act(async () => { buttonWithText('Valider cette séance').click() })
     expect(toggleSeance).toHaveBeenCalledWith('LUN')

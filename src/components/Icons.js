@@ -7,6 +7,9 @@ const PATHS = {
   chat: <><path d="M21 12a8 8 0 0 1-11.7 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" /></>,
   equipe: <><circle cx="9" cy="8" r="3.2" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" /><circle cx="17" cy="9" r="2.4" /><path d="M16 14.2c3 0 5 2 5 5.2" /></>,
   bibliotheque: <><path d="M5 4h4v16H5z" /><path d="M11 4h4v16h-4z" /><path d="M17.5 5.5l3.5 1-3.5 13-3.5-1z" /></>,
+  chevron: <><path d="M6 9l6 6 6-6" /></>,
+  check: <><path d="M5 12.5l4.5 4.5L19 7.5" /></>,
+  target: <><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="0.8" /></>,
   admin: <><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z" /><path d="M9 12l2 2 4-4" /></>,
 }
 
