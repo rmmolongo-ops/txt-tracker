@@ -183,13 +183,12 @@ export default function AdminScreen({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 16 }}>
               {KPI_CONFIG.map(kpi => (
                 <div key={kpi.id} onClick={() => setAdminChartKpi(kpi.id)}
-                  style={{ background: adminChartKpi === kpi.id ? kpi.color + '20' : C.bg, borderRadius: 8, padding: '8px 10px', textAlign: 'center', cursor: 'pointer', border: '1px solid ' + (adminChartKpi === kpi.id ? kpi.color + '60' : 'transparent'), transition: 'all 0.15s' }}>
-                  <div style={{ fontSize: 14, marginBottom: 2 }}>{kpi.icon}</div>
-                  <div style={{ fontSize: 9, color: C.muted, marginBottom: 2, lineHeight: 1.2 }}>{kpi.label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: j.kpis?.[kpi.id] != null ? kpi.color : C.muted }}>
+                  style={{ background: adminChartKpi === kpi.id ? C.accent + '22' : C.bg, borderRadius: 8, padding: '8px 10px', textAlign: 'center', cursor: 'pointer', border: '1px solid ' + (adminChartKpi === kpi.id ? C.accent : 'transparent') }}>
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 2, lineHeight: 1.2 }}>{kpi.label}</div>
+                  <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: j.kpis?.[kpi.id] != null ? C.text : C.muted }}>
                     {j.kpis?.[kpi.id] != null ? j.kpis[kpi.id] : '—'}
                   </div>
-                  {j.kpis?.[kpi.id] != null && <div style={{ fontSize: 9, color: C.muted }}>{kpi.unit}</div>}
+                  {j.kpis?.[kpi.id] != null && <div style={{ fontSize: 11, color: C.muted }}>{kpi.unit}</div>}
                 </div>
               ))}
             </div>
@@ -199,7 +198,6 @@ export default function AdminScreen({
                 Graphique — {KPI_CONFIG.find(k => k.id === adminChartKpi)?.label}
               </div>
               {(() => {
-                const kpi = KPI_CONFIG.find(k => k.id === adminChartKpi)
                 const arr = (j.mesuresData || []).filter(m => m.kpi_id === adminChartKpi).sort((a, b) => a.date.localeCompare(b.date))
                 const chartData = arr.slice(-12).map(d => ({ date: d.date.slice(5), val: d.valeur }))
                 if (chartData.length < 2) return (
@@ -210,16 +208,16 @@ export default function AdminScreen({
                 return (
                   <ResponsiveContainer width="100%" height={160}>
                     <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                      <XAxis dataKey="date" tick={{ fontSize: 9, fill: C.muted }} />
-                      <YAxis tick={{ fontSize: 9, fill: C.muted }} />
+                      <CartesianGrid vertical={false} stroke={C.border} />
+                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} width={36} />
                       <Tooltip contentStyle={{ background: C.card, border: '1px solid ' + C.border, borderRadius: 8, color: C.text, fontSize: 11 }} />
-                      <Line type="monotone" dataKey="val" stroke={kpi.color} strokeWidth={2} dot={{ fill: kpi.color, r: 3 }} activeDot={{ r: 5 }} />
+                      <Line type="monotone" dataKey="val" stroke={C.accentGlow} strokeWidth={2} dot={{ fill: C.accentGlow, r: 3 }} activeDot={{ r: 5 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 )
               })()}
-              <div style={{ fontSize: 10, color: C.muted, textAlign: 'center', marginTop: 6 }}>Cliquez sur un KPI pour changer le graphique</div>
+              <div style={{ fontSize: 12, color: C.muted, textAlign: 'center', marginTop: 6 }}>Clique sur un KPI pour changer le graphique</div>
             </div>
 
             {(isAdmin || isClubManager) && (() => {
@@ -237,7 +235,7 @@ export default function AdminScreen({
                       {entries.map(m => (
                         <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid ' + C.border, fontSize: 13 }}>
                           <div style={{ color: C.muted, width: 80 }}>{new Date(m.date).toLocaleDateString('fr-FR')}</div>
-                          <div style={{ flex: 1, fontWeight: 700, color: kpi?.color }}>{m.valeur} <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>{kpi?.unit}</span></div>
+                          <div style={{ flex: 1, fontWeight: 600, color: C.text }}>{m.valeur} <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>{kpi?.unit}</span></div>
                           {mesureToDelete === m.id ? (
                             <div style={{ display: 'flex', gap: 6 }}>
                               <button onClick={() => setMesureToDelete(null)}

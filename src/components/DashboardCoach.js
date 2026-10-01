@@ -187,7 +187,7 @@ export default function DashboardCoach({
                           <button key={i} onClick={() => setViewDay(selected ? null : { dateStr, date: d, dayCode, s, teamId: activeCoachTeam.id })}
                             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '6px 0', borderRadius: 10, border: selected ? '2px solid ' + C.accent : '2px solid transparent', background: isToday && !selected ? C.accent + '15' : 'transparent', cursor: 'pointer' }}>
                             <div style={{ fontSize: 14, fontWeight: isToday ? 800 : 600, color: isToday ? C.accent : C.text }}>{day}</div>
-                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: planned ? s.color : 'transparent' }} />
+                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: planned ? C.accent : 'transparent' }} />
                           </button>
                         )
                       })}
@@ -245,7 +245,7 @@ export default function DashboardCoach({
                                 style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid ' + C.border, color: C.text, fontSize: 13, fontWeight: 700, outline: 'none' }} />
                               <input value={bloc.duree} placeholder="Durée"
                                 onChange={e => { const d = JSON.parse(JSON.stringify(dailySessionDraft)); d.blocs[bi].duree = e.target.value; setDailySessionDraft(d) }}
-                                style={{ background: 'transparent', border: '1px solid ' + C.border, borderRadius: 6, color: viewDay.s.color, fontSize: 11, padding: '2px 6px', outline: 'none', width: 70, textAlign: 'center' }} />
+                                style={{ background: 'transparent', border: '1px solid ' + C.border, borderRadius: 6, color: C.muted, fontSize: 12, padding: '2px 6px', outline: 'none', width: 70, textAlign: 'center' }} />
                               <button onClick={() => setDailySessionDraft(d => ({ ...d, blocs: d.blocs.filter((_, i) => i !== bi) }))}
                                 aria-label="Supprimer ce bloc"
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, display: 'grid', placeItems: 'center' }}><Icon name="trash" size={16} /></button>
@@ -266,7 +266,7 @@ export default function DashboardCoach({
                             Annuler
                           </button>
                           <button onClick={() => handleUpdateDailySession(viewDay.s.id, dailySessionDraft)}
-                            style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: C.green, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                            style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
                             Enregistrer
                           </button>
                         </div>
@@ -274,21 +274,21 @@ export default function DashboardCoach({
                     ) : (
                       <>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                          <div style={{ width: 42, height: 42, borderRadius: 12, background: viewDay.s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{viewDay.s.icon}</div>
+                          <div className="mono" style={{ width: 42, height: 42, borderRadius: 10, background: C.bg, border: '1px solid ' + C.border, color: C.muted, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{viewDay.date.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '').toUpperCase()}</div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 700, fontSize: 14 }}>{viewDay.s.label}</div>
+                            <div style={{ fontWeight: 600, fontSize: 15 }}>{viewDay.s.label}</div>
                             <div style={{ fontSize: 12, color: C.muted }}>{viewDay.s.duration}{viewDay.s.objectif ? ' · ' + viewDay.s.objectif : ''}</div>
                           </div>
                         </div>
                         {(viewDay.s.blocs || []).map((bloc, bi) => (
                           <div key={bi} style={{ marginBottom: 10 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                              <div style={{ fontSize: 13, fontWeight: 700 }}>{bloc.titre}</div>
-                              <div style={{ fontSize: 11, color: viewDay.s.color, background: viewDay.s.color + '20', padding: '2px 8px', borderRadius: 8, fontWeight: 600 }}>{bloc.duree}</div>
+                              <div style={{ fontSize: 14, fontWeight: 600 }}>{bloc.titre}</div>
+                              <div className="mono" style={{ fontSize: 12, color: C.muted }}>{bloc.duree}</div>
                             </div>
                             {(bloc.exercices || []).filter(e => e.trim()).map((ex, ei) => (
                               <div key={ei} style={{ display: 'flex', gap: 8, marginBottom: 4, alignItems: 'flex-start' }}>
-                                <div style={{ width: 6, height: 6, borderRadius: '50%', background: viewDay.s.color, marginTop: 6, flexShrink: 0 }} />
+                                <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.muted, marginTop: 8, flexShrink: 0 }} />
                                 <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.4 }}>{ex}</div>
                               </div>
                             ))}
@@ -490,7 +490,7 @@ export default function DashboardCoach({
                 ) : seanceTemplates.map(t => (
                   <button key={t.id} onClick={() => assignDailySession(dailyPickerFor.teamId, dailyPickerFor.dateStr, t)}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid ' + C.border, background: C.surface, color: C.text, cursor: 'pointer', marginBottom: 8 }}>
-                    <span style={{ fontSize: 20 }}>{t.icon}</span>
+                    {t.icon && <span style={{ fontSize: 20 }}>{t.icon}</span>}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: 13 }}>{t.label}</div>
                       <div style={{ fontSize: 11, color: C.muted }}>{t.duration}{t.objectif ? ' · ' + t.objectif : ''}</div>

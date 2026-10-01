@@ -924,14 +924,14 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
           ) : (
             getProgramsForTeam(teamId).map(prog => {
               const today = toDateStr(new Date())
-              const status = today < prog.start_date ? { label: 'À venir', color: C.gold } : today > prog.end_date ? { label: 'Terminé', color: C.muted } : { label: 'En cours', color: C.green }
+              const status = today < prog.start_date ? { label: 'À venir', color: C.accentGlow } : today > prog.end_date ? { label: 'Terminé', color: C.muted } : { label: 'En cours', color: C.green }
               return (
                 <div key={prog.id} style={{ background: C.card, borderRadius: 14, padding: 16, marginBottom: 10, border: '1px solid ' + C.border }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                        <div style={{ fontWeight: 800, fontSize: 15 }}>{prog.name}</div>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: status.color, background: status.color + '20', padding: '2px 8px', borderRadius: 8 }}>{status.label}</span>
+                        <div style={{ fontWeight: 600, fontSize: 15 }}>{prog.name}</div>
+                        <span style={{ fontSize: 12, fontWeight: 500, color: status.color }}>{status.label}</span>
                       </div>
                       <div style={{ fontSize: 12, color: C.muted }}>
                         Du {new Date(prog.start_date).toLocaleDateString('fr-FR')} au {new Date(prog.end_date).toLocaleDateString('fr-FR')}
@@ -940,10 +940,10 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
                     <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                       <button onClick={() => { setProgDraft({ name: prog.name, start_date: prog.start_date, end_date: prog.end_date, sessions: JSON.parse(JSON.stringify(prog.sessions)) }); setEditingProgramId(prog.id); setEditingProg(true) }}
                         aria-label={`Modifier le programme ${prog.name}`}
-                        style={{ padding: '7px 10px', background: C.surface, color: C.text, border: '1px solid ' + C.border, borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>✏️</button>
+                        style={{ padding: '7px 10px', background: C.surface, color: C.text, border: '1px solid ' + C.border, borderRadius: 8, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="edit" size={16} /></button>
                       <button onClick={() => deleteProgram(prog.id)}
                         aria-label={`Supprimer le programme ${prog.name}`}
-                        style={{ padding: '7px 10px', background: 'transparent', color: C.red, border: '1px solid ' + C.red + '40', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>🗑️</button>
+                        style={{ padding: '7px 10px', background: 'transparent', color: C.red, border: '1px solid ' + C.red + '40', borderRadius: 8, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="trash" size={16} /></button>
                     </div>
                   </div>
                 </div>
@@ -954,67 +954,66 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
       ) : (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>{editingProgramId ? 'Modifier le programme' : 'Nouveau programme'}</div>
+            <div style={{ fontWeight: 600, fontSize: 16 }}>{editingProgramId ? 'Modifier le programme' : 'Nouveau programme'}</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => { setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
-                style={{ padding: '9px 14px', background: C.surface, color: C.muted, border: '1px solid ' + C.border, borderRadius: 10, fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
+                style={{ padding: '9px 14px', background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 10, fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
                 Annuler
               </button>
               <button onClick={() => saveProgram(teamId, progDraft, editingProgramId)}
-                style={{ padding: '9px 18px', background: C.green, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                ✓ Sauvegarder
+                style={{ padding: '9px 18px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+                Sauvegarder
               </button>
             </div>
           </div>
 
           <div style={{ background: C.card, borderRadius: 14, padding: 16, marginBottom: 16, border: '1px solid ' + C.border }}>
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>NOM DU PROGRAMME</div>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Nom du programme</div>
               <input value={progDraft.name} onChange={e => setProgDraft(d => ({ ...d, name: e.target.value }))} placeholder="Ex : Reprise estivale"
                 style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>DÉBUT</div>
+                <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Début</div>
                 <input type="date" value={progDraft.start_date} onChange={e => setProgDraft(d => ({ ...d, start_date: e.target.value }))}
                   style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>FIN</div>
+                <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Fin</div>
                 <input type="date" value={progDraft.end_date} onChange={e => setProgDraft(d => ({ ...d, end_date: e.target.value }))}
                   style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
               </div>
             </div>
           </div>
 
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Semaine type</div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 10, fontWeight: 500 }}>Semaine type</div>
           {progDraft.sessions.map((s, si) => (
-            <div key={s.day} style={{ background: C.card, borderRadius: 16, marginBottom: 12, border: '1px solid ' + s.color + '50', overflow: 'hidden' }}>
+            <div key={s.day} style={{ background: C.card, borderRadius: 14, marginBottom: 12, border: '1px solid ' + C.border, overflow: 'hidden' }}>
               {/* En-tête du jour */}
-              <div style={{ background: s.color + '18', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 24, flexShrink: 0 }}>{s.icon}</span>
+              <div style={{ borderBottom: '1px solid ' + C.border, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span className="mono" style={{ width: 42, height: 42, borderRadius: 10, background: C.bg, border: '1px solid ' + C.border, color: C.muted, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{s.day}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: s.color, fontWeight: 700 }}>{s.day}</div>
                   <input value={s.label}
                     onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].label = e.target.value; setProgDraft(d) }}
-                    style={{ background: 'transparent', border: 'none', borderBottom: '1px solid ' + s.color + '60', color: C.text, fontSize: 15, fontWeight: 700, outline: 'none', width: '100%' }} />
+                    style={{ background: 'transparent', border: 'none', borderBottom: '1px solid ' + C.border, color: C.text, fontSize: 15, fontWeight: 600, outline: 'none', width: '100%' }} />
                 </div>
                 <input value={s.duration}
                   onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].duration = e.target.value; setProgDraft(d) }}
-                  style={{ background: 'transparent', border: '1px solid ' + s.color + '50', borderRadius: 6, color: s.color, fontSize: 12, padding: '4px 8px', outline: 'none', width: 65, textAlign: 'center', fontWeight: 700 }} />
+                  style={{ background: 'transparent', border: '1px solid ' + C.border, borderRadius: 6, color: C.muted, fontSize: 12, padding: '4px 8px', outline: 'none', width: 65, textAlign: 'center', fontWeight: 500 }} />
               </div>
 
               {/* Objectif + blocs */}
               <div style={{ padding: '10px 16px 16px' }}>
                 {seanceTemplates.length > 0 && (
                   <button onClick={() => setLibraryPickerFor({ si })}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid ' + s.color + '40', background: 'transparent', color: s.color, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                    📚 Charger depuis la bibliothèque
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid ' + C.border, background: 'transparent', color: C.accentGlow, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
+                    Charger depuis la bibliothèque
                   </button>
                 )}
                 <input value={s.objectif}
                   onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].objectif = e.target.value; setProgDraft(d) }}
-                  style={{ width: '100%', background: s.color + '10', border: '1px solid ' + s.color + '30', borderRadius: 8, padding: '7px 12px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 12 }}
+                  style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '7px 12px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 12 }}
                   placeholder="Objectif de la séance..." />
 
                 {s.blocs.map((bloc, bi) => (
@@ -1022,10 +1021,10 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <input value={bloc.titre}
                         onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].blocs[bi].titre = e.target.value; setProgDraft(d) }}
-                        style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid ' + C.border, color: C.text, fontSize: 13, fontWeight: 700, outline: 'none', marginRight: 10 }} />
+                        style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid ' + C.border, color: C.text, fontSize: 14, fontWeight: 600, outline: 'none', marginRight: 10 }} />
                       <input value={bloc.duree}
                         onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].blocs[bi].duree = e.target.value; setProgDraft(d) }}
-                        style={{ background: 'transparent', border: '1px solid ' + s.color + '40', borderRadius: 6, color: s.color, fontSize: 11, padding: '2px 6px', outline: 'none', width: 70, textAlign: 'center' }} />
+                        style={{ background: 'transparent', border: '1px solid ' + C.border, borderRadius: 6, color: C.muted, fontSize: 12, padding: '2px 6px', outline: 'none', width: 70, textAlign: 'center' }} />
                     </div>
                     <textarea value={bloc.exercices.join('\n')}
                       onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].blocs[bi].exercices = e.target.value.split('\n'); setProgDraft(d) }}
@@ -1040,13 +1039,13 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
           {libraryPickerFor && (
             <div onClick={() => setLibraryPickerFor(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
               <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 20, maxWidth: 420, width: '100%', maxHeight: '80vh', overflowY: 'auto', border: '1px solid ' + C.border }}>
-                <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 14 }}>Choisir une séance de la bibliothèque</div>
+                <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 14 }}>Choisir une séance de la bibliothèque</div>
                 {seanceTemplates.map(t => (
                   <button key={t.id} onClick={() => applyTemplateToDay(t)}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid ' + C.border, background: C.surface, color: C.text, cursor: 'pointer', marginBottom: 8 }}>
-                    <span style={{ fontSize: 20 }}>{t.icon}</span>
+                    {t.icon && <span style={{ fontSize: 20 }}>{t.icon}</span>}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13 }}>{t.label}</div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{t.label}</div>
                       <div style={{ fontSize: 11, color: C.muted }}>{t.duration}{t.objectif ? ' · ' + t.objectif : ''}</div>
                     </div>
                   </button>
@@ -1070,11 +1069,11 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
       {tab === 'dashboard' && (
         <div>
           {hasLeadership && hasPlayerRole && (
-            <div style={{ display: 'flex', background: C.surface, borderRadius: 12, padding: 4, marginBottom: 16, gap: 2 }}>
-              {[{ id: 'joueur', icon: '⚽', label: 'Vue Joueur' }, { id: 'coach', icon: '🧠', label: 'Vue Coach' }].map(v => (
+            <div style={{ display: 'flex', borderRadius: 10, padding: 3, marginBottom: 20, gap: 2, border: '1px solid ' + C.border }}>
+              {[{ id: 'joueur', label: 'Vue Joueur' }, { id: 'coach', label: 'Vue Coach' }].map(v => (
                 <button key={v.id} onClick={() => setHomeView(v.id)}
-                  style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 14, background: homeViewMode === v.id ? C.accent : 'transparent', color: homeViewMode === v.id ? '#fff' : C.muted, transition: 'all 0.2s' }}>
-                  {v.icon} {v.label}
+                  style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500, fontSize: 14, background: homeViewMode === v.id ? C.surface : 'transparent', color: homeViewMode === v.id ? C.text : C.muted }}>
+                  {v.label}
                 </button>
               ))}
             </div>
