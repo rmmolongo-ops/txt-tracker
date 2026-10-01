@@ -106,7 +106,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
           },
         })
         if (error) throw error
-        setSuccess('Compte créé ! Vérifie ton email pour confirmer.')
+        setSuccess('Compte créé. Vérifie ton email pour confirmer.')
       }
     } catch (e) {
       setError(e.message)
@@ -115,33 +115,33 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
   }
 
   return (
-    <div style={{ background: C.bg, minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20, fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
-      <div style={{ marginBottom: 40, textAlign: 'center' }}>
-        <div style={{ width: 80, height: 80, borderRadius: 20, background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, margin: '0 auto 16px', boxShadow: '0 0 40px rgba(59,130,246,0.4)' }}>⚽</div>
-        <div style={{ fontSize: 28, fontWeight: 900, color: C.text, letterSpacing: -1 }}>TxT Tracker</div>
-        <div style={{ fontSize: 14, color: C.gold, fontWeight: 600, marginTop: 4 }}>Talent × Travail × Temps</div>
+    <div style={{ background: C.bg, minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ marginBottom: 32, textAlign: 'center' }}>
+        <div style={{ width: 64, height: 64, borderRadius: 16, background: C.card, border: '1px solid ' + C.border, color: C.accentGlow, display: 'grid', placeItems: 'center', fontSize: 20, fontWeight: 600, margin: '0 auto 16px' }}>TxT</div>
+        <h1 style={{ fontSize: 28, fontWeight: 600, color: C.text, letterSpacing: '-0.03em' }}>TxT Tracker</h1>
+        <div style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>Talent × Travail × Temps</div>
       </div>
-      <div style={{ background: C.card, borderRadius: 20, padding: 28, width: '100%', maxWidth: 380, border: '1px solid ' + C.border }}>
-        <div style={{ display: 'flex', background: C.surface, borderRadius: 12, padding: 4, marginBottom: 24 }}>
+      <div style={{ background: C.card, borderRadius: 16, padding: 28, width: '100%', maxWidth: 380, border: '1px solid ' + C.border }}>
+        <div style={{ display: 'flex', borderRadius: 10, padding: 3, marginBottom: 24, border: '1px solid ' + C.border }}>
           {['login', 'register'].map(m => (
             <button key={m} onClick={() => switchMode(m)}
-              style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 14, background: mode === m ? C.accent : 'transparent', color: mode === m ? '#fff' : C.muted, transition: 'all 0.2s' }}>
+              style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500, fontSize: 14, background: mode === m ? C.surface : 'transparent', color: mode === m ? C.text : C.muted }}>
               {m === 'login' ? 'Connexion' : 'Inscription'}
             </button>
           ))}
         </div>
         {inviteTeam && (
           <div style={{ background: C.accent + '15', border: '1px solid ' + C.accent + '40', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: C.text }}>
-            🎟️ Invitation à rejoindre l'équipe <strong>{inviteTeam.name}</strong>
+            Invitation à rejoindre l'équipe <strong>{inviteTeam.name}</strong>
           </div>
         )}
         {clubInviteCode && (
           <div style={{ background: C.accent + '15', border: '1px solid ' + C.accent + '40', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: C.text }}>
-            🎟️ Invitation à rejoindre l'équipe encadrante d'un club
+            Invitation à rejoindre l'équipe encadrante d'un club
           </div>
         )}
         <button onClick={handleGoogleAuth} type="button"
-          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 13, borderRadius: 12, border: '1px solid ' + C.border, cursor: 'pointer', fontWeight: 700, fontSize: 15, background: '#fff', color: '#1f2937', marginBottom: 18 }}>
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 13, borderRadius: 10, border: '1px solid ' + C.border, cursor: 'pointer', fontWeight: 500, fontSize: 15, background: '#fff', color: '#1f2937', marginBottom: 18 }}>
           <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
             <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.56 2.7-3.86 2.7-6.62z"/>
             <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.98v2.33A9 9 0 0 0 9 18z"/>
@@ -152,25 +152,25 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
           <div style={{ flex: 1, height: 1, background: C.border }} />
-          <div style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>OU</div>
+          <div style={{ fontSize: 12, color: C.muted }}>ou</div>
           <div style={{ flex: 1, height: 1, background: C.border }} />
         </div>
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 6, fontWeight: 600 }}>EMAIL</div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Email</div>
           <input type="email" placeholder="ton@email.com" value={email} onChange={e => setEmail(e.target.value)}
             style={{ width: '100%', background: C.surface, border: borderFor(email), borderRadius: 10, padding: '12px 14px', color: C.text, fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
         </div>
         <div style={{ marginBottom: mode === 'register' ? 12 : 20 }}>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 6, fontWeight: 600 }}>MOT DE PASSE</div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Mot de passe</div>
           <div style={{ position: 'relative' }}>
             <input type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password}
               onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAuth()}
-              style={{ width: '100%', background: C.surface, border: borderFor(password), borderRadius: 10, padding: '12px 44px 12px 14px', color: C.text, fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
+              style={{ width: '100%', background: C.surface, border: borderFor(password), borderRadius: 10, padding: '12px 84px 12px 14px', color: C.text, fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
             <button onClick={() => setShowPassword(v => !v)}
               aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-              style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: C.muted, padding: 0 }}>
-              {showPassword ? '🙈' : '👁️'}
+              style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: C.accentGlow, padding: 0 }}>
+              {showPassword ? 'Masquer' : 'Afficher'}
             </button>
           </div>
         </div>
@@ -189,21 +189,21 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
         )}
         {mode === 'register' && (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Profil joueur</div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 10, fontWeight: 500 }}>Profil joueur</div>
             <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>NOM</div>
+                <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Nom</div>
                 <input type="text" placeholder="Nom" value={nom} onChange={e => setNom(e.target.value)}
                   style={{ width: '100%', background: C.surface, border: borderFor(nom), borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>PRÉNOM</div>
+                <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Prénom</div>
                 <input type="text" placeholder="Prénom" value={prenom} onChange={e => setPrenom(e.target.value)}
                   style={{ width: '100%', background: C.surface, border: borderFor(prenom), borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
               </div>
             </div>
             <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>CLUB</div>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Club</div>
               <select value={selectedClub} onChange={e => changeClub(e.target.value)}
                 style={{ width: '100%', background: C.surface, border: borderFor(selectedClub), borderRadius: 10, padding: '10px 12px', color: selectedClub ? C.text : C.muted, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}>
                 <option value="">Sélectionne ton club...</option>
@@ -212,7 +212,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
               {clubs.length === 0 && <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>Aucun club disponible pour l'instant, contacte ton coach.</div>}
             </div>
             <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>ÉQUIPE{clubInviteCode ? ' (optionnel)' : ''}</div>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Équipe{clubInviteCode ? ' (optionnel)' : ''}</div>
               <select value={equipe} onChange={e => setEquipe(e.target.value)} disabled={!selectedClub}
                 style={{ width: '100%', background: C.surface, border: clubInviteCode ? '1px solid ' + C.border : borderFor(equipe), borderRadius: 10, padding: '10px 12px', color: equipe ? C.text : C.muted, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}>
                 <option value="">{selectedClub ? 'Sélectionne ton équipe...' : "Choisis d'abord ton club..."}</option>
@@ -222,12 +222,12 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>POSTE 1</div>
+                <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Poste 1</div>
                 <input type="text" placeholder="Ex: Milieu Gauche" value={poste1} onChange={e => setPoste1(e.target.value)}
                   style={{ width: '100%', background: C.surface, border: borderFor(poste1), borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontWeight: 600 }}>POSTE 2</div>
+                <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Poste 2</div>
                 <input type="text" placeholder="Ex: Attaquant" value={poste2} onChange={e => setPoste2(e.target.value)}
                   style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
               </div>
@@ -244,17 +244,17 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
             </span>
           </label>
         )}
-        {error && <div style={{ background: C.red + '20', border: '1px solid ' + C.red + '40', borderRadius: 10, padding: '10px 14px', color: C.red, fontSize: 13, marginBottom: 14 }}>{error}</div>}
+        {error && <div role="alert" style={{ background: C.red + '20', border: '1px solid ' + C.red + '40', borderRadius: 10, padding: '10px 14px', color: C.red, fontSize: 13, marginBottom: 14 }}>{error}</div>}
         {success && <div style={{ background: C.green + '20', border: '1px solid ' + C.green + '40', borderRadius: 10, padding: '10px 14px', color: C.green, fontSize: 13, marginBottom: 14 }}>{success}</div>}
         <button onClick={handleAuth} disabled={loading}
-          style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 800, fontSize: 16, background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', transition: 'all 0.2s', opacity: loading ? 0.7 : 1 }}>
+          style={{ width: '100%', padding: 13, borderRadius: 10, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 16, background: C.accent, color: '#fff', opacity: loading ? 0.7 : 1 }}>
           {loading ? '...' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
         </button>
       </div>
       <div style={{ marginTop: 20, fontSize: 12, color: C.muted, textAlign: 'center' }}>
         Suivi de performance pour les joueurs de ton club
       </div>
-      <div style={{ marginTop: 10, fontSize: 11, color: C.muted, textAlign: 'center', display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+      <div style={{ marginTop: 10, fontSize: 12, color: C.muted, textAlign: 'center', display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
         <a href="/legal/mentions-legales.html" target="_blank" rel="noopener noreferrer" style={{ color: C.muted }}>Mentions légales</a>
         <a href="/legal/confidentialite.html" target="_blank" rel="noopener noreferrer" style={{ color: C.muted }}>Confidentialité</a>
         <a href="/legal/cgu.html" target="_blank" rel="noopener noreferrer" style={{ color: C.muted }}>CGU</a>

@@ -11,10 +11,20 @@
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/icon-192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>TxT Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600&display=swap" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { background: #0a0e1a; -webkit-tap-highlight-color: transparent; }
+      body { background: #0a0e1a; -webkit-tap-highlight-color: transparent; font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
       input, button { font-family: inherit; }
+      /* Retours d'interaction globaux : les styles en ligne ne peuvent pas porter :hover/:active/:focus-visible. */
+      button, [role="button"] { transition: transform .15s ease, filter .15s ease, background-color .15s ease; }
+      button:not(:disabled):hover, [role="button"]:hover { filter: brightness(1.12); }
+      button:not(:disabled):active, [role="button"]:active { transform: scale(.98); }
+      button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid #6ea0f5; outline-offset: 2px; }
+      .mono { font-family: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace; font-variant-numeric: tabular-nums; }
+      @media (prefers-reduced-motion: reduce) { button, [role="button"] { transition: none; } }
       @media print {
         body * { visibility: hidden; }
         #fiche-joueur-print, #fiche-joueur-print * { visibility: visible; }

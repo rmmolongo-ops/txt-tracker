@@ -48,7 +48,7 @@ test('affiche l’identité, les KPIs et le bilan de matchs du joueur', async ()
   expect(text).toContain('Kenji Lahib')
   expect(text).toContain('"KL"')
   expect(text).toContain('Match vs Meudon')
-  expect(text).toContain('⚽ 2') // ses buts
+  expect(text).toContain('2 buts') // ses buts
   expect(text).toContain('Absent') // absent du 2e match
   expect(text).toContain('▲4%') // progression sprint : 5.0 → 4.8
 })

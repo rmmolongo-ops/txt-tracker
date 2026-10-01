@@ -135,12 +135,12 @@ describe('StatsScreen', () => {
   ]
   const getMesuresForKpi = (id) => mesures.filter(m => m.kpi_id === id)
 
-  test('suppression d’une mesure en deux temps (🗑️ puis confirmation)', async () => {
+  test('suppression d’une mesure en deux temps (icône corbeille puis confirmation)', async () => {
     const onDeleteMesure = jest.fn(() => Promise.resolve())
     await render(<StatsScreen isMobile={false} mesures={mesures} selectedKpi="sprint30" setSelectedKpi={jest.fn()}
       getLatest={() => 4.8} getMesuresForKpi={getMesuresForKpi} getProgress={() => '4.0'} onDeleteMesure={onDeleteMesure} />)
     expect(container.textContent).toContain('4.8 sec')
-    const trash = [...container.querySelectorAll('button')].filter(b => b.textContent === '🗑️')
+    const trash = [...container.querySelectorAll('button')].filter(b => b.getAttribute('aria-label') === 'Supprimer cette mesure')
     expect(trash).toHaveLength(2)
     await act(async () => { trash[0].click() })
     expect(onDeleteMesure).not.toHaveBeenCalled()
@@ -154,7 +154,8 @@ describe('SeancesScreen', () => {
   test('sans programme d’équipe : programme perso de la semaine, validation d’une séance', async () => {
     const toggleSeance = jest.fn()
     await render(<SeancesScreen myTeams={[]} getProgramForDate={() => null} getProgramsForTeam={() => []} isSeanceDone={() => false} toggleSeance={toggleSeance} />)
-    expect(container.textContent).toContain('LUN — Explosivité & Vitesse')
+    expect(container.textContent).toContain('LUN')
+    expect(container.textContent).toContain('Explosivité & Vitesse')
     await act(async () => { container.querySelector('[style*="cursor: pointer"]').click() })
     await act(async () => { buttonWithText('Valider cette séance').click() })
     expect(toggleSeance).toHaveBeenCalledWith('LUN')

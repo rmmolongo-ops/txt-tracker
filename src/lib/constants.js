@@ -20,16 +20,16 @@ export const ROLE_CONFIG = {
 }
 
 export const KPI_CONFIG = [
-  { id: 'sprint30', label: 'Sprint 30m', unit: 'sec', icon: '⚡', color: '#f59e0b', lower: true, category: 'physique' },
-  { id: 'sprint10', label: 'Sprint 10m', unit: 'sec', icon: '💥', color: '#ef4444', lower: true, category: 'physique' },
-  { id: 'jonglerie_g', label: 'Jonglerie Gauche', unit: 'touches', icon: '🦶', color: '#3b82f6', lower: false, category: 'technique' },
-  { id: 'jonglerie_d', label: 'Jonglerie Droite', unit: 'touches', icon: '👟', color: '#8b5cf6', lower: false, category: 'technique' },
-  { id: 'jonglerie_alt', label: 'Jonglerie Alternée', unit: 'touches', icon: '🔀', color: '#0ea5e9', lower: false, category: 'technique' },
-  { id: 'precision', label: 'Précision Frappe', unit: '/10', icon: '🎯', color: '#10b981', lower: false, category: 'technique' },
-  { id: 'slalom', label: 'Slalom 20m', unit: 'sec', icon: '🔄', color: '#f97316', lower: true, category: 'technique' },
-  { id: 'scan', label: 'Scan Ballon/Mvt', unit: '/10', icon: '👁️', color: '#14b8a6', lower: false, category: 'technique' },
-  { id: 'motivation', label: 'Motivation', unit: '/10', icon: '🔥', color: '#ec4899', lower: false, category: 'mental' },
-  { id: 'sommeil', label: 'Qualité Sommeil', unit: '/10', icon: '😴', color: '#06b6d4', lower: false, category: 'mental' },
+  { id: 'sprint30', label: 'Sprint 30m', unit: 'sec', lower: true, category: 'physique' },
+  { id: 'sprint10', label: 'Sprint 10m', unit: 'sec', lower: true, category: 'physique' },
+  { id: 'jonglerie_g', label: 'Jonglerie Gauche', unit: 'touches', lower: false, category: 'technique' },
+  { id: 'jonglerie_d', label: 'Jonglerie Droite', unit: 'touches', lower: false, category: 'technique' },
+  { id: 'jonglerie_alt', label: 'Jonglerie Alternée', unit: 'touches', lower: false, category: 'technique' },
+  { id: 'precision', label: 'Précision Frappe', unit: '/10', lower: false, category: 'technique' },
+  { id: 'slalom', label: 'Slalom 20m', unit: 'sec', lower: true, category: 'technique' },
+  { id: 'scan', label: 'Scan Ballon/Mvt', unit: '/10', lower: false, category: 'technique' },
+  { id: 'motivation', label: 'Motivation', unit: '/10', lower: false, category: 'mental' },
+  { id: 'sommeil', label: 'Qualité Sommeil', unit: '/10', lower: false, category: 'mental' },
 ]
 
 export const SESSIONS = [

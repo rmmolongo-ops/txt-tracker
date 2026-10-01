@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { C, SESSIONS, DAY_ORDER } from '../lib/constants'
 import { toDateStr, getMonday } from '../lib/stats'
 import { renderSessionBlocs } from './SessionBlocs'
+import Icon from './Icons'
 
 // Onglet Programme : semaine d'entraînement du joueur (programmes d'équipe et programme perso), validation des séances.
 
@@ -14,20 +15,20 @@ export default function SeancesScreen({ myTeams, getProgramForDate, getProgramsF
   if (myTeamsWithProgram.length === 0) {
     return (
       <div>
-        <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Programme de la semaine</div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 12, fontWeight: 500 }}>Programme de la semaine</div>
         {SESSIONS.map(s => {
           const done = isSeanceDone(s.day); const expanded = expandedDay === s.day
           return (
-            <div key={s.day} style={{ marginBottom: 10, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
+            <div key={s.day} style={{ marginBottom: 10, borderRadius: 14, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '50' : expanded ? C.accent + '60' : C.border) }}>
               <div onClick={() => setExpandedDay(expanded ? null : s.day)} role="button" tabIndex={0}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedDay(expanded ? null : s.day) } }}
-                style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '18' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                <div style={{ width: 42, height: 42, borderRadius: 12, background: done ? C.green + '30' : s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
+                style={{ background: done ? C.green + '14' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                <div className="mono" style={{ width: 42, height: 42, borderRadius: 10, background: C.bg, border: '1px solid ' + (done ? C.green + '50' : C.border), color: done ? C.green : C.muted, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{done ? <Icon name="check" size={18} /> : s.day}</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>{s.day} — {s.label}</div>
-                  <div style={{ fontSize: 12, color: C.muted }}>{s.duration} • {s.blocs.length} blocs</div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{s.label}</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>{s.duration} · {s.blocs.length} blocs</div>
                 </div>
-                <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
+                <Icon name="chevron" size={18} style={{ color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }} />
               </div>
               {renderSessionBlocs(s, expanded, done, () => toggleSeance(s.day))}
             </div>
@@ -60,7 +61,7 @@ export default function SeancesScreen({ myTeams, getProgramForDate, getProgramsF
         <button onClick={() => canGoPrev && setSeancesWeekOffset(o => o - 1)} disabled={!canGoPrev}
           style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid ' + C.border, background: C.card, color: canGoPrev ? C.text : C.border, fontSize: 16, cursor: canGoPrev ? 'pointer' : 'default' }}>‹</button>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>
+          <div className="mono" style={{ fontSize: 13, fontWeight: 600 }}>
             {weekDates[0].date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} — {weekDates[6].date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
           </div>
           {seancesWeekOffset !== 0 && (
@@ -83,10 +84,9 @@ export default function SeancesScreen({ myTeams, getProgramForDate, getProgramsF
 
         if (entries.length === 0) {
           return (
-            <div key={dateStr} style={{ marginBottom: 10, borderRadius: 16, border: '1px dashed ' + C.border, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, opacity: 0.55 }}>
-              <div style={{ fontSize: 20 }}>💤</div>
+            <div key={dateStr} style={{ marginBottom: 10, borderRadius: 14, border: '1px dashed ' + C.border, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, opacity: 0.6 }}>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 13, textTransform: 'capitalize' }}>{dateLabel}</div>
+                <div style={{ fontWeight: 500, fontSize: 13, textTransform: 'capitalize' }}>{dateLabel}</div>
                 <div style={{ fontSize: 12, color: C.muted }}>Hors programme</div>
               </div>
             </div>
@@ -95,27 +95,27 @@ export default function SeancesScreen({ myTeams, getProgramForDate, getProgramsF
 
         return (
           <div key={dateStr} style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 12, color: C.muted, fontWeight: 700, marginBottom: 6, textTransform: 'capitalize' }}>{dateLabel}</div>
+            <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 6, textTransform: 'capitalize' }}>{dateLabel}</div>
             {entries.map(({ team, program, s }) => {
               const cardKey = dateStr + '_' + team.id
               const done = isSeanceDone(day, dateStr, team.id); const expanded = expandedDay === cardKey
               return (
-                <div key={cardKey} style={{ marginBottom: 10, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '60' : expanded ? s.color + '50' : C.border) }}>
+                <div key={cardKey} style={{ marginBottom: 10, borderRadius: 14, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '50' : expanded ? C.accent + '60' : C.border) }}>
                   <div onClick={() => setExpandedDay(expanded ? null : cardKey)} role="button" tabIndex={0}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedDay(expanded ? null : cardKey) } }}
-                    style={{ background: done ? 'linear-gradient(135deg, #064e3b, #065f46)' : expanded ? s.color + '18' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                    <div style={{ width: 42, height: 42, borderRadius: 12, background: done ? C.green + '30' : s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
+                    style={{ background: done ? C.green + '14' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                    <div className="mono" style={{ width: 42, height: 42, borderRadius: 10, background: C.bg, border: '1px solid ' + (done ? C.green + '50' : C.border), color: done ? C.green : C.muted, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{done ? <Icon name="check" size={18} /> : s.day}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>{s.label}</div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{s.label}</div>
                       <div style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
                         <span>{s.duration}</span>
-                        <span>•</span>
-                        <span style={{ color: team.color, fontWeight: 700 }}>{team.name}</span>
-                        <span>•</span>
+                        <span aria-hidden="true">·</span>
+                        <span style={{ color: C.text, fontWeight: 500 }}>{team.name}</span>
+                        <span aria-hidden="true">·</span>
                         <span>{program.name}</span>
                       </div>
                     </div>
-                    <div style={{ fontSize: 18, color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
+                    <Icon name="chevron" size={18} style={{ color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }} />
                   </div>
                   {renderSessionBlocs(s, expanded, done, () => toggleSeance(day, dateStr, team.id))}
                 </div>

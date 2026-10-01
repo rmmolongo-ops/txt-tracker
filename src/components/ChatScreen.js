@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../lib/constants'
+import Icon from './Icons'
 
 // Onglet Chat : tchat d'équipe en temps réel (Supabase Realtime), une conversation par équipe.
 export default function ChatScreen({ user, profil, isAdmin, isMobile, myTeams, chatTeamId, onSelectTeam, unreadCounts, markChatRead, showToast }) {
@@ -41,7 +42,7 @@ export default function ChatScreen({ user, profil, isAdmin, isMobile, myTeams, c
       sender_surnom: profil.surnom || '',
       sender_photo_url: profil.photo_url || '',
     })
-    if (error) showToast('❌ ' + error.message)
+    if (error) showToast('Message non envoyé : ' + error.message)
   }
 
   const deleteChatMessage = async (id) => {
@@ -51,8 +52,8 @@ export default function ChatScreen({ user, profil, isAdmin, isMobile, myTeams, c
 
   if (myTeams.length === 0) {
     return (
-      <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
-        <div style={{ fontSize: 32, marginBottom: 10 }}>💬</div>
+      <div style={{ border: '1px dashed ' + C.border, borderRadius: 14, padding: '32px 20px', textAlign: 'center', color: C.muted, fontSize: 14 }}>
+        <Icon name="chat" size={28} style={{ margin: '0 auto 12px' }} />
         Rejoins une équipe pour accéder à son tchat
       </div>
     )
@@ -68,10 +69,10 @@ export default function ChatScreen({ user, profil, isAdmin, isMobile, myTeams, c
             const unread = unreadCounts[team.id] || 0
             return (
               <button key={team.id} onClick={() => onSelectTeam(team.id)}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 13, cursor: 'pointer' }}>
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 8, border: '1px solid ' + (sel ? C.accent : C.border), background: sel ? C.accent + '22' : 'transparent', color: sel ? C.accentGlow : C.muted, fontWeight: 500, fontSize: 13, cursor: 'pointer' }}>
                 {team.name}
                 {unread > 0 && (
-                  <span style={{ background: C.red, color: '#fff', fontSize: 10, fontWeight: 800, borderRadius: 8, padding: '1px 6px', minWidth: 14, textAlign: 'center', lineHeight: '13px' }}>{unread > 9 ? '9+' : unread}</span>
+                  <span style={{ background: C.red, color: '#fff', fontSize: 11, fontWeight: 600, borderRadius: 8, padding: '1px 6px', minWidth: 16, textAlign: 'center', lineHeight: '14px' }}>{unread > 9 ? '9+' : unread}</span>
                 )}
               </button>
             )
@@ -82,29 +83,29 @@ export default function ChatScreen({ user, profil, isAdmin, isMobile, myTeams, c
       <div style={{ maxHeight: isMobile ? '50vh' : 500, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, padding: '4px 2px', marginBottom: 12 }}>
         {chatMessages.length === 0 && (
           <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, marginTop: 30 }}>
-            Aucun message pour l'instant — lance la discussion !
+            Aucun message pour l'instant. Écris le premier.
           </div>
         )}
         {chatMessages.map(m => {
           const mine = m.user_id === user.id
           return (
             <div key={m.id} style={{ display: 'flex', flexDirection: mine ? 'row-reverse' : 'row', gap: 8, alignItems: 'flex-end' }}>
-              <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>
-                {m.sender_photo_url ? <img src={m.sender_photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+              <div style={{ width: 30, height: 30, borderRadius: 8, overflow: 'hidden', background: C.card, border: '1px solid ' + C.border, color: C.accentGlow, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+                {m.sender_photo_url ? <img src={m.sender_photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((m.sender_prenom || '?').charAt(0) + (m.sender_nom || '').charAt(0)).toUpperCase()}
               </div>
               <div style={{ maxWidth: '72%' }}>
                 {!mine && <div style={{ fontSize: 11, color: C.muted, marginBottom: 2, marginLeft: 4 }}>{m.sender_prenom}{m.sender_surnom ? ' "' + m.sender_surnom + '"' : ''}</div>}
-                <div style={{ background: mine ? C.accent : C.card, color: mine ? '#fff' : C.text, border: mine ? 'none' : '1px solid ' + C.border, borderRadius: 14, padding: '8px 12px', fontSize: 14, lineHeight: 1.4, wordBreak: 'break-word' }}>
+                <div style={{ background: mine ? C.accent : C.card, color: mine ? '#fff' : C.text, border: mine ? 'none' : '1px solid ' + C.border, borderRadius: mine ? '14px 14px 4px 14px' : '14px 14px 14px 4px', padding: '8px 12px', fontSize: 14, lineHeight: 1.45, wordBreak: 'break-word' }}>
                   {m.content}
                 </div>
-                <div style={{ fontSize: 10, color: C.muted, marginTop: 2, textAlign: mine ? 'right' : 'left' }}>
+                <div className="mono" style={{ fontSize: 11, color: C.muted, marginTop: 2, textAlign: mine ? 'right' : 'left' }}>
                   {new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
               {(mine || isAdmin) && (
                 <button onClick={() => deleteChatMessage(m.id)}
                   aria-label="Supprimer ce message"
-                  style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 12, opacity: 0.5, flexShrink: 0 }}>🗑️</button>
+                  style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4, flexShrink: 0, display: 'grid', placeItems: 'center' }}><Icon name="trash" size={15} /></button>
               )}
             </div>
           )
@@ -115,9 +116,10 @@ export default function ChatScreen({ user, profil, isAdmin, isMobile, myTeams, c
         <input value={chatInput} onChange={e => setChatInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && sendChatMessage()}
           placeholder={'Écrire à ' + (activeTeam?.name || '...')}
-          style={{ flex: 1, background: C.surface, border: '1px solid ' + C.border, borderRadius: 20, padding: '10px 16px', color: C.text, fontSize: 14, outline: 'none', minWidth: 0 }} />
+          style={{ flex: 1, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', minWidth: 0 }} />
         <button onClick={sendChatMessage} disabled={!chatInput.trim()}
-          style={{ width: 42, height: 42, borderRadius: '50%', border: 'none', background: chatInput.trim() ? C.accent : C.surface, color: '#fff', cursor: 'pointer', fontSize: 18, flexShrink: 0 }}>➤</button>
+          aria-label="Envoyer"
+          style={{ width: 42, height: 42, borderRadius: 10, border: 'none', background: chatInput.trim() ? C.accent : C.surface, color: chatInput.trim() ? '#fff' : C.muted, cursor: 'pointer', flexShrink: 0, display: 'grid', placeItems: 'center' }}><Icon name="send" size={18} /></button>
       </div>
     </div>
   )
