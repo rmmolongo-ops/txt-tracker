@@ -1,6 +1,7 @@
 import { Fragment, useState, useRef } from 'react'
 import { C, KPI_CONFIG, DAY_MAP } from '../lib/constants'
 import { toDateStr, getMonday, MATCH_RESULTS, hasScore, resultFromScore } from '../lib/stats'
+import Icon from './Icons'
 
 // Accueil, vue coach : équipe, récap de la semaine, calendrier mensuel, séances et matchs du jour.
 export default function DashboardCoach({
@@ -41,7 +42,7 @@ export default function DashboardCoach({
             const sel = activeCoachTeam?.id === team.id
             return (
               <button key={team.id} onClick={() => setCoachTeamId(team.id)}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 13, cursor: 'pointer' }}>
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 8, border: '1px solid ' + (sel ? C.accent : C.border), background: sel ? C.accent + '22' : 'transparent', color: sel ? C.accentGlow : C.muted, fontWeight: 500, fontSize: 13, cursor: 'pointer' }}>
                 {team.name}
               </button>
             )
@@ -50,21 +51,21 @@ export default function DashboardCoach({
       )}
 
       {!activeCoachTeam ? (
-        <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>🧠</div>
+        <div style={{ border: '1px dashed ' + C.border, borderRadius: 14, padding: '32px 20px', textAlign: 'center', color: C.muted, fontSize: 14 }}>
+          <Icon name="equipe" size={28} style={{ margin: '0 auto 12px' }} />
           Aucune équipe à suivre pour le moment
         </div>
       ) : (
         <>
-          <div style={{ background: 'linear-gradient(135deg, #1e3a5f, #0f2a4a)', borderRadius: 16, padding: 16, marginBottom: 16, border: '1px solid ' + C.accent + '30' }}>
+          <div style={{ padding: '4px 4px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div style={{ fontSize: 12, color: C.muted }}>ÉQUIPE SUIVIE</div>
-                <div style={{ fontSize: 20, fontWeight: 900, color: C.accentGlow }}>{activeCoachTeam.name}</div>
+                <div style={{ fontSize: 13, color: C.muted }}>Équipe suivie</div>
+                <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>{activeCoachTeam.name}</div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 12, color: C.muted }}>Joueurs</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: C.green }}>{coachRosterData.length + managedPlayers.length}</div>
+                <div style={{ fontSize: 13, color: C.muted }}>Joueurs</div>
+                <div className="mono" style={{ fontSize: 22, fontWeight: 600 }}>{coachRosterData.length + managedPlayers.length}</div>
               </div>
             </div>
           </div>
@@ -92,20 +93,20 @@ export default function DashboardCoach({
             if (weekPlanned.length === 0 && kpiAverages.length === 0) return null
 
             return (
-              <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 16, border: '1px solid ' + C.border }}>
-                <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
-                  📊 Récap de la semaine
+              <div style={{ background: C.card, borderRadius: 14, padding: 16, marginBottom: 16, border: '1px solid ' + C.border }}>
+                <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 12 }}>
+                  Récap de la semaine
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: kpiAverages.length > 0 ? 14 : 0 }}>
                   <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>PRÉVU VS RÉALISÉ</div>
-                    <div style={{ fontSize: 18, fontWeight: 800 }}>{realized.length} / {weekPlanned.length}</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 2 }}>Prévu / réalisé</div>
+                    <div className="mono" style={{ fontSize: 18, fontWeight: 600 }}>{realized.length} / {weekPlanned.length}</div>
                   </div>
                   <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>MATCH DE LA SEMAINE</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 2 }}>Match de la semaine</div>
                     {matches.length > 0 ? (
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#eab308' }}>
-                        🏆 {matches[0].label} · {new Date(matches[0].date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                        {matches[0].label} · {new Date(matches[0].date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
                       </div>
                     ) : (
                       <div style={{ fontSize: 13, color: C.muted }}>Aucun</div>
@@ -114,11 +115,11 @@ export default function DashboardCoach({
                 </div>
                 {kpiAverages.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>MOYENNES KPI DE LA SEMAINE</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Moyennes de la semaine</div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       {kpiAverages.map(({ kpi, avg, count }) => (
-                        <div key={kpi.id} style={{ background: kpi.color + '18', border: '1px solid ' + kpi.color + '40', borderRadius: 10, padding: '6px 10px', fontSize: 12 }}>
-                          {kpi.icon} {kpi.label} : <b style={{ color: kpi.color }}>{avg.toFixed(1)}{kpi.unit === '/10' ? '/10' : ' ' + kpi.unit}</b>
+                        <div key={kpi.id} style={{ background: C.surface, borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>
+                          {kpi.label} : <b className="mono" style={{ color: C.text }}>{avg.toFixed(1)}{kpi.unit === '/10' ? '/10' : ' ' + kpi.unit}</b>
                           <span style={{ color: C.muted }}> ({count})</span>
                         </div>
                       ))}
@@ -131,8 +132,8 @@ export default function DashboardCoach({
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
             <button onClick={() => { changeTab('equipe'); setEquipeTab('programme') }}
-              style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
-              📋 Gérer le programme
+              style={{ background: 'none', border: 'none', color: C.accent, fontSize: 13, fontWeight: 500, cursor: 'pointer', padding: 0 }}>
+              Gérer le programme
             </button>
           </div>
           {(() => {
@@ -160,11 +161,11 @@ export default function DashboardCoach({
                     if (delta > 50) changeMonth(-1)
                     else if (delta < -50) changeMonth(1)
                   }}
-                  style={{ background: C.card, borderRadius: 16, border: '1px solid ' + C.border, overflow: 'hidden', marginBottom: 16 }}>
-                  <div style={{ background: 'linear-gradient(135deg, #1e3a8a, #4f6ef7)', padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <button onClick={() => changeMonth(-1)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer', padding: 4 }}>‹</button>
-                    <div style={{ fontWeight: 800, fontSize: 15, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 }}>{monthLabel}</div>
-                    <button onClick={() => changeMonth(1)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer', padding: 4 }}>›</button>
+                  style={{ background: C.card, borderRadius: 14, border: '1px solid ' + C.border, overflow: 'hidden', marginBottom: 16 }}>
+                  <div style={{ borderBottom: '1px solid ' + C.border, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <button onClick={() => changeMonth(-1)} style={{ background: 'none', border: 'none', color: C.text, fontSize: 18, cursor: 'pointer', padding: 4 }}>‹</button>
+                    <div style={{ fontWeight: 600, fontSize: 15, textTransform: 'capitalize' }}>{monthLabel}</div>
+                    <button onClick={() => changeMonth(1)} style={{ background: 'none', border: 'none', color: C.text, fontSize: 18, cursor: 'pointer', padding: 4 }}>›</button>
                   </div>
                   <div style={{ padding: 14 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 6 }}>
@@ -215,9 +216,9 @@ export default function DashboardCoach({
                       {!editingDailySession && (
                         <div style={{ display: 'flex', gap: 10 }}>
                           <button onClick={() => { setDailySessionDraft(JSON.parse(JSON.stringify({ label: viewDay.s.label, duration: viewDay.s.duration, objectif: viewDay.s.objectif, blocs: viewDay.s.blocs || [] }))); setEditingDailySession(viewDay.s.id) }}
-                            style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>✏️ Modifier</button>
+                            style={{ background: 'none', border: 'none', color: C.accent, fontSize: 13, fontWeight: 500, cursor: 'pointer', padding: 0 }}>Modifier</button>
                           <button onClick={() => handleRemoveDailySession(viewDay.s.id)}
-                            style={{ background: 'none', border: 'none', color: C.red, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>🗑️ Supprimer</button>
+                            style={{ background: 'none', border: 'none', color: C.red, fontSize: 13, fontWeight: 500, cursor: 'pointer', padding: 0 }}>Supprimer</button>
                         </div>
                       )}
                     </div>
@@ -247,7 +248,7 @@ export default function DashboardCoach({
                                 style={{ background: 'transparent', border: '1px solid ' + C.border, borderRadius: 6, color: viewDay.s.color, fontSize: 11, padding: '2px 6px', outline: 'none', width: 70, textAlign: 'center' }} />
                               <button onClick={() => setDailySessionDraft(d => ({ ...d, blocs: d.blocs.filter((_, i) => i !== bi) }))}
                                 aria-label="Supprimer ce bloc"
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.red, fontSize: 14 }}>🗑️</button>
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, display: 'grid', placeItems: 'center' }}><Icon name="trash" size={16} /></button>
                             </div>
                             <textarea value={bloc.exercices.join('\n')} placeholder="Un exercice par ligne..."
                               onChange={e => { const d = JSON.parse(JSON.stringify(dailySessionDraft)); d.blocs[bi].exercices = e.target.value.split('\n'); setDailySessionDraft(d) }}
@@ -266,7 +267,7 @@ export default function DashboardCoach({
                           </button>
                           <button onClick={() => handleUpdateDailySession(viewDay.s.id, dailySessionDraft)}
                             style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: C.green, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                            ✓ Enregistrer
+                            Enregistrer
                           </button>
                         </div>
                       </div>
@@ -305,7 +306,7 @@ export default function DashboardCoach({
                       const totalButs = savedButs.reduce((a, [, n]) => a + n, 0)
                       return (
                         <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid ' + C.border }}>
-                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Résultat du match</div>
+                          <div style={{ fontSize: 13, color: C.muted, marginBottom: 8, fontWeight: 500 }}>Résultat du match</div>
                           {editingMatchId === viewDay.s.id ? (
                             <div>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 12 }}>
@@ -334,7 +335,7 @@ export default function DashboardCoach({
                                 ))}
                               </div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                <div style={{ fontSize: 11, color: C.muted }}>✅ Présents ({matchDraft.presents.length}/{matchPlayers.length}) · ⚽ Buts</div>
+                                <div style={{ fontSize: 11, color: C.muted }}>Présents ({matchDraft.presents.length}/{matchPlayers.length}) · Buts</div>
                                 {matchPlayers.length > 0 && (
                                   <button onClick={() => setMatchDraft(d => ({ ...d, presents: d.presents.length === matchPlayers.length ? [] : matchPlayers.map(p => p.user_id) }))}
                                     style={{ background: 'none', border: 'none', color: C.accent, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
@@ -368,7 +369,7 @@ export default function DashboardCoach({
                                 </button>
                                 <button onClick={() => handleSaveMatchResult(viewDay.s.id, matchDraft)}
                                   style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: C.green, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                                  ✓ Enregistrer
+                                  Enregistrer
                                 </button>
                               </div>
                             </div>
@@ -385,12 +386,12 @@ export default function DashboardCoach({
                               })()}
                               {(viewDay.s.presents || []).length > 0 && (
                                 <div style={{ fontSize: 12, color: C.muted, marginBottom: 8, lineHeight: 1.5 }}>
-                                  ✅ {viewDay.s.presents.length} présent{viewDay.s.presents.length > 1 ? 's' : ''} : <span style={{ color: C.text }}>{viewDay.s.presents.map(nameOf).join(', ')}</span>
+                                  {viewDay.s.presents.length} présent{viewDay.s.presents.length > 1 ? 's' : ''} : <span style={{ color: C.text }}>{viewDay.s.presents.map(nameOf).join(', ')}</span>
                                 </div>
                               )}
                               {savedButs.length > 0 && (
                                 <div style={{ marginBottom: 8 }}>
-                                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>⚽ {totalButs} but{totalButs > 1 ? 's' : ''}</div>
+                                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{totalButs} but{totalButs > 1 ? 's' : ''}</div>
                                   {savedButs.map(([k, n]) => (
                                     <div key={k} style={{ fontSize: 13, marginBottom: 2 }}>{nameOf(k)} <b style={{ color: '#eab308' }}>× {n}</b></div>
                                   ))}
@@ -398,7 +399,7 @@ export default function DashboardCoach({
                               )}
                               <button onClick={() => { setMatchDraft({ resultat: viewDay.s.resultat || null, buts: { ...(viewDay.s.buts || {}) }, presents: [...(viewDay.s.presents || [])], score_pour: viewDay.s.score_pour ?? '', score_contre: viewDay.s.score_contre ?? '' }); setEditingMatchId(viewDay.s.id) }}
                                 style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
-                                🏆 {viewDay.s.resultat || hasScore(viewDay.s) || savedButs.length > 0 || (viewDay.s.presents || []).length > 0 ? 'Modifier le match (score, présents, buteurs)' : 'Saisir le score, les présents et les buteurs'}
+                                {viewDay.s.resultat || hasScore(viewDay.s) || savedButs.length > 0 || (viewDay.s.presents || []).length > 0 ? 'Modifier le match (score, présents, buteurs)' : 'Saisir le score, les présents et les buteurs'}
                               </button>
                             </div>
                           )}
@@ -417,7 +418,7 @@ export default function DashboardCoach({
                                   <div style={{ display: 'flex', gap: 2 }}>
                                     {[1, 2, 3, 4, 5].map(n => (
                                       <button key={n} onClick={() => setAnnotationDraft(d => ({ ...d, [key]: d[key] === n ? 0 : n }))}
-                                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 0, opacity: n <= annotationDraft[key] ? 1 : 0.25 }}>⭐</button>
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, padding: 0, color: C.gold, opacity: n <= annotationDraft[key] ? 1 : 0.25 }}>★</button>
                                     ))}
                                   </div>
                                 </div>
@@ -434,7 +435,7 @@ export default function DashboardCoach({
                               </button>
                               <button onClick={() => handleSaveAnnotation(viewDay.s.id, annotationDraft)}
                                 style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: C.green, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                                ✓ Enregistrer
+                                Enregistrer
                               </button>
                             </div>
                           </div>
@@ -451,7 +452,7 @@ export default function DashboardCoach({
                             )}
                             <button onClick={() => { setAnnotationDraft({ note_coach: viewDay.s.note_coach || '', rating_deroule: viewDay.s.rating_deroule || 0, rating_ressenti: viewDay.s.rating_ressenti || 0 }); setAnnotatingId(viewDay.s.id) }}
                               style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
-                              📝 {viewDay.s.note_coach || viewDay.s.rating_deroule || viewDay.s.rating_ressenti ? 'Modifier les notes' : 'Ajouter une note / noter la séance'}
+                              {viewDay.s.note_coach || viewDay.s.rating_deroule || viewDay.s.rating_ressenti ? 'Modifier les notes' : 'Ajouter une note / noter la séance'}
                             </button>
                           </div>
                         )}
@@ -471,11 +472,11 @@ export default function DashboardCoach({
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <button onClick={() => setPickerMode('entrainement')}
                 style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, background: pickerMode === 'entrainement' ? C.accent : C.surface, color: pickerMode === 'entrainement' ? '#fff' : C.muted }}>
-                🏃 Entraînement
+                Entraînement
               </button>
               <button onClick={() => setPickerMode('match')}
                 style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, background: pickerMode === 'match' ? '#eab308' : C.surface, color: pickerMode === 'match' ? '#fff' : C.muted }}>
-                🏆 Match
+                Match
               </button>
             </div>
 
@@ -505,7 +506,7 @@ export default function DashboardCoach({
                   style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 14 }} />
                 <button onClick={() => { assignMatchSession(dailyPickerFor.teamId, dailyPickerFor.dateStr, matchOpponent.trim()); setMatchOpponent('') }}
                   style={{ width: '100%', padding: 10, borderRadius: 10, border: 'none', background: '#eab308', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', marginBottom: 8 }}>
-                  🏆 Planifier ce match
+                  Planifier ce match
                 </button>
               </>
             )}

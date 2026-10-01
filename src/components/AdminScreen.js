@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { C, KPI_CONFIG, ROLE_CONFIG, GHOST_PREFIX } from '../lib/constants'
+import Icon from './Icons'
 
 // Onglet Admin : vue d'ensemble (stats, inscriptions, équipes, clubs, joueurs sans équipe)
 // et détail d'une équipe (joueurs, programmes). Les actions en base restent dans App ;
@@ -96,8 +97,8 @@ export default function AdminScreen({
         <div onClick={() => setExpandedAdmin(expanded ? null : cardKey)} role="button" tabIndex={0}
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedAdmin(expanded ? null : cardKey) } }}
           style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-          <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
-            {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+          <div style={{ width: 46, height: 46, borderRadius: '50%', background: C.surface, color: C.accentGlow, fontWeight: 600, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+            {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((j.prenom || '?').charAt(0) + (j.nom || '').charAt(0)).toUpperCase()}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -122,7 +123,7 @@ export default function AdminScreen({
             <div style={{ fontSize: 11, color: C.muted }}>{j.nb_mesures || 0} mesures</div>
             <button onClick={e => { e.stopPropagation(); openFiche(j, [...(isAdmin ? adminData : coachRosterData), ...(isAdmin ? adminManagedPlayers : managedPlayers)]) }}
               style={{ background: 'none', border: 'none', color: C.accent, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
-              📋 Fiche
+              Fiche
             </button>
           </div>
           <div style={{ fontSize: 16, color: C.muted, marginLeft: 4, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
@@ -132,12 +133,12 @@ export default function AdminScreen({
           <div style={{ borderTop: '1px solid ' + C.border, padding: '14px 16px' }}>
             {j.isManaged && (
               <div style={{ background: C.surface, borderRadius: 10, padding: '8px 12px', marginBottom: 10, fontSize: 12, color: C.muted }}>
-                👻 Joueur sans compte — géré par le coach/admin, pas d'accès à l'application
+                Joueur sans compte — géré par le coach/admin, pas d'accès à l'application
               </div>
             )}
             {j.email && (
               <div style={{ background: C.surface, borderRadius: 10, padding: '8px 12px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>✉️</span>
+                
                 <div>
                   <div style={{ fontSize: 10, color: C.muted, marginBottom: 1 }}>EMAIL</div>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{j.email}</div>
@@ -178,7 +179,7 @@ export default function AdminScreen({
               </div>
             </div>
 
-            <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Performances</div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 8, fontWeight: 500 }}>Performances</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 16 }}>
               {KPI_CONFIG.map(kpi => (
                 <div key={kpi.id} onClick={() => setAdminChartKpi(kpi.id)}
@@ -194,7 +195,7 @@ export default function AdminScreen({
             </div>
 
             <div style={{ borderTop: '1px solid ' + C.border, paddingTop: 14 }}>
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 10, fontWeight: 500 }}>
                 Graphique — {KPI_CONFIG.find(k => k.id === adminChartKpi)?.label}
               </div>
               {(() => {
@@ -226,7 +227,7 @@ export default function AdminScreen({
               const entries = (j.mesuresData || []).filter(m => m.kpi_id === adminChartKpi && m.id).sort((a, b) => b.date.localeCompare(a.date))
               return (
                 <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid ' + C.border }}>
-                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>
+                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 8, fontWeight: 500 }}>
                     Saisies — {kpi?.label} ({entries.length})
                   </div>
                   {entries.length === 0 ? (
@@ -246,7 +247,7 @@ export default function AdminScreen({
                             </div>
                           ) : (
                             <button onClick={() => setMesureToDelete(m.id)} title="Supprimer cette saisie"
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, padding: 0 }}>🗑️</button>
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: 0, display: 'grid', placeItems: 'center' }}><Icon name="trash" size={16} /></button>
                           )}
                         </div>
                       ))}
@@ -270,14 +271,14 @@ export default function AdminScreen({
                   </div>
                 ) : (
                   <div style={{ background: C.red + '20', border: '2px solid ' + C.red + '70', borderRadius: 12, padding: '14px' }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.red, marginBottom: 6 }}>⚠️ Action irréversible</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.red, marginBottom: 6 }}>Action irréversible</div>
                     <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.6 }}>
                       Le compte de <strong style={{ color: C.text }}>{j.prenom} {j.nom}</strong> et <strong style={{ color: C.text }}>toutes ses données</strong> seront définitivement supprimés.<br />
                       Cette action est <strong style={{ color: C.red }}>impossible à annuler</strong>.
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => setDeleteConfirm(null)} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid ' + C.border, background: C.surface, color: C.muted, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>Annuler</button>
-                      <button onClick={() => j.isManaged ? deleteManagedPlayer(j.managed_player_id) : handleDeleteUser(j.user_id)} style={{ flex: 2, padding: '10px', borderRadius: 8, border: 'none', background: C.red, color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 800 }}>🗑️ Supprimer définitivement</button>
+                      <button onClick={() => j.isManaged ? deleteManagedPlayer(j.managed_player_id) : handleDeleteUser(j.user_id)} style={{ flex: 2, padding: '10px', borderRadius: 8, border: 'none', background: C.red, color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 800 }}>Supprimer définitivement</button>
                     </div>
                   </div>
                 )
@@ -319,7 +320,7 @@ export default function AdminScreen({
         {/* Inscriptions non confirmées */}
         {unconfirmedSignups.length > 0 && (
           <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.gold + '40' }}>
-            <div style={{ fontSize: 12, color: C.gold, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
+            <div style={{ fontSize: 13, color: C.gold, fontWeight: 500, marginBottom: 10 }}>
               ⏳ Inscriptions non confirmées ({unconfirmedSignups.length})
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -329,7 +330,7 @@ export default function AdminScreen({
                   <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{new Date(u.created_at).toLocaleDateString('fr-FR')}</span>
                   <button onClick={() => handleResend(u.email)} disabled={resendingEmail === u.email}
                     style={{ flexShrink: 0, padding: '5px 10px', background: C.gold + '20', color: C.gold, border: '1px solid ' + C.gold + '40', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: resendingEmail === u.email ? 'default' : 'pointer', opacity: resendingEmail === u.email ? 0.6 : 1 }}>
-                    {resendingEmail === u.email ? '...' : '✉️ Relancer'}
+                    {resendingEmail === u.email ? '...' : 'Relancer'}
                   </button>
                 </div>
               ))}
@@ -339,7 +340,7 @@ export default function AdminScreen({
 
         {/* Créer une équipe */}
         <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
-          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Nouvelle équipe</div>
+          <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 10 }}>Nouvelle équipe</div>
           <div style={{ display: 'flex', gap: 8 }}>
             <input type="text" placeholder="Nom de l'équipe..." value={newTeamName}
               onChange={e => setNewTeamName(e.target.value)}
@@ -355,7 +356,7 @@ export default function AdminScreen({
         {/* Gérer les clubs (liste proposée à l'inscription) — catalogue plateforme, pas un réglage de club */}
         {isAdmin && (
         <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
-          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Clubs proposés à l'inscription</div>
+          <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 10 }}>Clubs proposés à l'inscription</div>
           <div style={{ display: 'flex', gap: 8, marginBottom: clubs.length > 0 ? 12 : 0 }}>
             <input type="text" placeholder="Nom du club..." value={newClubName}
               onChange={e => setNewClubName(e.target.value)}
@@ -387,7 +388,7 @@ export default function AdminScreen({
             reste publique (catalogue d'inscription) — on la filtre donc ici au sien. */}
         {(isAdmin || isClubManager) && clubs.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Vue par club</div>
+          <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 12 }}>Vue par club</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {clubs.filter(c => isAdmin || c.id === myClubId).map(club => {
               const clubTeams = teams.filter(t => t.club_id === club.id)
@@ -435,7 +436,7 @@ export default function AdminScreen({
             leur club (profils.club vide ou sans correspondance) — assignation manuelle. */}
         {isAdmin && teams.some(t => !t.club_id) && (
         <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.gold + '50' }}>
-          <div style={{ fontSize: 12, color: C.gold, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>⚠️ Équipes sans club</div>
+          <div style={{ fontSize: 13, color: C.gold, fontWeight: 500, marginBottom: 10 }}>Équipes sans club</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {teams.filter(t => !t.club_id).map(t => (
               <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -454,7 +455,7 @@ export default function AdminScreen({
         {/* Inviter un membre de l'équipe encadrante du club (coach/dirigeant/admin) */}
         {(isClubManager || isAdmin) && (
         <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
-          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Inviter un coach ou dirigeant</div>
+          <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 10 }}>Inviter un coach ou dirigeant</div>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
             Génère un lien à usage unique, valable 7 jours, donnant accès à toutes les équipes du club.
           </div>
@@ -472,7 +473,7 @@ export default function AdminScreen({
             </select>
             <button onClick={handleGenerateInvite} disabled={generatingInvite || !inviteTargetClubId}
               style={{ padding: '10px 18px', background: inviteTargetClubId ? C.accent : C.surface, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14, whiteSpace: 'nowrap', opacity: generatingInvite ? 0.6 : 1 }}>
-              🔗 Générer le lien
+              Générer le lien
             </button>
           </div>
         </div>
@@ -481,7 +482,7 @@ export default function AdminScreen({
         {/* Grille des équipes */}
         {teams.length > 0 && (
           <>
-            <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Mes équipes</div>
+            <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 12 }}>Mes équipes</div>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12, marginBottom: 24 }}>
               {teams.map(team => {
                 const teamRealPlayers = adminData.filter(j => (j.teams || []).some(t => t.id === team.id))
@@ -494,29 +495,29 @@ export default function AdminScreen({
                 return (
                   <div key={team.id}
                     onClick={() => { setSelectedAdminTeam(team); setAdminView('team_detail'); setExpandedAdmin(null); setAdminDetailTab('joueurs'); setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
-                    style={{ background: C.card, borderRadius: 16, border: '1px solid ' + team.color + '40', overflow: 'hidden', cursor: 'pointer' }}>
-                    <div style={{ height: 4, background: 'linear-gradient(90deg, ' + team.color + ', ' + team.color + '50)' }} />
+                    style={{ background: C.card, borderRadius: 14, border: '1px solid ' + C.border, overflow: 'hidden', cursor: 'pointer' }}>
+                    <div style={{ height: 2, background: team.color }} />
                     <div style={{ padding: '16px 16px 14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 56, height: 56, borderRadius: 14, background: team.color + '25', border: '2px solid ' + team.color + '50', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <div style={{ width: 56, height: 56, borderRadius: 12, background: C.bg, border: '1px solid ' + C.border, overflow: 'hidden', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
                           {team.photo_url
                             ? <img src={team.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            : <span style={{ fontSize: 28 }}>🏟️</span>}
+                            : <span style={{ fontSize: 16, fontWeight: 600, color: C.accentGlow }}>{(team.name || '?').slice(0, 3).toUpperCase()}</span>}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 800, fontSize: 16 }}>{team.name}</div>
+                          <div style={{ fontWeight: 600, fontSize: 16 }}>{team.name}</div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
-                            <div style={{ fontSize: 13, color: team.color, fontWeight: 700 }}>{teamPlayers.length} joueur{teamPlayers.length > 1 ? 's' : ''}</div>
+                            <div style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>{teamPlayers.length} joueur{teamPlayers.length > 1 ? 's' : ''}</div>
                             {lastActivity && <div style={{ fontSize: 11, color: C.muted }}>Actif {new Date(lastActivity).toLocaleDateString('fr-FR')}</div>}
                           </div>
                         </div>
-                        <div style={{ fontSize: 18, color: C.muted }}>→</div>
+                        <Icon name="chevron" size={18} style={{ color: C.muted, transform: 'rotate(-90deg)' }} />
                       </div>
                       {teamPlayers.length > 0 && (
                         <div style={{ display: 'flex', marginTop: 12 }}>
                           {teamPlayers.slice(0, 6).map((j, idx) => (
-                            <div key={j.user_id} style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', border: '2px solid ' + C.card, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, marginLeft: idx > 0 ? -8 : 0 }}>
-                              {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+                            <div key={j.user_id} style={{ width: 28, height: 28, borderRadius: '50%', background: C.surface, color: C.accentGlow, fontWeight: 600, border: '2px solid ' + C.card, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, marginLeft: idx > 0 ? -8 : 0 }}>
+                              {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((j.prenom || '?').charAt(0) + (j.nom || '').charAt(0)).toUpperCase()}
                             </div>
                           ))}
                           {teamPlayers.length > 6 && (
@@ -540,7 +541,7 @@ export default function AdminScreen({
           if (unassigned.length === 0) return null
           return (
             <div>
-              <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Sans équipe ({unassigned.length})</div>
+              <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 12 }}>Sans équipe ({unassigned.length})</div>
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
                 {unassigned.map(j => renderPlayerCard(j, 'unassigned_' + j.user_id))}
               </div>
@@ -550,7 +551,7 @@ export default function AdminScreen({
 
         {teams.length === 0 && adminData.length === 0 && !adminLoading && (
           <div style={{ background: C.card, borderRadius: 16, padding: 40, textAlign: 'center', color: C.muted }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>⚽</div>
+            <Icon name="equipe" size={32} style={{ margin: '0 auto 12px' }} />
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Aucun joueur inscrit</div>
             <div style={{ fontSize: 13 }}>Créez une équipe et invitez vos joueurs</div>
           </div>
@@ -587,46 +588,46 @@ export default function AdminScreen({
         </div>
 
         {/* Carte équipe */}
-        <div style={{ background: C.card, borderRadius: 20, border: '2px solid ' + selectedAdminTeam.color + '40', overflow: 'hidden', marginBottom: 20 }}>
-          <div style={{ height: 6, background: 'linear-gradient(90deg, ' + selectedAdminTeam.color + ', ' + selectedAdminTeam.color + '40)' }} />
+        <div style={{ background: C.card, borderRadius: 14, border: '1px solid ' + C.border, overflow: 'hidden', marginBottom: 20 }}>
+          <div style={{ height: 2, background: selectedAdminTeam.color }} />
           <div style={{ padding: '20px 20px 18px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <label style={{ position: 'relative', cursor: uploadingTeamPhoto === selectedAdminTeam.id ? 'wait' : 'pointer', flexShrink: 0 }}>
-                <div style={{ width: 72, height: 72, borderRadius: 18, background: selectedAdminTeam.color + '25', border: '3px solid ' + selectedAdminTeam.color + '50', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: uploadingTeamPhoto === selectedAdminTeam.id ? 0.6 : 1 }}>
+                <div style={{ width: 72, height: 72, borderRadius: 16, background: C.bg, border: '1px solid ' + C.border, overflow: 'hidden', display: 'grid', placeItems: 'center', opacity: uploadingTeamPhoto === selectedAdminTeam.id ? 0.6 : 1 }}>
                   {uploadingTeamPhoto === selectedAdminTeam.id
-                    ? <span style={{ fontSize: 28 }}>⏳</span>
+                    ? <span style={{ fontSize: 12, color: C.muted }}>Envoi…</span>
                     : selectedAdminTeam.photo_url
                       ? <img src={selectedAdminTeam.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <span style={{ fontSize: 36 }}>🏟️</span>}
+                      : <span style={{ fontSize: 22, fontWeight: 600, color: C.accentGlow }}>{(selectedAdminTeam.name || '?').slice(0, 3).toUpperCase()}</span>}
                 </div>
-                <div style={{ position: 'absolute', bottom: -4, right: -4, width: 24, height: 24, borderRadius: '50%', background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>📷</div>
+                <div style={{ position: 'absolute', bottom: -4, right: -4, width: 24, height: 24, borderRadius: 8, background: C.accent, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="camera" size={13} /></div>
                 <input type="file" accept="image/*" style={{ display: 'none' }} disabled={uploadingTeamPhoto !== null}
                   onChange={e => e.target.files[0] && uploadTeamPhoto(selectedAdminTeam.id, e.target.files[0])} />
               </label>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 22, fontWeight: 900 }}>{selectedAdminTeam.name}</div>
-                <div style={{ fontSize: 14, color: selectedAdminTeam.color, fontWeight: 700, marginTop: 4 }}>
+                <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>{selectedAdminTeam.name}</div>
+                <div style={{ fontSize: 14, color: C.muted, fontWeight: 500, marginTop: 4 }}>
                   {adminData.filter(j => (j.teams || []).some(t => t.id === selectedAdminTeam.id)).length} joueur{adminData.filter(j => (j.teams || []).some(t => t.id === selectedAdminTeam.id)).length !== 1 ? 's' : ''}
                 </div>
               </div>
-              <button onClick={() => shareInviteLink(selectedAdminTeam.id, selectedAdminTeam.name)} title="Partager le lien d'invitation"
-                style={{ width: 38, height: 38, borderRadius: 10, background: C.accent + '15', border: '1px solid ' + C.accent + '30', color: C.accent, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                🔗
+              <button onClick={() => shareInviteLink(selectedAdminTeam.id, selectedAdminTeam.name)} title="Partager le lien d'invitation" aria-label="Partager le lien d'invitation"
+                style={{ width: 38, height: 38, borderRadius: 10, background: 'transparent', border: '1px solid ' + C.border, color: C.accentGlow, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon name="install" size={18} style={{ transform: 'rotate(180deg)' }} />
               </button>
               <button onClick={() => deleteTeam(selectedAdminTeam.id)}
-                style={{ width: 38, height: 38, borderRadius: 10, background: C.red + '15', border: '1px solid ' + C.red + '30', color: C.red, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                🗑️
+                style={{ width: 38, height: 38, borderRadius: 10, background: 'transparent', border: '1px solid ' + C.red + '40', color: C.red, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} aria-label="Supprimer l'équipe" title="Supprimer l'équipe">
+                <Icon name="trash" size={18} />
               </button>
             </div>
           </div>
         </div>
 
         {/* Sub-tabs */}
-        <div style={{ display: 'flex', background: C.surface, borderRadius: 12, padding: 4, marginBottom: 20, gap: 2 }}>
-          {[{ id: 'joueurs', icon: '👥', label: 'Joueurs' }, { id: 'programme', icon: '📋', label: 'Programme' }].map(t => (
+        <div style={{ display: 'flex', borderRadius: 10, padding: 3, marginBottom: 20, gap: 2, border: '1px solid ' + C.border }}>
+          {[{ id: 'joueurs', label: 'Joueurs' }, { id: 'programme', label: 'Programme' }].map(t => (
             <button key={t.id} onClick={() => { setAdminDetailTab(t.id); setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
-              style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 14, background: adminDetailTab === t.id ? C.accent : 'transparent', color: adminDetailTab === t.id ? '#fff' : C.muted, transition: 'all 0.2s' }}>
-              {t.icon} {t.label}
+              style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500, fontSize: 14, background: adminDetailTab === t.id ? C.surface : 'transparent', color: adminDetailTab === t.id ? C.text : C.muted }}>
+              {t.label}
             </button>
           ))}
         </div>
@@ -639,13 +640,13 @@ export default function AdminScreen({
               if (notInTeam.length === 0) return null
               return (
                 <div style={{ background: C.card, borderRadius: 16, padding: '14px 16px', marginBottom: 20, border: '1px solid ' + C.border }}>
-                  <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Ajouter des joueurs</div>
+                  <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 10 }}>Ajouter des joueurs</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {notInTeam.map(j => (
                       <button key={j.user_id} onClick={() => togglePlayerTeam(j.user_id, selectedAdminTeam.id)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, border: '1px solid ' + C.border, background: C.surface, color: C.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                        <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, flexShrink: 0 }}>
-                          {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid ' + C.border, background: 'transparent', color: C.text, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                        <div style={{ width: 22, height: 22, borderRadius: '50%', background: C.surface, color: C.accentGlow, fontWeight: 600, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, flexShrink: 0 }}>
+                          {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((j.prenom || '?').charAt(0) + (j.nom || '').charAt(0)).toUpperCase()}
                         </div>
                         + {j.prenom || '?'} {j.nom || ''}
                       </button>
@@ -658,7 +659,7 @@ export default function AdminScreen({
             {/* Joueurs sans compte */}
             <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: addingManagedPlayer ? 12 : 0 }}>
-                <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Joueurs sans compte</div>
+                <div style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>Joueurs sans compte</div>
                 {!addingManagedPlayer && (
                   <button onClick={() => setAddingManagedPlayer(true)}
                     style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
@@ -683,7 +684,7 @@ export default function AdminScreen({
             </div>
 
             {/* Joueurs de l'équipe */}
-            <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Joueurs de l'équipe</div>
+            <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 12 }}>Joueurs de l'équipe</div>
             {adminError && <div style={{ background: C.red + '15', border: '1px solid ' + C.red + '40', borderRadius: 12, padding: '12px 14px', marginBottom: 14, fontSize: 12, color: C.red }}>{adminError}</div>}
             {(() => {
               const teamPlayers = [
@@ -692,7 +693,7 @@ export default function AdminScreen({
               ]
               if (teamPlayers.length === 0) return (
                 <div style={{ background: C.card, borderRadius: 16, padding: 40, textAlign: 'center', color: C.muted }}>
-                  <div style={{ fontSize: 36, marginBottom: 10 }}>👥</div>
+                  <Icon name="equipe" size={28} style={{ margin: '0 auto 12px' }} />
                   <div style={{ fontSize: 14, fontWeight: 600 }}>Aucun joueur dans cette équipe</div>
                   <div style={{ fontSize: 12, marginTop: 6 }}>Ajoutez des joueurs depuis la section ci-dessus</div>
                 </div>
