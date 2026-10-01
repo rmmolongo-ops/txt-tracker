@@ -77,7 +77,7 @@ export default function EquipeJoueurScreen({ myTeams, getProgramsForTeam, isMobi
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', columnGap: 24 }}>
             {sortedPlayers.map(p => (
               <div key={p.user_id} style={{ padding: '12px 0', borderBottom: '1px solid ' + C.border, display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 10, overflow: 'hidden', background: C.card, border: '1px solid ' + C.border, color: C.accentGlow, display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 600, flexShrink: 0 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, overflow: 'hidden', background: C.card, border: '1px solid ' + C.border, color: C.accentGlow, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, flexShrink: 0 }}>
                   {p.photo_url ? <img src={p.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((p.prenom || '?').charAt(0) + (p.nom || '').charAt(0)).toUpperCase()}
                 </div>
                 <div style={{ minWidth: 0 }}>

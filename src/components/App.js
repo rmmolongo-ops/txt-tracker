@@ -1178,7 +1178,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
           <div onClick={() => changeTab('dashboard')} role="button" tabIndex={0}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); changeTab('dashboard') } }}
             style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, overflow: 'hidden', background: C.card, border: '1px solid ' + C.border, display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 600, color: C.accentGlow, flexShrink: 0 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, overflow: 'hidden', background: C.card, border: '1px solid ' + C.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, color: C.accentGlow, flexShrink: 0 }}>
               {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'TxT'}
             </div>
             <div>
@@ -1194,7 +1194,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
                 <div style={{ fontSize: 11, color: C.muted }}>{todayStr}</div>
                 <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{profil.division || '—'} • {profil.club || '—'}</div>
               </div>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', background: C.card, display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 600, color: C.accentGlow, flexShrink: 0, border: '1px solid ' + C.border }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', background: C.card, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, color: C.accentGlow, flexShrink: 0, border: '1px solid ' + C.border }}>
                 {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((profil.prenom || 'J')[0] || 'J').toUpperCase()}
               </div>
             </div>

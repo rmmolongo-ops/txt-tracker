@@ -90,7 +90,7 @@ export default function ChatScreen({ user, profil, isAdmin, isMobile, myTeams, c
           const mine = m.user_id === user.id
           return (
             <div key={m.id} style={{ display: 'flex', flexDirection: mine ? 'row-reverse' : 'row', gap: 8, alignItems: 'flex-end' }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, overflow: 'hidden', background: C.card, border: '1px solid ' + C.border, color: C.accentGlow, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+              <div style={{ width: 30, height: 30, borderRadius: 8, overflow: 'hidden', background: C.card, border: '1px solid ' + C.border, color: C.accentGlow, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
                 {m.sender_photo_url ? <img src={m.sender_photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((m.sender_prenom || '?').charAt(0) + (m.sender_nom || '').charAt(0)).toUpperCase()}
               </div>
               <div style={{ maxWidth: '72%' }}>

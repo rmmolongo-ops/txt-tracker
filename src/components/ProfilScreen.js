@@ -58,7 +58,7 @@ export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs
     <div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24, paddingTop: 8 }}>
         <div style={{ position: 'relative', marginBottom: 12 }}>
-          <div style={{ width: 90, height: 90, borderRadius: 22, background: C.card, border: '1px solid ' + C.border, color: C.accentGlow, overflow: 'hidden', display: 'grid', placeItems: 'center', fontSize: 28, fontWeight: 600 }}>
+          <div style={{ width: 90, height: 90, borderRadius: 22, background: C.card, border: '1px solid ' + C.border, color: C.accentGlow, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, fontWeight: 600 }}>
             {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (((profil.prenom || '').charAt(0) + (profil.nom || '').charAt(0)).toUpperCase() || 'TxT')}
           </div>
           <label title="Changer la photo" style={{ position: 'absolute', bottom: -6, right: -6, width: 32, height: 32, borderRadius: 10, background: C.accent, color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', border: '2px solid ' + C.bg, opacity: uploadingPhoto ? 0.6 : 1 }}>
