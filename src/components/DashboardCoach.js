@@ -1,5 +1,5 @@
 import { Fragment, useState, useRef } from 'react'
-import { C, KPI_CONFIG, DAY_MAP } from '../lib/constants'
+import { C, KPI_CONFIG, DAY_MAP, MATCH_COLOR } from '../lib/constants'
 import { toDateStr, getMonday, MATCH_RESULTS, hasScore, resultFromScore } from '../lib/stats'
 import Icon from './Icons'
 
@@ -105,7 +105,7 @@ export default function DashboardCoach({
                   <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
                     <div style={{ fontSize: 12, color: C.muted, marginBottom: 2 }}>Match de la semaine</div>
                     {matches.length > 0 ? (
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: MATCH_COLOR }}>
                         {matches[0].label} · {new Date(matches[0].date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
                       </div>
                     ) : (
@@ -187,7 +187,7 @@ export default function DashboardCoach({
                           <button key={i} onClick={() => setViewDay(selected ? null : { dateStr, date: d, dayCode, s, teamId: activeCoachTeam.id })}
                             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '6px 0', borderRadius: 10, border: selected ? '2px solid ' + C.accent : '2px solid transparent', background: isToday && !selected ? C.accent + '15' : 'transparent', cursor: 'pointer' }}>
                             <div style={{ fontSize: 14, fontWeight: isToday ? 800 : 600, color: isToday ? C.accent : C.text }}>{day}</div>
-                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: planned ? C.accent : 'transparent' }} />
+                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: planned ? (s.type === 'match' ? MATCH_COLOR : C.accent) : 'transparent' }} />
                           </button>
                         )
                       })}
@@ -274,7 +274,7 @@ export default function DashboardCoach({
                     ) : (
                       <>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                          <div className="mono" style={{ width: 42, height: 42, borderRadius: 10, background: C.bg, border: '1px solid ' + C.border, color: C.muted, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{viewDay.date.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '').toUpperCase()}</div>
+                          <div className="mono" style={{ width: 42, height: 42, borderRadius: 10, background: C.bg, border: '1px solid ' + (viewDay.s.type === 'match' ? MATCH_COLOR + '80' : C.border), color: viewDay.s.type === 'match' ? MATCH_COLOR : C.muted, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{viewDay.date.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '').toUpperCase()}</div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontWeight: 600, fontSize: 15 }}>{viewDay.s.label}</div>
                             <div style={{ fontSize: 12, color: C.muted }}>{viewDay.s.duration}{viewDay.s.objectif ? ' · ' + viewDay.s.objectif : ''}</div>
