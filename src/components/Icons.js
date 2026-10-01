@@ -10,6 +10,8 @@ const PATHS = {
   camera: <><path d="M4 8h3l1.5-2h7L17 8h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></>,
   trash: <><path d="M4 7h16" /><path d="M9 7V4h6v3" /><path d="M6 7l1 13h10l1-13" /><path d="M10 11v6M14 11v6" /></>,
   install: <><path d="M12 4v11" /><path d="M7.5 11L12 15.5 16.5 11" /><path d="M5 20h14" /></>,
+  send: <><path d="M4 12L20 4l-5 16-3.5-6.5z" /><path d="M11.5 13.5L20 4" /></>,
+  edit: <><path d="M4 20h4L19 9l-4-4L4 16z" /></>,
   chevron: <><path d="M6 9l6 6 6-6" /></>,
   check: <><path d="M5 12.5l4.5 4.5L19 7.5" /></>,
   target: <><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="0.8" /></>,
