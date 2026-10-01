@@ -4,6 +4,7 @@ import { getDeferredPrompt } from '../lib/installPrompt'
 import { toDateStr, latestKpis, activeAdminTeamId } from '../lib/stats'
 import { C, TEAM_COLORS, KPI_CONFIG, SESSIONS, DEFAULT_PROFIL, LEADERSHIP_ROLES, GHOST_PREFIX, isGhostId, ghostRealId, seanceRowKey } from '../lib/constants'
 import FicheJoueur from './FicheJoueur'
+import Icon from './Icons'
 import ChatScreen from './ChatScreen'
 import BibliothequeScreen from './BibliothequeScreen'
 import ProfilScreen from './ProfilScreen'
@@ -868,14 +869,14 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
   const effectiveHomeView = !hasLeadership ? 'joueur' : (!hasPlayerRole ? 'coach' : homeViewMode)
   const activeCoachTeam = useMemo(() => leadershipTeams.find(t => t.id === coachTeamId) || leadershipTeams[0], [leadershipTeams, coachTeamId])
   const NAV_ITEMS = useMemo(() => [
-    { id: 'dashboard', icon: '🏠', label: 'Accueil' },
-    { id: 'seances', icon: '💪', label: 'Programme' },
-    { id: 'kpi', icon: '📊', label: 'Mesures' },
-    { id: 'stats', icon: '📈', label: 'Stats' },
-    { id: 'chat', icon: '💬', label: 'Chat' },
-    { id: 'equipe', icon: '⚽', label: 'Équipe' },
-    ...(hasLeadership ? [{ id: 'bibliotheque', icon: '📚', label: 'Bibliothèque' }] : []),
-    ...(canManageClub ? [{ id: 'admin', icon: '🛡️', label: 'Admin' }] : []),
+    { id: 'dashboard', icon: <Icon name="dashboard" />, label: 'Accueil' },
+    { id: 'seances', icon: <Icon name="seances" />, label: 'Programme' },
+    { id: 'kpi', icon: <Icon name="kpi" />, label: 'Mesures' },
+    { id: 'stats', icon: <Icon name="stats" />, label: 'Stats' },
+    { id: 'chat', icon: <Icon name="chat" />, label: 'Chat' },
+    { id: 'equipe', icon: <Icon name="equipe" />, label: 'Équipe' },
+    ...(hasLeadership ? [{ id: 'bibliotheque', icon: <Icon name="bibliotheque" />, label: 'Bibliothèque' }] : []),
+    ...(canManageClub ? [{ id: 'admin', icon: <Icon name="admin" />, label: 'Admin' }] : []),
   ], [hasLeadership, canManageClub])
 
   if (loading) return (
@@ -1173,13 +1174,13 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
       {ficheJoueur && <FicheJoueur player={ficheJoueur} onClose={() => setFicheJoueur(null)} />}
 
       {/* Header */}
-      <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)', padding: '16px 20px', borderBottom: '1px solid ' + C.border, position: 'sticky', top: 0, zIndex: 50 }}>
+      <div style={{ background: C.bg, padding: '14px 20px', borderBottom: '1px solid ' + C.border, position: 'sticky', top: 0, zIndex: 50 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div onClick={() => changeTab('dashboard')} role="button" tabIndex={0}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); changeTab('dashboard') } }}
             style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, overflow: 'hidden', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, boxShadow: '0 0 20px rgba(59,130,246,0.4)', flexShrink: 0 }}>
-              {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+            <div style={{ width: 40, height: 40, borderRadius: 10, overflow: 'hidden', background: C.card, border: '1px solid ' + C.border, display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 600, color: C.accentGlow, flexShrink: 0 }}>
+              {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'TxT'}
             </div>
             <div>
               <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.5 }}>TxT Tracker</div>
@@ -1192,10 +1193,10 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
               style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 11, color: C.muted }}>{todayStr}</div>
-                <div style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}>{profil.division || '—'} • {profil.club || '—'}</div>
+                <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{profil.division || '—'} • {profil.club || '—'}</div>
               </div>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0, border: '2px solid ' + C.border }}>
-                {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+              <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', background: C.card, display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 600, color: C.accentGlow, flexShrink: 0, border: '1px solid ' + C.border }}>
+                {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((profil.prenom || 'J')[0] || 'J').toUpperCase()}
               </div>
             </div>
             <button onClick={onSignOut} title="Se déconnecter"
@@ -1216,8 +1217,8 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
           <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.card, borderTop: '1px solid ' + C.border, display: 'flex', padding: '8px 0 12px', zIndex: 50 }}>
             {NAV_ITEMS.map(t => (
               <button key={t.id} onClick={() => changeTab(t.id)}
-                style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, opacity: tab === t.id ? 1 : 0.4, position: 'relative' }}>
-                <span style={{ fontSize: 20, position: 'relative' }}>
+                style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: tab === t.id ? C.accentGlow : C.muted, position: 'relative' }}>
+                <span style={{ position: 'relative' }}>
                   {t.icon}
                   {t.id === 'chat' && totalUnread > 0 && (
                     <span style={{ position: 'absolute', top: -6, right: -10, background: C.red, color: '#fff', fontSize: 9, fontWeight: 800, borderRadius: 8, padding: '1px 5px', minWidth: 14, textAlign: 'center', lineHeight: '13px' }}>{totalUnread > 9 ? '9+' : totalUnread}</span>
@@ -1260,7 +1261,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
       {tab === 'dashboard' && effectiveHomeView === 'coach' && activeCoachTeam && (
         <button onClick={() => setDailyPickerFor({ teamId: viewDay?.teamId || activeCoachTeam.id, dateStr: viewDay?.dateStr || toDateStr(new Date()) })}
           title={viewDay ? 'Ajouter une séance à ce jour' : "Ajouter une séance à ma journée"}
-          style={{ position: 'fixed', right: 20, bottom: isMobile ? 84 : 24, width: 56, height: 56, borderRadius: '50%', border: 'none', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', fontSize: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 16px rgba(59,130,246,0.5)', zIndex: 60 }}>
+          style={{ position: 'fixed', right: 20, bottom: isMobile ? 84 : 24, width: 56, height: 56, borderRadius: '50%', border: 'none', background: C.accent, color: '#fff', fontSize: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 10px 24px -10px rgba(0,0,0,0.8)', zIndex: 60 }}>
           +
         </button>
       )}
