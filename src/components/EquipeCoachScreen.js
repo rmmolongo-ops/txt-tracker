@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { LineChart, Line, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { C, KPI_CONFIG, PLAYER_COLORS, DAY_ORDER, LEADERSHIP_ROLES, seanceRowKey } from '../lib/constants'
 import { toDateStr, getMonday } from '../lib/stats'
+import Icon from './Icons'
 
 // Onglet Équipe, vue coach / admin : effectif, performances, suivi des séances, programmes.
 
@@ -28,9 +29,9 @@ export default function EquipeCoachScreen({
   <div>
     {/* Sélecteur d'équipe */}
     {equipeViewTeams.length === 0 ? (
-      <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
-        <div style={{ fontSize: 36, marginBottom: 10 }}>🏟️</div>
-        <div style={{ fontWeight: 700 }}>Aucune équipe créée</div>
+      <div style={{ border: '1px dashed ' + C.border, borderRadius: 14, padding: '32px 20px', textAlign: 'center', color: C.muted }}>
+        <Icon name="equipe" size={28} style={{ margin: '0 auto 12px' }} />
+        <div style={{ fontWeight: 600, color: C.text }}>Aucune équipe créée</div>
         <div style={{ fontSize: 13, marginTop: 6 }}>{isAdmin ? "Créez des équipes depuis l'onglet Admin" : "Tu ne diriges aucune équipe pour le moment"}</div>
       </div>
     ) : (
@@ -41,7 +42,7 @@ export default function EquipeCoachScreen({
               const sel = activeEquipeTeamId === team.id
               return (
                 <button key={team.id} onClick={() => selectEquipeTeam(team.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 14, cursor: 'pointer' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 8, border: '1px solid ' + (sel ? C.accent : C.border), background: sel ? C.accent + '22' : 'transparent', color: sel ? C.accentGlow : C.muted, fontWeight: 500, fontSize: 14, cursor: 'pointer' }}>
                   {team.photo_url
                     ? <img src={team.photo_url} alt="" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
                     : <span style={{ width: 10, height: 10, borderRadius: '50%', background: team.color, display: 'inline-block' }} />}
@@ -68,7 +69,7 @@ export default function EquipeCoachScreen({
               {canManagePlayers && (
                 <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: managedPlayers.length > 0 || addingManagedPlayer ? 12 : 0 }}>
-                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Joueurs sans compte</div>
+                    <div style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>Joueurs sans compte</div>
                     {!addingManagedPlayer && (
                       <button onClick={() => setAddingManagedPlayer(true)}
                         style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
@@ -107,7 +108,7 @@ export default function EquipeCoachScreen({
 
               {canManagePlayers && teamPlayers.length > 0 && (
                 <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
-                  <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Saisir une performance</div>
+                  <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 12 }}>Saisir une performance</div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <select value={entryTarget || ''} onChange={e => setEntryTarget(e.target.value)}
                       style={{ flex: '1 1 160px', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }}>
@@ -116,7 +117,7 @@ export default function EquipeCoachScreen({
                     </select>
                     <select value={entryKpi} onChange={e => setEntryKpi(e.target.value)}
                       style={{ flex: '1 1 160px', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }}>
-                      {KPI_CONFIG.map(k => <option key={k.id} value={k.id}>{k.icon} {k.label}</option>)}
+                      {KPI_CONFIG.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
                     </select>
                     <input type="number" placeholder="Valeur" value={entryValue} onChange={e => setEntryValue(e.target.value)}
                       style={{ flex: '0 1 100px', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }} />
@@ -130,11 +131,11 @@ export default function EquipeCoachScreen({
               )}
 
               {/* Sub-tabs */}
-              <div style={{ display: 'flex', background: C.surface, borderRadius: 12, padding: 4, marginBottom: 20, gap: 2 }}>
-                {[{ id: 'perf', icon: '📊', label: 'Performances' }, { id: 'programme', icon: '📋', label: 'Programme' }, { id: 'suivi', icon: '✅', label: 'Suivi' }].map(t => (
+              <div style={{ display: 'flex', borderRadius: 10, padding: 3, marginBottom: 20, gap: 2, border: '1px solid ' + C.border }}>
+                {[{ id: 'perf', label: 'Performances' }, { id: 'programme', label: 'Programme' }, { id: 'suivi', label: 'Suivi' }].map(t => (
                   <button key={t.id} onClick={() => { setEquipeTab(t.id); setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
-                    style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 14, background: equipeTab === t.id ? C.accent : 'transparent', color: equipeTab === t.id ? '#fff' : C.muted, transition: 'all 0.2s' }}>
-                    {t.icon} {t.label}
+                    style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500, fontSize: 14, background: equipeTab === t.id ? C.surface : 'transparent', color: equipeTab === t.id ? C.text : C.muted }}>
+                    {t.label}
                   </button>
                 ))}
               </div>
@@ -194,7 +195,7 @@ export default function EquipeCoachScreen({
                             {/* Podium - vue comparative */}
                             {barData.length > 0 && (
                               <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
-                                <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
+                                <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 12 }}>
                                   Comparaison — {kpi.label} {kpi.lower ? '(moins = mieux)' : ''}
                                 </div>
                                 <ResponsiveContainer width="100%" height={Math.max(180, barData.length * 56)}>
@@ -217,7 +218,7 @@ export default function EquipeCoachScreen({
                             )}
 
                             {/* Graphiques individuels */}
-                            <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
+                            <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 12 }}>
                               Courbe de progression par joueur
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>

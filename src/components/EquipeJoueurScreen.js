@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { C, ROLE_CONFIG } from '../lib/constants'
 import { toDateStr } from '../lib/stats'
+import Icon from './Icons'
 
 // Onglet Équipe, vue joueur : effectif de ses équipes et programmes d'entraînement de l'équipe.
 
@@ -33,8 +34,8 @@ export default function EquipeJoueurScreen({ myTeams, getProgramsForTeam, isMobi
 
   if (myTeams.length === 0) {
     return (
-      <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
-        <div style={{ fontSize: 32, marginBottom: 10 }}>👥</div>
+      <div style={{ border: '1px dashed ' + C.border, borderRadius: 14, padding: '32px 20px', textAlign: 'center', color: C.muted, fontSize: 14 }}>
+        <Icon name="equipe" size={28} style={{ margin: '0 auto 12px' }} />
         Rejoins une équipe pour voir tes coéquipiers
       </div>
     )
@@ -51,7 +52,7 @@ export default function EquipeJoueurScreen({ myTeams, getProgramsForTeam, isMobi
             const sel = activeTeamId === team.id
             return (
               <button key={team.id} onClick={() => { setRosterTeamId(team.id); setExpandedPlayerProgramId(null) }}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 20, border: '2px solid ' + (sel ? team.color : C.border), background: sel ? team.color + '20' : C.card, color: sel ? team.color : C.muted, fontWeight: sel ? 700 : 500, fontSize: 13, cursor: 'pointer' }}>
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 8, border: '1px solid ' + (sel ? C.accent : C.border), background: sel ? C.accent + '22' : 'transparent', color: sel ? C.accentGlow : C.muted, fontWeight: 500, fontSize: 13, cursor: 'pointer' }}>
                 {team.name}
               </button>
             )
@@ -59,33 +60,33 @@ export default function EquipeJoueurScreen({ myTeams, getProgramsForTeam, isMobi
         </div>
       )}
 
-      <div style={{ display: 'flex', background: C.surface, borderRadius: 12, padding: 4, marginBottom: 16, gap: 2 }}>
-        {[{ id: 'joueurs', icon: '👥', label: 'Joueurs' }, { id: 'programme', icon: '📋', label: 'Programme' }].map(t => (
+      <div style={{ display: 'flex', borderRadius: 10, padding: 3, marginBottom: 20, gap: 2, border: '1px solid ' + C.border }}>
+        {[{ id: 'joueurs', label: 'Joueurs' }, { id: 'programme', label: 'Programme' }].map(t => (
           <button key={t.id} onClick={() => setEquipePlayerTab(t.id)}
-            style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 14, background: equipePlayerTab === t.id ? C.accent : 'transparent', color: equipePlayerTab === t.id ? '#fff' : C.muted, transition: 'all 0.2s' }}>
-            {t.icon} {t.label}
+            style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500, fontSize: 14, background: equipePlayerTab === t.id ? C.surface : 'transparent', color: equipePlayerTab === t.id ? C.text : C.muted }}>
+            {t.label}
           </button>
         ))}
       </div>
 
       {equipePlayerTab === 'joueurs' && (
         <>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 8, fontWeight: 500 }}>
             {sortedPlayers.length} joueur{sortedPlayers.length !== 1 ? 's' : ''} · {activeTeam?.name}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', columnGap: 24 }}>
             {sortedPlayers.map(p => (
-              <div key={p.user_id} style={{ background: C.card, borderRadius: 14, padding: 14, border: '1px solid ' + C.border, display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                <div style={{ width: 46, height: 46, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
-                  {p.photo_url ? <img src={p.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+              <div key={p.user_id} style={{ padding: '12px 0', borderBottom: '1px solid ' + C.border, display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, overflow: 'hidden', background: C.card, border: '1px solid ' + C.border, color: C.accentGlow, display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 600, flexShrink: 0 }}>
+                  {p.photo_url ? <img src={p.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((p.prenom || '?').charAt(0) + (p.nom || '').charAt(0)).toUpperCase()}
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {p.prenom || '—'} {p.nom || ''}{p.surnom && <span style={{ color: C.gold }}> "{p.surnom}"</span>}
+                  <div style={{ fontWeight: 600, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {p.prenom || '—'} {p.nom || ''}{p.surnom && <span style={{ color: C.muted, fontWeight: 400 }}> « {p.surnom} »</span>}
                   </div>
                   <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{p.poste1 || '—'}{p.poste2 ? ' · ' + p.poste2 : ''}</div>
                   {p.role !== 'joueur' && (
-                    <span style={{ display: 'inline-block', marginTop: 4, fontSize: 10, fontWeight: 700, color: ROLE_CONFIG[p.role].color, background: ROLE_CONFIG[p.role].color + '18', padding: '2px 7px', borderRadius: 8 }}>
+                    <span style={{ display: 'inline-block', marginTop: 4, fontSize: 12, fontWeight: 500, color: C.accentGlow }}>
                       {ROLE_CONFIG[p.role].label}
                     </span>
                   )}
@@ -99,13 +100,13 @@ export default function EquipeJoueurScreen({ myTeams, getProgramsForTeam, isMobi
       {equipePlayerTab === 'programme' && (
         <div>
           {teamPrograms.length === 0 ? (
-            <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
-              <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
+            <div style={{ border: '1px dashed ' + C.border, borderRadius: 14, padding: '32px 20px', textAlign: 'center', color: C.muted, fontSize: 14 }}>
+              <Icon name="seances" size={28} style={{ margin: '0 auto 12px' }} />
               Aucun programme planifié pour cette équipe
             </div>
           ) : teamPrograms.map(prog => {
             const today = toDateStr(new Date())
-            const status = today < prog.start_date ? { label: 'À venir', color: C.gold } : today > prog.end_date ? { label: 'Terminé', color: C.muted } : { label: 'En cours', color: C.green }
+            const status = today < prog.start_date ? { label: 'À venir', color: C.accentGlow } : today > prog.end_date ? { label: 'Terminé', color: C.muted } : { label: 'En cours', color: C.green }
             const expanded = expandedPlayerProgramId === prog.id
             return (
               <div key={prog.id} style={{ background: C.card, borderRadius: 14, marginBottom: 10, border: '1px solid ' + (expanded ? C.accent + '60' : C.border), overflow: 'hidden' }}>
@@ -114,31 +115,31 @@ export default function EquipeJoueurScreen({ myTeams, getProgramsForTeam, isMobi
                   style={{ padding: 16, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                      <div style={{ fontWeight: 800, fontSize: 15 }}>{prog.name}</div>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: status.color, background: status.color + '20', padding: '2px 8px', borderRadius: 8 }}>{status.label}</span>
+                      <div style={{ fontWeight: 600, fontSize: 15 }}>{prog.name}</div>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: status.color }}>{status.label}</span>
                     </div>
                     <div style={{ fontSize: 12, color: C.muted }}>
                       Du {new Date(prog.start_date).toLocaleDateString('fr-FR')} au {new Date(prog.end_date).toLocaleDateString('fr-FR')}
                     </div>
                   </div>
-                  <div style={{ fontSize: 18, color: C.muted, flexShrink: 0, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>⌄</div>
+                  <Icon name="chevron" size={18} style={{ color: C.muted, flexShrink: 0, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
                 </div>
                 {expanded && (
                   <div style={{ borderTop: '1px solid ' + C.border, padding: '14px 16px' }}>
                     {prog.sessions.map((s, si) => (
                       <div key={s.day} style={{ marginBottom: si < prog.sessions.length - 1 ? 16 : 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                          <span style={{ fontSize: 16 }}>{s.icon}</span>
-                          <span style={{ fontWeight: 700, fontSize: 13 }}>{s.day} — {s.label}</span>
-                          <span style={{ fontSize: 11, color: s.color, background: s.color + '20', padding: '2px 8px', borderRadius: 8, marginLeft: 'auto', flexShrink: 0 }}>{s.duration}</span>
+                          <span className="mono" style={{ fontSize: 12, color: C.muted, width: 32 }}>{s.day}</span>
+                          <span style={{ fontWeight: 600, fontSize: 13 }}>{s.label}</span>
+                          <span className="mono" style={{ fontSize: 12, color: C.muted, marginLeft: 'auto', flexShrink: 0 }}>{s.duration}</span>
                         </div>
-                        <div style={{ fontSize: 12, color: s.color, marginBottom: 8, marginLeft: 24 }}>🎯 {s.objectif}</div>
+                        <div style={{ fontSize: 12, color: C.accentGlow, marginBottom: 8, marginLeft: 40 }}>Objectif : {s.objectif}</div>
                         {s.blocs.map((bloc, bi) => (
-                          <div key={bi} style={{ marginBottom: 8, marginLeft: 24 }}>
-                            <div style={{ fontSize: 12, fontWeight: 700 }}>{bloc.titre} <span style={{ color: C.muted, fontWeight: 400 }}>({bloc.duree})</span></div>
+                          <div key={bi} style={{ marginBottom: 8, marginLeft: 40 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600 }}>{bloc.titre} <span style={{ color: C.muted, fontWeight: 400 }}>({bloc.duree})</span></div>
                             {bloc.exercices.map((ex, ei) => (
                               <div key={ei} style={{ fontSize: 12, color: C.muted, marginTop: 3, display: 'flex', gap: 6 }}>
-                                <span>•</span><span>{ex}</span>
+                                <span aria-hidden="true">·</span><span>{ex}</span>
                               </div>
                             ))}
                           </div>
