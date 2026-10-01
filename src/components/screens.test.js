@@ -135,12 +135,12 @@ describe('StatsScreen', () => {
   ]
   const getMesuresForKpi = (id) => mesures.filter(m => m.kpi_id === id)
 
-  test('suppression d’une mesure en deux temps (🗑️ puis confirmation)', async () => {
+  test('suppression d’une mesure en deux temps (icône corbeille puis confirmation)', async () => {
     const onDeleteMesure = jest.fn(() => Promise.resolve())
     await render(<StatsScreen isMobile={false} mesures={mesures} selectedKpi="sprint30" setSelectedKpi={jest.fn()}
       getLatest={() => 4.8} getMesuresForKpi={getMesuresForKpi} getProgress={() => '4.0'} onDeleteMesure={onDeleteMesure} />)
     expect(container.textContent).toContain('4.8 sec')
-    const trash = [...container.querySelectorAll('button')].filter(b => b.textContent === '🗑️')
+    const trash = [...container.querySelectorAll('button')].filter(b => b.getAttribute('aria-label') === 'Supprimer cette mesure')
     expect(trash).toHaveLength(2)
     await act(async () => { trash[0].click() })
     expect(onDeleteMesure).not.toHaveBeenCalled()
