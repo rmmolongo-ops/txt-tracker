@@ -37,7 +37,7 @@ export default function FicheJoueur({ player, onClose }) {
       <div onClick={e => e.stopPropagation()} id="fiche-joueur-print" style={{ background: C.card, borderRadius: 18, padding: 20, maxWidth: 460, width: '100%', maxHeight: '88vh', overflowY: 'auto', border: '1px solid ' + C.border }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 58, height: 58, borderRadius: 14, background: C.surface, color: C.accentGlow, fontWeight: 600, overflow: 'hidden', display: 'grid', placeItems: 'center', fontSize: 20, flexShrink: 0 }}>
+            <div style={{ width: 58, height: 58, borderRadius: 14, background: C.surface, color: C.accentGlow, fontWeight: 600, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
               {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (((j.prenom || '').charAt(0) + (j.nom || '').charAt(0)).toUpperCase() || 'TxT')}
             </div>
             <div>

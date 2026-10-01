@@ -223,7 +223,7 @@ export default function EquipeCoachScreen({
                                 <div key={j.user_id} style={{ background: C.card, borderRadius: 14, border: '1px solid ' + C.border, overflow: 'hidden' }}>
                                   <div style={{ padding: '12px 14px 8px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                                      <div style={{ width: 36, height: 36, borderRadius: 10, background: C.surface, color: C.accentGlow, fontWeight: 600, overflow: 'hidden', display: 'grid', placeItems: 'center', fontSize: 13, flexShrink: 0 }}>
+                                      <div style={{ width: 36, height: 36, borderRadius: 10, background: C.surface, color: C.accentGlow, fontWeight: 600, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>
                                         {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((j.prenom || '?').charAt(0) + (j.nom || '').charAt(0)).toUpperCase()}
                                       </div>
                                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -358,7 +358,7 @@ export default function EquipeCoachScreen({
                                   <div style={{ width: 22, height: 22, borderRadius: 6, border: '2px solid ' + (isDone ? C.green : isSelected ? C.accent : C.border), background: isDone ? C.green : isSelected ? C.accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#fff', flexShrink: 0 }}>
                                     {(isDone || isSelected) && '✓'}
                                   </div>
-                                  <div style={{ width: 30, height: 30, borderRadius: 8, overflow: 'hidden', background: C.surface, color: C.accentGlow, fontWeight: 600, display: 'grid', placeItems: 'center', fontSize: 12, flexShrink: 0 }}>
+                                  <div style={{ width: 30, height: 30, borderRadius: 8, overflow: 'hidden', background: C.surface, color: C.accentGlow, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flexShrink: 0 }}>
                                     {p.photo_url ? <img src={p.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((p.prenom || '?').charAt(0) + (p.nom || '').charAt(0)).toUpperCase()}
                                   </div>
                                   <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

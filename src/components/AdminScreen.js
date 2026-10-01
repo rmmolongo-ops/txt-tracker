@@ -497,7 +497,7 @@ export default function AdminScreen({
                     <div style={{ height: 2, background: team.color }} />
                     <div style={{ padding: '16px 16px 14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 56, height: 56, borderRadius: 12, background: C.bg, border: '1px solid ' + C.border, overflow: 'hidden', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                        <div style={{ width: 56, height: 56, borderRadius: 12, background: C.bg, border: '1px solid ' + C.border, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           {team.photo_url
                             ? <img src={team.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             : <span style={{ fontSize: 16, fontWeight: 600, color: C.accentGlow }}>{(team.name || '?').slice(0, 3).toUpperCase()}</span>}
@@ -591,7 +591,7 @@ export default function AdminScreen({
           <div style={{ padding: '20px 20px 18px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <label style={{ position: 'relative', cursor: uploadingTeamPhoto === selectedAdminTeam.id ? 'wait' : 'pointer', flexShrink: 0 }}>
-                <div style={{ width: 72, height: 72, borderRadius: 16, background: C.bg, border: '1px solid ' + C.border, overflow: 'hidden', display: 'grid', placeItems: 'center', opacity: uploadingTeamPhoto === selectedAdminTeam.id ? 0.6 : 1 }}>
+                <div style={{ width: 72, height: 72, borderRadius: 16, background: C.bg, border: '1px solid ' + C.border, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: uploadingTeamPhoto === selectedAdminTeam.id ? 0.6 : 1 }}>
                   {uploadingTeamPhoto === selectedAdminTeam.id
                     ? <span style={{ fontSize: 12, color: C.muted }}>Envoi…</span>
                     : selectedAdminTeam.photo_url
