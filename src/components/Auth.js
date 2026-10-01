@@ -252,7 +252,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
         </button>
       </div>
       <div style={{ marginTop: 20, fontSize: 12, color: C.muted, textAlign: 'center' }}>
-        Application réservée aux joueurs suivis par Coach Ralph 🎯
+        Suivi de performance pour les joueurs de ton club
       </div>
       <div style={{ marginTop: 10, fontSize: 11, color: C.muted, textAlign: 'center', display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
         <a href="/legal/mentions-legales.html" target="_blank" rel="noopener noreferrer" style={{ color: C.muted }}>Mentions légales</a>
