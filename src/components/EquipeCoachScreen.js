@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { LineChart, Line, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { C, KPI_CONFIG, PLAYER_COLORS, DAY_ORDER, LEADERSHIP_ROLES, seanceRowKey } from '../lib/constants'
+import { LineChart, Line, BarChart, Bar, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { C, KPI_CONFIG, DAY_ORDER, LEADERSHIP_ROLES, seanceRowKey } from '../lib/constants'
 import { toDateStr, getMonday } from '../lib/stats'
 import Icon from './Icons'
 
@@ -144,8 +144,8 @@ export default function EquipeCoachScreen({
               {equipeTab === 'perf' && (
                 <div>
                   {teamPlayers.length === 0 ? (
-                    <div style={{ background: C.card, borderRadius: 14, padding: 32, textAlign: 'center', color: C.muted }}>
-                      <div style={{ fontSize: 32, marginBottom: 10 }}>👥</div>
+                    <div style={{ border: '1px dashed ' + C.border, borderRadius: 14, padding: '32px 20px', textAlign: 'center', color: C.muted, fontSize: 14 }}>
+                      <Icon name="equipe" size={28} style={{ margin: '0 auto 12px' }} />
                       Aucun joueur dans cette équipe
                     </div>
                   ) : (
@@ -154,8 +154,8 @@ export default function EquipeCoachScreen({
                       <div style={{ display: 'flex', gap: 6, marginBottom: 20, overflowX: 'auto', paddingBottom: 4 }}>
                         {KPI_CONFIG.map(kpi => (
                           <button key={kpi.id} onClick={() => setEquipeKpi(kpi.id)}
-                            style={{ padding: '6px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', background: equipeKpi === kpi.id ? kpi.color : C.surface, color: '#fff', opacity: equipeKpi === kpi.id ? 1 : 0.55, flexShrink: 0 }}>
-                            {kpi.icon} {kpi.label.split(' ')[0]}
+                            style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid ' + (equipeKpi === kpi.id ? C.accent : C.border), cursor: 'pointer', fontWeight: 500, fontSize: 13, whiteSpace: 'nowrap', background: equipeKpi === kpi.id ? C.accent + '22' : 'transparent', color: equipeKpi === kpi.id ? C.accentGlow : C.muted, flexShrink: 0 }}>
+                            {kpi.label.split(' ')[0]}
                           </button>
                         ))}
                       </div>
@@ -166,21 +166,19 @@ export default function EquipeCoachScreen({
                         /* Graphique comparatif en barres — valeurs actuelles */
                         const barData = teamPlayers
                           .filter(j => j.kpis?.[equipeKpi] != null)
-                          .map((j, idx) => ({
+                          .map(j => ({
                             name: (j.prenom || '?') + ' ' + (j.nom?.[0] || '') + '.',
                             val: j.kpis[equipeKpi],
-                            color: PLAYER_COLORS[idx % PLAYER_COLORS.length],
                           }))
                           .sort((a, b) => kpi.lower ? a.val - b.val : b.val - a.val)
 
                         /* Données timeline pour chaque joueur */
-                        const playerCharts = teamPlayers.map((j, idx) => {
+                        const playerCharts = teamPlayers.map(j => {
                           const arr = (j.mesuresData || [])
                             .filter(m => m.kpi_id === equipeKpi)
                             .sort((a, b) => a.date.localeCompare(b.date))
                           return {
                             player: j,
-                            color: PLAYER_COLORS[idx % PLAYER_COLORS.length],
                             chartData: arr.slice(-10).map(d => ({ date: d.date.slice(5), val: d.valeur })),
                             latest: arr.length > 0 ? arr[arr.length - 1].valeur : null,
                             prog: arr.length >= 2 ? (kpi.lower
@@ -201,15 +199,14 @@ export default function EquipeCoachScreen({
                                 <ResponsiveContainer width="100%" height={Math.max(180, barData.length * 56)}>
                                   <BarChart data={barData} layout="vertical" margin={{ left: 0, right: 60, top: 4, bottom: 4 }} barCategoryGap="30%">
                                     <CartesianGrid stroke={C.border} horizontal={false} />
-                                    <XAxis type="number" domain={[0, dataMax => Math.ceil(dataMax * 1.25)]} tick={{ fontSize: 11, fill: '#cbd5e1' }} axisLine={{ stroke: C.border }} tickLine={{ stroke: C.border }} />
-                                    <YAxis type="category" dataKey="name" tick={{ fontSize: 13, fontWeight: 600, fill: '#e2e8f0' }} axisLine={{ stroke: C.border }} tickLine={false} width={80} />
+                                    <XAxis type="number" domain={[0, dataMax => Math.ceil(dataMax * 1.25)]} tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} />
+                                    <YAxis type="category" dataKey="name" tick={{ fontSize: 13, fontWeight: 500, fill: C.text }} axisLine={false} tickLine={false} width={80} />
                                     <Tooltip
                                       cursor={{ fill: '#ffffff', opacity: 0.04 }}
                                       contentStyle={{ background: C.card, border: '1px solid ' + C.border, borderRadius: 8, color: C.text, fontSize: 12 }}
                                       formatter={v => [v + ' ' + kpi.unit, kpi.label]} />
-                                    <Bar dataKey="val" radius={[0, 6, 6, 0]} maxBarSize={28}>
-                                      {barData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                                      <LabelList dataKey="val" position="right" fill="#e2e8f0" fontSize={12} fontWeight={700}
+                                    <Bar dataKey="val" fill={C.accent} radius={[0, 4, 4, 0]} maxBarSize={24}>
+                                      <LabelList dataKey="val" position="right" fill={C.text} fontSize={12} fontWeight={600}
                                         formatter={v => v + ' ' + kpi.unit} />
                                     </Bar>
                                   </BarChart>
@@ -222,29 +219,28 @@ export default function EquipeCoachScreen({
                               Courbe de progression par joueur
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
-                              {playerCharts.map(({ player: j, color, chartData, latest, prog }) => (
+                              {playerCharts.map(({ player: j, chartData, latest, prog }) => (
                                 <div key={j.user_id} style={{ background: C.card, borderRadius: 14, border: '1px solid ' + C.border, overflow: 'hidden' }}>
-                                  <div style={{ height: 3, background: color }} />
                                   <div style={{ padding: '12px 14px 8px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
-                                        {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+                                      <div style={{ width: 36, height: 36, borderRadius: 10, background: C.surface, color: C.accentGlow, fontWeight: 600, overflow: 'hidden', display: 'grid', placeItems: 'center', fontSize: 13, flexShrink: 0 }}>
+                                        {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((j.prenom || '?').charAt(0) + (j.nom || '').charAt(0)).toUpperCase()}
                                       </div>
                                       <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontWeight: 700, fontSize: 13 }}>{j.prenom} {j.nom}</div>
+                                        <div style={{ fontWeight: 600, fontSize: 14 }}>{j.prenom} {j.nom}</div>
                                         <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>{j.poste1 || '—'}</div>
                                         <button onClick={() => openFiche(j, teamPlayers)}
-                                          style={{ background: 'none', border: 'none', color: C.accent, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
-                                          📋 Fiche joueur
+                                          style={{ background: 'none', border: 'none', color: C.accentGlow, fontSize: 12, fontWeight: 500, cursor: 'pointer', padding: 0 }}>
+                                          Fiche joueur
                                         </button>
                                       </div>
                                       <div style={{ textAlign: 'right' }}>
-                                        <div style={{ fontSize: 20, fontWeight: 900, color: latest != null ? kpi.color : C.muted }}>
+                                        <div className="mono" style={{ fontSize: 20, fontWeight: 600, color: latest != null ? C.text : C.muted }}>
                                           {latest != null ? latest : '—'}
                                           <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}> {kpi.unit}</span>
                                         </div>
                                         {prog != null && (
-                                          <div style={{ fontSize: 11, fontWeight: 700, color: parseFloat(prog) >= 0 ? C.green : C.red }}>
+                                          <div style={{ fontSize: 12, fontWeight: 600, color: parseFloat(prog) >= 0 ? C.green : C.red }}>
                                             {parseFloat(prog) >= 0 ? '▲' : '▼'} {Math.abs(prog)}%
                                           </div>
                                         )}
@@ -256,7 +252,7 @@ export default function EquipeCoachScreen({
                                           <XAxis dataKey="date" tick={{ fontSize: 9, fill: C.muted }} />
                                           <YAxis tick={{ fontSize: 9, fill: C.muted }} width={28} />
                                           <Tooltip contentStyle={{ background: C.card, border: '1px solid ' + C.border, borderRadius: 6, color: C.text, fontSize: 11 }} formatter={v => [v + ' ' + kpi.unit]} />
-                                          <Line type="monotone" dataKey="val" stroke={color} strokeWidth={2} dot={{ fill: color, r: 3 }} activeDot={{ r: 5 }} />
+                                          <Line type="monotone" dataKey="val" stroke={C.accentGlow} strokeWidth={2} dot={{ fill: C.accentGlow, r: 3 }} activeDot={{ r: 5 }} />
                                         </LineChart>
                                       </ResponsiveContainer>
                                     ) : (
@@ -284,8 +280,8 @@ export default function EquipeCoachScreen({
                 const progs = getProgramsForTeam(equipeTeamId)
                 if (progs.length === 0) {
                   return (
-                    <div style={{ background: C.card, borderRadius: 16, padding: 32, textAlign: 'center', color: C.muted }}>
-                      <div style={{ fontSize: 32, marginBottom: 10 }}>✅</div>
+                    <div style={{ border: '1px dashed ' + C.border, borderRadius: 14, padding: '32px 20px', textAlign: 'center', color: C.muted, fontSize: 14 }}>
+                      <Icon name="seances" size={28} style={{ margin: '0 auto 12px' }} />
                       Aucun programme planifié pour cette équipe
                     </div>
                   )
@@ -310,7 +306,7 @@ export default function EquipeCoachScreen({
                       <button onClick={() => canGoPrev && setSuiviWeekOffset(o => o - 1)} disabled={!canGoPrev}
                         style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid ' + C.border, background: C.card, color: canGoPrev ? C.text : C.border, fontSize: 16, cursor: canGoPrev ? 'pointer' : 'default' }}>‹</button>
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 13, fontWeight: 700 }}>
+                        <div className="mono" style={{ fontSize: 13, fontWeight: 600 }}>
                           {weekDates[0].date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} — {weekDates[6].date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
                         </div>
                         {suiviWeekOffset !== 0 && (
@@ -341,11 +337,11 @@ export default function EquipeCoachScreen({
                       }
 
                       return (
-                        <div key={cardKey} style={{ marginBottom: 14, borderRadius: 16, overflow: 'hidden', border: '1px solid ' + C.border }}>
+                        <div key={cardKey} style={{ marginBottom: 14, borderRadius: 14, overflow: 'hidden', border: '1px solid ' + C.border }}>
                           <div style={{ background: C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <div style={{ width: 42, height: 42, borderRadius: 12, background: s.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
+                            <div className="mono" style={{ width: 42, height: 42, borderRadius: 10, background: C.bg, border: '1px solid ' + C.border, color: C.muted, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{s.day}</div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontWeight: 700, fontSize: 14, textTransform: 'capitalize' }}>{dateLabel}</div>
+                              <div style={{ fontWeight: 600, fontSize: 14, textTransform: 'capitalize' }}>{dateLabel}</div>
                               <div style={{ fontSize: 12, color: C.muted }}>{s.label} · {doneUserIds.size}/{teamPlayers.length} fait{doneUserIds.size !== 1 ? 's' : ''}</div>
                             </div>
                           </div>
@@ -362,20 +358,20 @@ export default function EquipeCoachScreen({
                                   <div style={{ width: 22, height: 22, borderRadius: 6, border: '2px solid ' + (isDone ? C.green : isSelected ? C.accent : C.border), background: isDone ? C.green : isSelected ? C.accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#fff', flexShrink: 0 }}>
                                     {(isDone || isSelected) && '✓'}
                                   </div>
-                                  <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>
-                                    {p.photo_url ? <img src={p.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '⚽'}
+                                  <div style={{ width: 30, height: 30, borderRadius: 8, overflow: 'hidden', background: C.surface, color: C.accentGlow, fontWeight: 600, display: 'grid', placeItems: 'center', fontSize: 12, flexShrink: 0 }}>
+                                    {p.photo_url ? <img src={p.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((p.prenom || '?').charAt(0) + (p.nom || '').charAt(0)).toUpperCase()}
                                   </div>
                                   <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {p.prenom || '—'} {p.nom || ''}
                                   </div>
                                   {isDone && (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                                      <span style={{ fontSize: 10, fontWeight: 700, color: row.validated_by ? C.gold : C.green, background: (row.validated_by ? C.gold : C.green) + '18', padding: '2px 7px', borderRadius: 8 }}>
+                                      <span style={{ fontSize: 12, fontWeight: 500, color: C.green }}>
                                         {row.validated_by ? '✓ Validé' : '✓ Fait'}
                                       </span>
                                       <button onClick={(e) => { e.stopPropagation(); unvalidateSeance(row.id, cardKey, p.user_id) }}
                                         aria-label="Annuler la validation de cette séance"
-                                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, opacity: 0.4 }}>🗑️</button>
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, display: 'grid', placeItems: 'center', padding: 2 }}><Icon name="trash" size={15} /></button>
                                     </div>
                                   )}
                                 </div>
@@ -383,7 +379,7 @@ export default function EquipeCoachScreen({
                             })}
                             {pending.length > 0 && (
                               <button onClick={() => validateSeances(pending.map(p => p.user_id), day, dateStr, equipeTeamId, cardKey)}
-                                style={{ marginTop: 10, width: '100%', padding: '10px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                                style={{ marginTop: 10, width: '100%', padding: '10px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
                                 Valider pour {pending.length} joueur{pending.length !== 1 ? 's' : ''}
                               </button>
                             )}
