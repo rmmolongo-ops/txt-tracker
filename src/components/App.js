@@ -76,6 +76,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
   const { unreadCounts, totalUnread, markChatRead } = useChatUnread({ userId: user.id, availableTeams, myTeamIds, openTeamId: tab === 'chat' ? chatTeamId : null })
   const [seanceTemplates, setSeanceTemplates] = useState([])
   const [seanceTemplatesLoading, setSeanceTemplatesLoading] = useState(false)
+  const [seanceCategories, setSeanceCategories] = useState([])
   const [libraryPickerFor, setLibraryPickerFor] = useState(null)
   const [viewDay, setViewDay] = useState(null)
   const [dailySessions, setDailySessions] = useState([])
@@ -443,8 +444,12 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
 
   const loadSeanceTemplates = useCallback(async () => {
     setSeanceTemplatesLoading(true)
-    const { data } = await supabase.from('seance_templates').select('*').eq('created_by', user.id).order('created_at', { ascending: false })
+    const [{ data }, { data: cats }] = await Promise.all([
+      supabase.from('seance_templates').select('*').eq('created_by', user.id).order('created_at', { ascending: false }),
+      supabase.from('seance_categories').select('*').eq('created_by', user.id).order('name'),
+    ])
     setSeanceTemplates(data || [])
+    setSeanceCategories(cats || [])
     setSeanceTemplatesLoading(false)
   }, [user.id])
 
@@ -759,12 +764,23 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
     return true
   }
 
-  const saveSessionAsTemplate = async (session) => {
+  const createSeanceCategory = async (name) => {
+    const clean = name.trim()
+    const existing = seanceCategories.find(c => c.name.trim().toLowerCase() === clean.toLowerCase())
+    if (existing) return existing
+    const { data, error } = await supabase.from('seance_categories').insert({ name: clean, created_by: user.id }).select().single()
+    if (error) { showToast('❌ ' + error.message); return null }
+    setSeanceCategories(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+    return data
+  }
+
+  const saveSessionAsTemplate = async (session, categoryId = null) => {
     if (!session.label?.trim()) { showToast('Donne un nom à la séance pour l’ajouter à la bibliothèque'); return false }
     const payload = {
       label: session.label.trim(), icon: session.icon || '', color: session.color || '#3b82f6', duration: (session.duration || '').trim() || '1h',
       objectif: (session.objectif || '').trim(),
       blocs: (session.blocs || []).map(b => ({ ...b, exercices: (b.exercices || []).filter(e => e.trim() !== '') })),
+      category_id: categoryId,
       created_by: user.id,
     }
     const { data, error } = await supabase.from('seance_templates').insert(payload).select().single()
@@ -1105,7 +1121,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
             <DashboardCoach
               activeCoachTeam={activeCoachTeam} assignDailySession={assignDailySession} assignMatchSession={assignMatchSession} changeTab={changeTab} coachRosterData={coachRosterData}
               dailyPickerFor={dailyPickerFor} dailySessions={dailySessions} getDailySession={getDailySession} leadershipTeams={leadershipTeams} managedPlayers={managedPlayers}
-              removeDailySession={removeDailySession} saveAnnotation={saveAnnotation} saveMatchResult={saveMatchResult} saveSessionAsTemplate={saveSessionAsTemplate} seanceTemplates={seanceTemplates} setCoachTeamId={setCoachTeamId}
+              removeDailySession={removeDailySession} saveAnnotation={saveAnnotation} saveMatchResult={saveMatchResult} saveSessionAsTemplate={saveSessionAsTemplate} seanceCategories={seanceCategories} createSeanceCategory={createSeanceCategory} seanceTemplates={seanceTemplates} setCoachTeamId={setCoachTeamId}
               setDailyPickerFor={setDailyPickerFor} setEquipeTab={setEquipeTab} setViewDay={setViewDay} updateDailySession={updateDailySession} viewDay={viewDay} />
           ) : (
             <DashboardJoueur
@@ -1159,7 +1175,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
 
       {/* ── BIBLIOTHÈQUE DE SÉANCES ── */}
       {tab === 'bibliotheque' && hasLeadership && (
-        <BibliothequeScreen user={user} templates={seanceTemplates} loading={seanceTemplatesLoading} setTemplates={setSeanceTemplates} showToast={showToast} />
+        <BibliothequeScreen user={user} templates={seanceTemplates} loading={seanceTemplatesLoading} setTemplates={setSeanceTemplates} categories={seanceCategories} setCategories={setSeanceCategories} showToast={showToast} />
       )}
 
       {/* ── ADMIN : VUE OVERVIEW ── */}

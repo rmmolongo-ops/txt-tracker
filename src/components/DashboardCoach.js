@@ -17,7 +17,7 @@ const isSessionModified = (original, draft) => !!draft && (
 export default function DashboardCoach({
   activeCoachTeam, assignDailySession, assignMatchSession, changeTab, coachRosterData, dailyPickerFor,
   dailySessions, getDailySession, leadershipTeams, managedPlayers, removeDailySession, saveAnnotation,
-  saveMatchResult, saveSessionAsTemplate, seanceTemplates, setCoachTeamId, setDailyPickerFor, setEquipeTab, setViewDay,
+  saveMatchResult, saveSessionAsTemplate, seanceCategories = [], createSeanceCategory, seanceTemplates, setCoachTeamId, setDailyPickerFor, setEquipeTab, setViewDay,
   updateDailySession, viewDay,
 }) {
   const [calendarMonth, setCalendarMonth] = useState(() => { const d = new Date(); d.setDate(1); return d })
@@ -28,6 +28,8 @@ export default function DashboardCoach({
   const [editingDailySession, setEditingDailySession] = useState(false)
   const [dailySessionDraft, setDailySessionDraft] = useState(null)
   const [confirmLibraryAdd, setConfirmLibraryAdd] = useState(false)
+  const [libraryCategory, setLibraryCategory] = useState('')
+  const [libraryNewCategory, setLibraryNewCategory] = useState('')
   const [editingMatchId, setEditingMatchId] = useState(null)
   const [matchDraft, setMatchDraft] = useState({ resultat: null, buts: {}, presents: [], score_pour: '', score_contre: '' })
   const swipeStartX = useRef(null)
@@ -286,13 +288,36 @@ export default function DashboardCoach({
                               <div style={{ fontSize: 13, marginBottom: 10, lineHeight: 1.5 }}>
                                 Ajouter <strong>« {dailySessionDraft.label.trim() || 'Sans nom'} »</strong> à ta bibliothèque ? Cette version modifiée sera enregistrée comme nouveau modèle.
                               </div>
-                              <div style={{ display: 'flex', gap: 8 }}>
+                              <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Catégorie (optionnel)</div>
+                              <select value={libraryCategory} onChange={e => setLibraryCategory(e.target.value)}
+                                style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '9px 10px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}>
+                                <option value="">Sans catégorie</option>
+                                {seanceCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                <option value="__new">+ Nouvelle catégorie…</option>
+                              </select>
+                              {libraryCategory === '__new' && (
+                                <input value={libraryNewCategory} maxLength={40} autoFocus placeholder="Nom de la catégorie (ex : Technique)"
+                                  onChange={e => setLibraryNewCategory(e.target.value)}
+                                  style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '9px 10px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 8 }} />
+                              )}
+                              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                                 <button onClick={() => setConfirmLibraryAdd(false)}
                                   style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer' }}>
                                   Annuler
                                 </button>
-                                <button onClick={async () => { if (await saveSessionAsTemplate({ ...viewDay.s, ...dailySessionDraft })) setConfirmLibraryAdd(false) }}
-                                  style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                                <button disabled={libraryCategory === '__new' && !libraryNewCategory.trim()}
+                                  onClick={async () => {
+                                    let categoryId = libraryCategory && libraryCategory !== '__new' ? libraryCategory : null
+                                    if (libraryCategory === '__new') {
+                                      const created = await createSeanceCategory(libraryNewCategory)
+                                      if (!created) return
+                                      categoryId = created.id
+                                    }
+                                    if (await saveSessionAsTemplate({ ...viewDay.s, ...dailySessionDraft }, categoryId)) {
+                                      setConfirmLibraryAdd(false); setLibraryCategory(''); setLibraryNewCategory('')
+                                    }
+                                  }}
+                                  style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: libraryCategory === '__new' && !libraryNewCategory.trim() ? 0.5 : 1 }}>
                                   Confirmer l'ajout
                                 </button>
                               </div>

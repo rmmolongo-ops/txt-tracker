@@ -5,7 +5,14 @@ import Icon from './Icons'
 
 // Onglet Bibliothèque (coachs) : séances types réutilisables, création / modification / suppression.
 // La liste `templates` est partagée avec le reste de l'appli (programmes, calendrier) : elle vit dans App.
-export default function BibliothequeScreen({ user, templates, loading, setTemplates, showToast }) {
+export default function BibliothequeScreen({ user, templates, loading, setTemplates, categories = [], setCategories = () => {}, showToast }) {
+  const [filter, setFilter] = useState('all')
+  const [search, setSearch] = useState('')
+  const [managingCategories, setManagingCategories] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [renamingCategoryId, setRenamingCategoryId] = useState(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [confirmDeleteCategoryId, setConfirmDeleteCategoryId] = useState(null)
   const [editingTemplate, setEditingTemplate] = useState(false)
   const [templateDraft, setTemplateDraft] = useState(null)
   const [editingTemplateId, setEditingTemplateId] = useState(null)
@@ -16,6 +23,7 @@ export default function BibliothequeScreen({ user, templates, loading, setTempla
     const clean = {
       label: draft.label.trim(), icon: draft.icon, color: draft.color, duration: draft.duration.trim() || '1h', objectif: draft.objectif.trim(),
       blocs: draft.blocs.map(b => ({ ...b, exercices: b.exercices.filter(e => e.trim() !== '') })),
+      category_id: draft.category_id || null,
     }
     if (templateId) {
       const { data, error } = await supabase.from('seance_templates').update({ ...clean, updated_at: new Date().toISOString() }).eq('id', templateId).select().single()
@@ -32,6 +40,49 @@ export default function BibliothequeScreen({ user, templates, loading, setTempla
     showToast('Séance enregistrée dans la bibliothèque')
   }
 
+  const categoryError = (error) => error.code === '23505' ? 'Tu as déjà une catégorie avec ce nom' : error.message
+
+  const addCategory = async () => {
+    const name = newCategoryName.trim()
+    if (!name) return
+    const { data, error } = await supabase.from('seance_categories').insert({ name, created_by: user.id }).select().single()
+    if (error) { showToast('Création impossible : ' + categoryError(error)); return }
+    setCategories(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+    setNewCategoryName('')
+    showToast('Catégorie créée')
+  }
+
+  const renameCategory = async (id) => {
+    const name = renameValue.trim()
+    if (!name) return
+    const { data, error } = await supabase.from('seance_categories').update({ name }).eq('id', id).select().single()
+    if (error) { showToast('Modification impossible : ' + categoryError(error)); return }
+    setCategories(prev => prev.map(c => c.id === id ? data : c).sort((a, b) => a.name.localeCompare(b.name)))
+    setRenamingCategoryId(null)
+  }
+
+  const deleteCategory = async (id) => {
+    const { error } = await supabase.from('seance_categories').delete().eq('id', id)
+    if (error) { showToast('Suppression impossible : ' + error.message); return }
+    setCategories(prev => prev.filter(c => c.id !== id))
+    setTemplates(prev => prev.map(t => t.category_id === id ? { ...t, category_id: null } : t))
+    if (filter === id) setFilter('all')
+    setConfirmDeleteCategoryId(null)
+    showToast('Catégorie supprimée, ses séances sont conservées')
+  }
+
+  const categoryName = (id) => categories.find(c => c.id === id)?.name
+  const normalize = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  const query = normalize(search.trim())
+  // La recherche porte sur toute la bibliothèque (nom, objectif, catégorie, blocs et exercices) et prend le pas sur le filtre par catégorie.
+  const matchesSearch = (t) => normalize([
+    t.label, t.objectif, categoryName(t.category_id),
+    ...(t.blocs || []).flatMap(b => [b.titre, ...(b.exercices || [])]),
+  ].join(' ')).includes(query)
+  const visibleTemplates = query
+    ? templates.filter(matchesSearch)
+    : templates.filter(t => filter === 'all' ? true : filter === 'none' ? !t.category_id : t.category_id === filter)
+
   const deleteTemplate = async (id) => {
     await supabase.from('seance_templates').delete().eq('id', id)
     setTemplates(prev => prev.filter(t => t.id !== id))
@@ -44,21 +95,96 @@ export default function BibliothequeScreen({ user, templates, loading, setTempla
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>Mes séances types</div>
-            <button onClick={() => { setTemplateDraft({ label: '', icon: '', color: '#3b82f6', duration: '1h30', objectif: '', blocs: JSON.parse(JSON.stringify(DEFAULT_TEMPLATE_BLOCS)) }); setEditingTemplateId(null); setEditingTemplate(true) }}
+            <button onClick={() => { setTemplateDraft({ label: '', icon: '', color: '#3b82f6', duration: '1h30', objectif: '', blocs: JSON.parse(JSON.stringify(DEFAULT_TEMPLATE_BLOCS)), category_id: categories.some(c => c.id === filter) ? filter : '' }); setEditingTemplateId(null); setEditingTemplate(true) }}
               style={{ padding: '9px 16px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
               + Nouvelle séance
             </button>
           </div>
 
+          <div style={{ position: 'relative', marginBottom: 12 }}>
+            <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une séance, un exercice ou une catégorie..."
+              aria-label="Rechercher dans la bibliothèque"
+              style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 36px 10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+            {search && (
+              <button onClick={() => setSearch('')} aria-label="Effacer la recherche"
+                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: C.muted, fontSize: 16, cursor: 'pointer', padding: 4, lineHeight: 1 }}>✕</button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14, opacity: query ? 0.5 : 1 }}>
+            {[{ id: 'all', name: 'Toutes' }, ...categories, { id: 'none', name: 'Sans catégorie' }].map(c => {
+              const sel = !query && filter === c.id
+              return (
+                <button key={c.id} onClick={() => { setSearch(''); setFilter(c.id) }}
+                  style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid ' + (sel ? C.accent : C.border), background: sel ? C.accent + '22' : 'transparent', color: sel ? C.accentGlow : C.muted, fontWeight: 500, fontSize: 13, cursor: 'pointer' }}>
+                  {c.name}
+                </button>
+              )
+            })}
+            <button onClick={() => setManagingCategories(v => !v)}
+              style={{ padding: '6px 12px', borderRadius: 8, border: '1px dashed ' + C.border, background: 'transparent', color: C.accent, fontWeight: 500, fontSize: 13, cursor: 'pointer' }}>
+              {managingCategories ? 'Fermer' : 'Gérer les catégories'}
+            </button>
+          </div>
+
+          {managingCategories && (
+            <div style={{ background: C.card, borderRadius: 14, padding: 14, marginBottom: 16, border: '1px solid ' + C.border }}>
+              <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 10 }}>Mes catégories</div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: categories.length > 0 ? 12 : 0 }}>
+                <input value={newCategoryName} maxLength={40} placeholder="Nouvelle catégorie (ex : Technique)"
+                  onChange={e => setNewCategoryName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCategory()}
+                  style={{ flex: 1, minWidth: 0, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none' }} />
+                <button onClick={addCategory} disabled={!newCategoryName.trim()}
+                  style={{ padding: '10px 16px', background: newCategoryName.trim() ? C.accent : C.surface, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  + Ajouter
+                </button>
+              </div>
+              {categories.map(c => {
+                const count = templates.filter(t => t.category_id === c.id).length
+                return (
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: '1px solid ' + C.border }}>
+                    {renamingCategoryId === c.id ? (
+                      <>
+                        <input value={renameValue} maxLength={40} autoFocus onChange={e => setRenameValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') renameCategory(c.id); if (e.key === 'Escape') setRenamingCategoryId(null) }}
+                          style={{ flex: 1, minWidth: 0, background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '7px 10px', color: C.text, fontSize: 14, outline: 'none' }} />
+                        <button onClick={() => renameCategory(c.id)} style={{ padding: '6px 10px', background: C.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>OK</button>
+                        <button onClick={() => setRenamingCategoryId(null)} style={{ padding: '6px 10px', background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>Annuler</button>
+                      </>
+                    ) : confirmDeleteCategoryId === c.id ? (
+                      <>
+                        <div style={{ flex: 1, fontSize: 13, lineHeight: 1.4 }}>Supprimer « {c.name} » ? Ses {count} séance{count !== 1 ? 's' : ''} {count !== 1 ? 'seront conservées' : 'sera conservée'} sans catégorie.</div>
+                        <button onClick={() => deleteCategory(c.id)} style={{ padding: '6px 10px', background: C.red, color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>Supprimer</button>
+                        <button onClick={() => setConfirmDeleteCategoryId(null)} style={{ padding: '6px 10px', background: 'transparent', color: C.muted, border: '1px solid ' + C.border, borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>Annuler</button>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 500 }}>{c.name} <span style={{ fontSize: 12, color: C.muted, fontWeight: 400 }}>· {count}</span></div>
+                        <button onClick={() => { setRenamingCategoryId(c.id); setRenameValue(c.name) }} aria-label={`Renommer la catégorie ${c.name}`}
+                          style={{ padding: '6px 8px', background: C.surface, color: C.text, border: '1px solid ' + C.border, borderRadius: 8, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="edit" size={15} /></button>
+                        <button onClick={() => setConfirmDeleteCategoryId(c.id)} aria-label={`Supprimer la catégorie ${c.name}`}
+                          style={{ padding: '6px 8px', background: 'transparent', color: C.red, border: '1px solid ' + C.red + '40', borderRadius: 8, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="trash" size={15} /></button>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
           {loading ? (
             <div style={{ textAlign: 'center', color: C.muted, padding: 24 }}>Chargement...</div>
+          ) : templates.length > 0 && visibleTemplates.length === 0 ? (
+            <div style={{ border: '1px dashed ' + C.border, borderRadius: 14, padding: '24px 20px', textAlign: 'center', color: C.muted, fontSize: 14 }}>
+              {query ? 'Aucun résultat pour « ' + search.trim() + ' »' : 'Aucune séance dans cette catégorie pour le moment'}
+            </div>
           ) : templates.length === 0 ? (
             <div style={{ border: '1px dashed ' + C.border, borderRadius: 14, padding: '32px 20px', textAlign: 'center', color: C.muted, fontSize: 14 }}>
               <Icon name="bibliotheque" size={28} style={{ margin: '0 auto 12px' }} />
               Aucune séance dans ta bibliothèque pour le moment
               <div style={{ fontSize: 12, marginTop: 6 }}>Prépare des modèles de séances réutilisables pour tes entraînements</div>
             </div>
-          ) : templates.map(t => {
+          ) : visibleTemplates.map(t => {
             const expanded = expandedTemplateId === t.id
             return (
               <div key={t.id} style={{ background: C.card, borderRadius: 14, marginBottom: 10, border: '1px solid ' + (expanded ? C.accent + '60' : C.border), overflow: 'hidden' }}>
@@ -68,10 +194,10 @@ export default function BibliothequeScreen({ user, templates, loading, setTempla
                   <div style={{ width: 42, height: 42, borderRadius: 10, background: C.bg, border: '1px solid ' + C.border, color: C.muted, display: 'grid', placeItems: 'center', fontSize: t.icon ? 20 : 13, fontWeight: 600, flexShrink: 0 }}>{t.icon || (t.label || '?').slice(0, 2).toUpperCase()}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 15 }}>{t.label}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{t.duration}{t.objectif ? ' · ' + t.objectif : ''}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{categoryName(t.category_id) ? categoryName(t.category_id) + ' · ' : ''}{t.duration}{t.objectif ? ' · ' + t.objectif : ''}</div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    <button onClick={e => { e.stopPropagation(); setTemplateDraft({ label: t.label, icon: t.icon, color: t.color, duration: t.duration, objectif: t.objectif, blocs: JSON.parse(JSON.stringify(t.blocs)) }); setEditingTemplateId(t.id); setEditingTemplate(true) }}
+                    <button onClick={e => { e.stopPropagation(); setTemplateDraft({ label: t.label, icon: t.icon, color: t.color, duration: t.duration, objectif: t.objectif, blocs: JSON.parse(JSON.stringify(t.blocs)), category_id: t.category_id || '' }); setEditingTemplateId(t.id); setEditingTemplate(true) }}
                       aria-label={`Modifier le modèle ${t.label}`}
                       style={{ padding: '7px 10px', background: C.surface, color: C.text, border: '1px solid ' + C.border, borderRadius: 8, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="edit" size={16} /></button>
                     <button onClick={e => { e.stopPropagation(); deleteTemplate(t.id) }}
@@ -136,7 +262,13 @@ export default function BibliothequeScreen({ user, templates, loading, setTempla
               </div>
             </div>
             <input value={templateDraft.objectif} onChange={e => setTemplateDraft(d => ({ ...d, objectif: e.target.value }))} placeholder="Objectif de la séance..."
-              style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+              style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box', marginBottom: 12 }} />
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Catégorie</div>
+            <select value={templateDraft.category_id || ''} onChange={e => setTemplateDraft(d => ({ ...d, category_id: e.target.value }))}
+              style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}>
+              <option value="">Sans catégorie</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
           </div>
 
           <div style={{ fontSize: 13, color: C.muted, marginBottom: 10, fontWeight: 500 }}>Blocs d'exercices</div>
