@@ -66,4 +66,4 @@ export const parseMesure = (kpi, raw) => {
 }
 
 // Clé stable d'un nouvel indicateur personnalisé (stockée dans mesures.kpi_id).
-export const newKpiKey = () => 'c_' + (globalThis.crypto?.randomUUID?.() || String(Date.now()) + Math.random().toString(36).slice(2, 8)).replace(/-/g, '').slice(0, 12)
+export const newKpiKey = () => 'c_' + (window.crypto?.randomUUID?.() || String(Date.now()) + Math.random().toString(36).slice(2, 8)).replace(/-/g, '').slice(0, 12)
