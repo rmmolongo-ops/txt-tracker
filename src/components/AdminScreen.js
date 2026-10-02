@@ -21,6 +21,7 @@ export default function AdminScreen({
   adminManagedPlayers, adminView, assignTeamClub, clubInvites = [], clubMembers = [], clubs, coachRosterData, createClub, createClubInvite, createTeam,
   deleteClub, deleteManagedPlayer, deleteTeam, deleteUserAccount, isAdmin, isClubManager, isMobile,
   loadAdminOverview, loadAdminTeamDetail, managedPlayerDraft, managedPlayers, myClubId, myClubRole, openFiche, renderProgrammeCatalog, resendConfirmation,
+  kpiCatalog = KPI_CONFIG, kpisForTeam = () => KPI_CONFIG,
   selectedAdminTeam, setAddingManagedPlayer, setAdminView, setEditingProg, setEditingProgramId, setManagedPlayerDraft,
   setPlayerRole, setProgDraft, setSelectedAdminTeam, shareInviteLink, teams, togglePlayerTeam,
   unconfirmedSignups, uploadTeamPhoto, uploadingTeamPhoto,
@@ -182,7 +183,7 @@ export default function AdminScreen({
 
             <div style={{ fontSize: 13, color: C.muted, marginBottom: 8, fontWeight: 500 }}>Performances</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 16 }}>
-              {KPI_CONFIG.map(kpi => (
+              {kpisForTeam(selectedAdminTeam?.id).map(kpi => (
                 <div key={kpi.id} onClick={() => setAdminChartKpi(kpi.id)}
                   style={{ background: adminChartKpi === kpi.id ? C.accent + '22' : C.bg, borderRadius: 8, padding: '8px 10px', textAlign: 'center', cursor: 'pointer', border: '1px solid ' + (adminChartKpi === kpi.id ? C.accent : 'transparent') }}>
                   <div style={{ fontSize: 11, color: C.muted, marginBottom: 2, lineHeight: 1.2 }}>{kpi.label}</div>
@@ -196,7 +197,7 @@ export default function AdminScreen({
 
             <div style={{ borderTop: '1px solid ' + C.border, paddingTop: 14 }}>
               <div style={{ fontSize: 13, color: C.muted, marginBottom: 10, fontWeight: 500 }}>
-                Graphique — {KPI_CONFIG.find(k => k.id === adminChartKpi)?.label}
+                Graphique — {kpiCatalog.find(k => k.id === adminChartKpi)?.label}
               </div>
               {(() => {
                 const arr = (j.mesuresData || []).filter(m => m.kpi_id === adminChartKpi).sort((a, b) => a.date.localeCompare(b.date))
@@ -222,7 +223,7 @@ export default function AdminScreen({
             </div>
 
             {(isAdmin || isClubManager) && (() => {
-              const kpi = KPI_CONFIG.find(k => k.id === adminChartKpi)
+              const kpi = kpiCatalog.find(k => k.id === adminChartKpi) || KPI_CONFIG[0]
               const entries = (j.mesuresData || []).filter(m => m.kpi_id === adminChartKpi && m.id).sort((a, b) => b.date.localeCompare(a.date))
               return (
                 <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid ' + C.border }}>

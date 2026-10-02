@@ -6,7 +6,7 @@ import { buildRadarData, kpiProgression, MATCH_RESULTS, hasScore, playerMatchSta
 
 // Fiche joueur façon scouting (modale) : infos, radar, matchs, KPIs, export.
 // `player` porte `__pool` : les joueurs de référence pour situer le radar.
-export default function FicheJoueur({ player, onClose }) {
+export default function FicheJoueur({ player, onClose, kpis = KPI_CONFIG }) {
   const [matches, setMatches] = useState([])
 
   useEffect(() => {
@@ -30,7 +30,7 @@ export default function FicheJoueur({ player, onClose }) {
   }, [player])
 
   const j = player
-  const radarData = buildRadarData(j, j.__pool, RADAR_AXES, KPI_CONFIG)
+  const radarData = buildRadarData(j, j.__pool, RADAR_AXES, kpis)
   const semaine = j.seancesSemaine
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
@@ -125,7 +125,7 @@ export default function FicheJoueur({ player, onClose }) {
 
         <div style={{ fontSize: 13, color: C.muted, marginBottom: 8, fontWeight: 500 }}>Performances & progression</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-          {KPI_CONFIG.map(kpi => {
+          {kpis.filter(k => !k.archived || (j.mesuresData || []).some(m => m.kpi_id === k.id)).map(kpi => {
             const arr = (j.mesuresData || []).filter(m => m.kpi_id === kpi.id).sort((a, b) => a.date.localeCompare(b.date))
             const latest = arr.length > 0 ? arr[arr.length - 1].valeur : null
             const prog = kpiProgression(arr.map(m => m.valeur), kpi.lower)

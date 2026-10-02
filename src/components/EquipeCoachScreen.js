@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { LineChart, Line, BarChart, Bar, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import KpiManager from './KpiManager'
 import { C, KPI_CONFIG, DAY_ORDER, LEADERSHIP_ROLES, seanceRowKey } from '../lib/constants'
 import { toDateStr, getMonday } from '../lib/stats'
 import Icon from './Icons'
@@ -8,7 +9,7 @@ import Icon from './Icons'
 
 export default function EquipeCoachScreen({
   addManagedPlayer, addingManagedPlayer, adminData, coachRosterData, coachTeamId, deleteManagedPlayer,
-  entryValue, equipeTab, equipeTeamId, getProgramForDate, getProgramsForTeam, isAdmin,
+  entryValue, kpisForTeam, archivedKpisForTeam, saveTeamKpi, setTeamKpiArchived, equipeTab, equipeTeamId, getProgramForDate, getProgramsForTeam, isAdmin,
   isMobile, leadershipTeams, managedPlayerDraft, managedPlayers, myTeamRoles, openFiche,
   renderProgrammeCatalog, saveMesureForPlayer, setAddingManagedPlayer, setCoachTeamId, setEditingProg, setEditingProgramId,
   setEntryValue, setEquipeTab, setEquipeTeamId, setManagedPlayerDraft, setProgDraft, setSuiviSelected,
@@ -21,6 +22,9 @@ export default function EquipeCoachScreen({
 
   const equipeViewTeams = isAdmin ? teams : leadershipTeams
   const activeEquipeTeamId = isAdmin ? equipeTeamId : coachTeamId
+  const teamKpiList = kpisForTeam ? kpisForTeam(activeEquipeTeamId) : KPI_CONFIG
+  const entryKpiId = teamKpiList.some(k => k.id === entryKpi) ? entryKpi : teamKpiList[0]?.id
+  const equipeKpiId = teamKpiList.some(k => k.id === equipeKpi) ? equipeKpi : teamKpiList[0]?.id
   const selectEquipeTeam = (id) => {
     if (isAdmin) setEquipeTeamId(id); else setCoachTeamId(id)
     setEditingProg(false); setProgDraft(null); setEditingProgramId(null); setSuiviWeekOffset(0)
@@ -115,14 +119,14 @@ export default function EquipeCoachScreen({
                       <option value="">Joueur...</option>
                       {teamPlayers.map(p => <option key={p.user_id} value={p.user_id}>{p.prenom || '—'} {p.nom || ''}</option>)}
                     </select>
-                    <select value={entryKpi} onChange={e => setEntryKpi(e.target.value)}
+                    <select value={entryKpiId} onChange={e => setEntryKpi(e.target.value)}
                       style={{ flex: '1 1 160px', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }}>
-                      {KPI_CONFIG.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
+                      {teamKpiList.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
                     </select>
                     <input type="number" placeholder="Valeur" value={entryValue} onChange={e => setEntryValue(e.target.value)}
                       style={{ flex: '0 1 100px', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '8px 10px', color: C.text, fontSize: 13, outline: 'none' }} />
                     <button disabled={!entryTarget || !entryValue}
-                      onClick={() => saveMesureForPlayer(teamPlayers.find(p => p.user_id === entryTarget), entryKpi, entryValue)}
+                      onClick={() => saveMesureForPlayer(teamPlayers.find(p => p.user_id === entryTarget), entryKpiId, entryValue)}
                       style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: entryTarget && entryValue ? C.accent : C.surface, color: entryTarget && entryValue ? '#fff' : C.muted, fontWeight: 700, fontSize: 13, cursor: entryTarget && entryValue ? 'pointer' : 'not-allowed' }}>
                       ✓ Enregistrer
                     </button>
@@ -132,7 +136,7 @@ export default function EquipeCoachScreen({
 
               {/* Sub-tabs */}
               <div style={{ display: 'flex', borderRadius: 10, padding: 3, marginBottom: 20, gap: 2, border: '1px solid ' + C.border }}>
-                {[{ id: 'perf', label: 'Performances' }, { id: 'programme', label: 'Programme' }, { id: 'suivi', label: 'Suivi' }].map(t => (
+                {[{ id: 'perf', label: 'Performances' }, { id: 'programme', label: 'Programme' }, { id: 'suivi', label: 'Suivi' }, ...(canManagePlayers ? [{ id: 'indicateurs', label: 'Indicateurs' }] : [])].map(t => (
                   <button key={t.id} onClick={() => { setEquipeTab(t.id); setEditingProg(false); setProgDraft(null); setEditingProgramId(null) }}
                     style={{ flex: 1, padding: '10px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500, fontSize: 14, background: equipeTab === t.id ? C.surface : 'transparent', color: equipeTab === t.id ? C.text : C.muted }}>
                     {t.label}
@@ -152,30 +156,30 @@ export default function EquipeCoachScreen({
                     <>
                       {/* KPI selector */}
                       <div style={{ display: 'flex', gap: 6, marginBottom: 20, overflowX: 'auto', paddingBottom: 4 }}>
-                        {KPI_CONFIG.map(kpi => (
+                        {teamKpiList.map(kpi => (
                           <button key={kpi.id} onClick={() => setEquipeKpi(kpi.id)}
-                            style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid ' + (equipeKpi === kpi.id ? C.accent : C.border), cursor: 'pointer', fontWeight: 500, fontSize: 13, whiteSpace: 'nowrap', background: equipeKpi === kpi.id ? C.accent + '22' : 'transparent', color: equipeKpi === kpi.id ? C.accentGlow : C.muted, flexShrink: 0 }}>
-                            {kpi.label.split(' ')[0]}
+                            style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid ' + (equipeKpiId === kpi.id ? C.accent : C.border), cursor: 'pointer', fontWeight: 500, fontSize: 13, whiteSpace: 'nowrap', background: equipeKpiId === kpi.id ? C.accent + '22' : 'transparent', color: equipeKpiId === kpi.id ? C.accentGlow : C.muted, flexShrink: 0 }}>
+                            {kpi.label}
                           </button>
                         ))}
                       </div>
 
                       {(() => {
-                        const kpi = KPI_CONFIG.find(k => k.id === equipeKpi)
+                        const kpi = teamKpiList.find(k => k.id === equipeKpiId)
 
                         /* Graphique comparatif en barres — valeurs actuelles */
                         const barData = teamPlayers
-                          .filter(j => j.kpis?.[equipeKpi] != null)
+                          .filter(j => j.kpis?.[equipeKpiId] != null)
                           .map(j => ({
                             name: (j.prenom || '?') + ' ' + (j.nom?.[0] || '') + '.',
-                            val: j.kpis[equipeKpi],
+                            val: j.kpis[equipeKpiId],
                           }))
                           .sort((a, b) => kpi.lower ? a.val - b.val : b.val - a.val)
 
                         /* Données timeline pour chaque joueur */
                         const playerCharts = teamPlayers.map(j => {
                           const arr = (j.mesuresData || [])
-                            .filter(m => m.kpi_id === equipeKpi)
+                            .filter(m => m.kpi_id === equipeKpiId)
                             .sort((a, b) => a.date.localeCompare(b.date))
                           return {
                             player: j,
@@ -274,6 +278,12 @@ export default function EquipeCoachScreen({
 
               {/* ── PROGRAMME (CATALOGUE) ── */}
               {equipeTab === 'programme' && renderProgrammeCatalog(equipeTeamId)}
+
+              {/* ── INDICATEURS DE L'ÉQUIPE ── */}
+              {equipeTab === 'indicateurs' && canManagePlayers && (
+                <KpiManager key={equipeTeamId} teams={equipeViewTeams.filter(t => t.id === equipeTeamId)} kpisForTeam={kpisForTeam}
+                  archivedKpisForTeam={archivedKpisForTeam} saveTeamKpi={saveTeamKpi} setTeamKpiArchived={setTeamKpiArchived} />
+              )}
 
               {/* ── SUIVI (PRÉSENCE / VALIDATION) ── */}
               {equipeTab === 'suivi' && (() => {

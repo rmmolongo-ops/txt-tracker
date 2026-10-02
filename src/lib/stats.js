@@ -23,6 +23,14 @@ export const latestKpis = (mesures, kpiConfig) => {
   return kpis
 }
 
+// Comme latestKpis, mais inclut aussi toute clé présente dans les mesures (indicateur
+// personnalisé d'une équipe, pas forcément connu de `kpiConfig`).
+export const latestKpisAll = (mesures, kpiConfig) => {
+  const known = new Set(kpiConfig.map(k => k.id))
+  const extra = [...new Set((mesures || []).map(m => m.kpi_id))].filter(id => !known.has(id)).map(id => ({ id }))
+  return latestKpis(mesures, [...kpiConfig, ...extra])
+}
+
 // Progression en % entre la première et la dernière mesure (positive = amélioration).
 // Pour un KPI « lower » (ex. sprint en secondes), une baisse est une amélioration.
 export const kpiProgression = (sortedValues, lower) => {

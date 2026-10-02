@@ -1,7 +1,8 @@
 import { Fragment, useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { getDeferredPrompt } from '../lib/installPrompt'
-import { toDateStr, latestKpis, activeAdminTeamId } from '../lib/stats'
+import { toDateStr, latestKpisAll, activeAdminTeamId } from '../lib/stats'
+import { buildKpiCatalog, activeKpisForTeam, activeKpisForTeams, archivedKpisForTeam as archivedKpisFor, parseMesure, newKpiKey } from '../lib/kpis'
 import { C, TEAM_COLORS, KPI_CONFIG, SESSIONS, DEFAULT_PROFIL, LEADERSHIP_ROLES, GHOST_PREFIX, isGhostId, ghostRealId, seanceRowKey } from '../lib/constants'
 import FicheJoueur from './FicheJoueur'
 import Icon from './Icons'
@@ -25,6 +26,12 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
   const [profil, setProfil] = useState(DEFAULT_PROFIL)
   const [inputValues, setInputValues] = useState({})
   const [selectedKpi, setSelectedKpi] = useState('sprint30')
+  const [teamKpis, setTeamKpis] = useState([])
+  const [kpiTeamId, setKpiTeamId] = useState(null)
+  const kpiCatalogRef = useRef(KPI_CONFIG)
+  const kpiCatalog = useMemo(() => buildKpiCatalog(teamKpis), [teamKpis])
+  kpiCatalogRef.current = kpiCatalog
+  const kpisForTeam = useCallback((teamId) => activeKpisForTeam(teamKpis, teamId), [teamKpis])
   const [toast, setToast] = useState(null)
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -190,7 +197,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
           mesuresData: mes, nb_mesures: mes.length, nb_seances: sea.length,
           derniere_seance: sea.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null,
           derniere_mesure: mes.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null,
-          kpis: latestKpis(mes, KPI_CONFIG),
+          kpis: latestKpisAll(mes, kpiCatalogRef.current),
         }
       }))
       const currentTeamMap = {}
@@ -205,7 +212,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
           mesuresData: mes, nb_mesures: mes.length, nb_seances: sea.length,
           derniere_seance: sea.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null,
           derniere_mesure: mes.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null,
-          kpis: latestKpis(mes, KPI_CONFIG),
+          kpis: latestKpisAll(mes, kpiCatalogRef.current),
         }
       })
       setAdminManagedPlayers(prev => [...prev.filter(mp => mp.team_id !== teamId), ...enrichedManaged])
@@ -219,7 +226,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
   userRef.current = user
 
   const loadAll = useCallback(async () => {
-    const [{ data: m }, { data: s }, { data: p }, { data: t }, { data: myMemberships }, { data: progs }, { data: cl }] = await Promise.all([
+    const [{ data: m }, { data: s }, { data: p }, { data: t }, { data: myMemberships }, { data: progs }, { data: cl }, { data: tk }] = await Promise.all([
       supabase.from('mesures').select('*').eq('user_id', user.id).order('date', { ascending: true }),
       supabase.from('seances').select('*').eq('user_id', user.id),
       supabase.from('profils').select('*').eq('user_id', user.id).maybeSingle(),
@@ -227,7 +234,9 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
       supabase.from('team_members').select('team_id, role').eq('user_id', user.id),
       supabase.from('team_programs').select('*').order('start_date'),
       supabase.from('clubs').select('*').order('name'),
+      supabase.from('team_kpis').select('*').order('position'),
     ])
+    if (tk) setTeamKpis(tk)
     if (m) setMesures(m)
     if (s) setSeances(s)
     if (t) setAvailableTeams(t)
@@ -347,7 +356,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
       const seancesSemaine = mySeances.filter(s => s.date >= weekAgoStr).length
       const myMesures = (mes || []).filter(m => m.user_id === uid)
       const derniereMesure = myMesures.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
-      const kpis = latestKpis(myMesures, KPI_CONFIG)
+      const kpis = latestKpisAll(myMesures, kpiCatalogRef.current)
       return { user_id: uid, ...prof, role: roleMap[uid] || 'joueur', derniereSeance, seancesSemaine, derniereMesure, mesuresData: myMesures, nb_mesures: myMesures.length, nb_seances: mySeances.length, kpis }
     })
     setCoachRosterData(roster)
@@ -381,7 +390,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
       const derniereSeance = mySeances.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
       const seancesSemaine = mySeances.filter(s => s.date >= weekAgoStr).length
       const derniereMesure = myMesures.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
-      const kpis = latestKpis(myMesures, KPI_CONFIG)
+      const kpis = latestKpisAll(myMesures, kpiCatalogRef.current)
       return { user_id: GHOST_PREFIX + p.id, managed_player_id: p.id, isManaged: true, nom: p.nom, prenom: p.prenom, surnom: p.surnom, photo_url: p.photo_url, poste1: p.poste1, poste2: p.poste2, role: 'joueur', mesuresData: myMesures, nb_mesures: myMesures.length, nb_seances: mySeances.length, kpis, derniereSeance, seancesSemaine, derniereMesure }
     })
     setManagedPlayers(enriched)
@@ -425,10 +434,12 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
   }
 
   const saveMesureForPlayer = async (target, kpiId, value) => {
+    const parsed = parseMesure(kpiCatalog.find(k => k.id === kpiId) || {}, value)
+    if (parsed.error) { showToast('❌ ' + parsed.error); return }
     const today = new Date().toISOString().split('T')[0]
     const payload = isGhostId(target.user_id)
-      ? { managed_player_id: target.managed_player_id, kpi_id: kpiId, valeur: parseFloat(value), date: today }
-      : { user_id: target.user_id, kpi_id: kpiId, valeur: parseFloat(value), date: today }
+      ? { managed_player_id: target.managed_player_id, kpi_id: kpiId, valeur: parsed.value, date: today }
+      : { user_id: target.user_id, kpi_id: kpiId, valeur: parsed.value, date: today }
     const { data, error } = await supabase.from('mesures').insert(payload).select().single()
     if (error) { showToast('❌ ' + error.message); return }
     if (isGhostId(target.user_id)) {
@@ -513,10 +524,43 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
   }
 
   const saveMesure = async (kpiId, value) => {
+    const parsed = parseMesure(kpiCatalog.find(k => k.id === kpiId) || {}, value)
+    if (parsed.error) { showToast('❌ ' + parsed.error); return }
     const today = new Date().toISOString().split('T')[0]
-    const { data } = await supabase.from('mesures').insert({ user_id: user.id, kpi_id: kpiId, valeur: parseFloat(value), date: today }).select().single()
+    const { data } = await supabase.from('mesures').insert({ user_id: user.id, kpi_id: kpiId, valeur: parsed.value, date: today }).select().single()
     if (data) { setMesures(prev => [...prev, data]); showToast('✅ Performance enregistrée !') }
     setInputValues(v => ({ ...v, [kpiId]: '' }))
+  }
+
+  // Gestion des indicateurs d'une équipe (coach/dirigeant). Supprimer = archiver : les mesures restent.
+  const saveTeamKpi = async (teamId, draft, existing) => {
+    const label = draft.label.trim()
+    if (!label) { showToast('❌ Donne un nom à l\'indicateur'); return false }
+    const fields = {
+      label, kind: draft.kind, unit: draft.unit.trim(), max_value: draft.kind === 'note' ? draft.max_value : null,
+      decimals: draft.decimals, lower_is_better: draft.lower_is_better, category: draft.category,
+    }
+    if (!fields.unit) { showToast('❌ Précise l\'unité de mesure'); return false }
+    if (existing) {
+      const { data, error } = await supabase.from('team_kpis').update(fields).eq('id', existing.rowId).select().single()
+      if (error) { showToast('❌ ' + error.message); return false }
+      setTeamKpis(prev => prev.map(r => r.id === data.id ? data : r))
+      showToast('✅ Indicateur modifié')
+      return true
+    }
+    const position = teamKpis.filter(r => r.team_id === teamId).reduce((m, r) => Math.max(m, r.position), 0) + 1
+    const { data, error } = await supabase.from('team_kpis').insert({ ...fields, team_id: teamId, key: newKpiKey(), position, created_by: user.id }).select().single()
+    if (error) { showToast('❌ ' + error.message); return false }
+    setTeamKpis(prev => [...prev, data])
+    showToast('✅ Indicateur ajouté')
+    return true
+  }
+
+  const setTeamKpiArchived = async (kpi, archived) => {
+    const { data, error } = await supabase.from('team_kpis').update({ archived_at: archived ? new Date().toISOString() : null }).eq('id', kpi.rowId).select().single()
+    if (error) { showToast('❌ ' + error.message); return }
+    setTeamKpis(prev => prev.map(r => r.id === data.id ? data : r))
+    showToast(archived ? 'Indicateur archivé, les mesures sont conservées' : 'Indicateur restauré')
   }
 
   const deleteMesure = async (id) => {
@@ -870,10 +914,10 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
   const getProgress = useCallback((kpiId) => {
     const arr = mesures.filter(m => m.kpi_id === kpiId).sort((a, b) => a.date.localeCompare(b.date))
     if (arr.length < 2) return null
-    const cfg = KPI_CONFIG.find(k => k.id === kpiId)
-    const diff = cfg.lower ? ((arr[0].valeur - arr[arr.length-1].valeur) / arr[0].valeur) * 100 : ((arr[arr.length-1].valeur - arr[0].valeur) / arr[0].valeur) * 100
+    const cfg = kpiCatalog.find(k => k.id === kpiId)
+    const diff = cfg?.lower ? ((arr[0].valeur - arr[arr.length-1].valeur) / arr[0].valeur) * 100 : ((arr[arr.length-1].valeur - arr[0].valeur) / arr[0].valeur) * 100
     return diff.toFixed(1)
-  }, [mesures])
+  }, [mesures, kpiCatalog])
   const getDashboardKpiIds = useCallback(() => {
     if (profil.dashboard_kpis && profil.dashboard_kpis.length > 0) return profil.dashboard_kpis
     const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
@@ -900,6 +944,10 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
     return withRole.filter(t => LEADERSHIP_ROLES.includes(t.myRole))
   }, [availableTeams, myTeamIds, myTeamRoles])
   const hasLeadership = leadershipTeams.length > 0
+  const activeKpiTeamId = myTeams.some(t => t.id === kpiTeamId) ? kpiTeamId : (myTeams[0]?.id || null)
+  const playerKpis = activeKpiTeamId ? kpisForTeam(activeKpiTeamId) : KPI_CONFIG
+  const myKpiUnion = activeKpisForTeams(teamKpis, myTeams.map(t => t.id))
+  const archivedKpisForTeam = (teamId) => archivedKpisFor(teamKpis, teamId)
   const hasPlayerRole = useMemo(() => {
     const withRole = availableTeams.filter(t => myTeamIds.has(t.id)).map(t => ({ ...t, myRole: myTeamRoles[t.id] || 'joueur' }))
     return withRole.some(t => !LEADERSHIP_ROLES.includes(t.myRole)) || withRole.length === 0
@@ -932,7 +980,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
     const strip = (p) => {
       if (p.user_id !== target.user_id) return p
       const mes = (p.mesuresData || []).filter(m => m.id !== mesureId)
-      const kpis = latestKpis(mes, KPI_CONFIG)
+      const kpis = latestKpisAll(mes, kpiCatalogRef.current)
       const derniere_mesure = mes.slice().sort((a, b) => b.date.localeCompare(a.date))[0]?.date || null
       return { ...p, mesuresData: mes, nb_mesures: mes.length, kpis, derniere_mesure }
     }
@@ -1121,14 +1169,14 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
             <DashboardCoach
               activeCoachTeam={activeCoachTeam} assignDailySession={assignDailySession} assignMatchSession={assignMatchSession} changeTab={changeTab} coachRosterData={coachRosterData}
               dailyPickerFor={dailyPickerFor} dailySessions={dailySessions} getDailySession={getDailySession} leadershipTeams={leadershipTeams} managedPlayers={managedPlayers}
-              removeDailySession={removeDailySession} saveAnnotation={saveAnnotation} saveMatchResult={saveMatchResult} saveSessionAsTemplate={saveSessionAsTemplate} seanceCategories={seanceCategories} createSeanceCategory={createSeanceCategory} seanceTemplates={seanceTemplates} setCoachTeamId={setCoachTeamId}
+              removeDailySession={removeDailySession} saveAnnotation={saveAnnotation} saveMatchResult={saveMatchResult} saveSessionAsTemplate={saveSessionAsTemplate} kpis={activeCoachTeam ? kpisForTeam(activeCoachTeam.id) : KPI_CONFIG} seanceCategories={seanceCategories} createSeanceCategory={createSeanceCategory} seanceTemplates={seanceTemplates} setCoachTeamId={setCoachTeamId}
               setDailyPickerFor={setDailyPickerFor} setEquipeTab={setEquipeTab} setViewDay={setViewDay} updateDailySession={updateDailySession} viewDay={viewDay} />
           ) : (
             <DashboardJoueur
               availableTeams={availableTeams} changeTab={changeTab} getDashboardKpiIds={getDashboardKpiIds} getLatest={getLatest} getProgramForDate={getProgramForDate}
               getProgramsForTeam={getProgramsForTeam} getProgress={getProgress} getWeekCompliance={getWeekCompliance} inputValues={inputValues} isMobile={isMobile}
               isSeanceDone={isSeanceDone} myTeamIds={myTeamIds} saveDashboardKpis={saveDashboardKpis} saveMesure={saveMesure} setInputValues={setInputValues}
-              setSelectedKpi={setSelectedKpi} toggleSeance={toggleSeance} />
+              setSelectedKpi={setSelectedKpi} toggleSeance={toggleSeance} kpis={myKpiUnion} />
           )}
         </div>
       )}
@@ -1141,13 +1189,16 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
 
       {/* ── KPI ── */}
       {tab === 'kpi' && (
-        <KpiScreen isMobile={isMobile} inputValues={inputValues} setInputValues={setInputValues} getLatest={getLatest} saveMesure={saveMesure} />
+        <KpiScreen isMobile={isMobile} inputValues={inputValues} setInputValues={setInputValues} getLatest={getLatest} saveMesure={saveMesure}
+          kpis={playerKpis} teams={myTeams} activeTeamId={activeKpiTeamId} onSelectTeam={setKpiTeamId} />
       )}
 
       {/* ── STATS ── */}
       {tab === 'stats' && (
         <StatsScreen isMobile={isMobile} mesures={mesures} selectedKpi={selectedKpi} setSelectedKpi={setSelectedKpi}
-          getLatest={getLatest} getMesuresForKpi={getMesuresForKpi} getProgress={getProgress} onDeleteMesure={deleteMesure} />
+          getLatest={getLatest} getMesuresForKpi={getMesuresForKpi} getProgress={getProgress} onDeleteMesure={deleteMesure}
+          kpis={playerKpis} teams={myTeams} activeTeamId={activeKpiTeamId} onSelectTeam={setKpiTeamId}
+          inputValues={inputValues} setInputValues={setInputValues} saveMesure={saveMesure} />
       )}
 
       {/* ── CHAT ── */}
@@ -1158,7 +1209,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
 
       {/* ── ÉQUIPE (ADMIN / COACH) ── */}
       {tab === 'equipe' && (isAdmin || hasLeadership) && (
-        <EquipeCoachScreen
+        <EquipeCoachScreen kpisForTeam={kpisForTeam} archivedKpisForTeam={archivedKpisForTeam} saveTeamKpi={saveTeamKpi} setTeamKpiArchived={setTeamKpiArchived}
           addManagedPlayer={addManagedPlayer} addingManagedPlayer={addingManagedPlayer} adminData={adminData} coachRosterData={coachRosterData} coachTeamId={coachTeamId}
           deleteManagedPlayer={deleteManagedPlayer} entryValue={entryValue} equipeTab={equipeTab} equipeTeamId={equipeTeamId} getProgramForDate={getProgramForDate}
           getProgramsForTeam={getProgramsForTeam} isAdmin={isAdmin} isMobile={isMobile} leadershipTeams={leadershipTeams} managedPlayerDraft={managedPlayerDraft}
@@ -1180,7 +1231,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
 
       {/* ── ADMIN : VUE OVERVIEW ── */}
       {tab === 'admin' && canManageClub && (
-        <AdminScreen
+        <AdminScreen kpiCatalog={kpiCatalog} kpisForTeam={kpisForTeam}
           addManagedPlayer={addManagedPlayer} addingManagedPlayer={addingManagedPlayer} adminData={adminData} adminDeleteMesure={adminDeleteMesure} adminError={adminError}
           adminLoading={adminLoading} adminManagedPlayers={adminManagedPlayers} adminView={adminView} assignTeamClub={assignTeamClub} clubInvites={clubInvites} clubMembers={clubMembers} clubs={clubs} coachRosterData={coachRosterData}
           createClub={createClub} createClubInvite={createClubInvite} createTeam={createTeam} deleteClub={deleteClub} deleteManagedPlayer={deleteManagedPlayer} deleteTeam={deleteTeam}
@@ -1209,7 +1260,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
         </div>
       )}
 
-      {ficheJoueur && <FicheJoueur player={ficheJoueur} onClose={() => setFicheJoueur(null)} />}
+      {ficheJoueur && <FicheJoueur player={ficheJoueur} onClose={() => setFicheJoueur(null)} kpis={kpiCatalog} />}
 
       {/* Header */}
       <div style={{ background: C.bg, padding: '14px 20px', borderBottom: '1px solid ' + C.border, position: 'sticky', top: 0, zIndex: 50 }}>

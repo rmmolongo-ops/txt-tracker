@@ -17,7 +17,7 @@ const isSessionModified = (original, draft) => !!draft && (
 export default function DashboardCoach({
   activeCoachTeam, assignDailySession, assignMatchSession, changeTab, coachRosterData, dailyPickerFor,
   dailySessions, getDailySession, leadershipTeams, managedPlayers, removeDailySession, saveAnnotation,
-  saveMatchResult, saveSessionAsTemplate, seanceCategories = [], createSeanceCategory, seanceTemplates, setCoachTeamId, setDailyPickerFor, setEquipeTab, setViewDay,
+  saveMatchResult, saveSessionAsTemplate, seanceCategories = [], createSeanceCategory, seanceTemplates, kpis = KPI_CONFIG, setCoachTeamId, setDailyPickerFor, setEquipeTab, setViewDay,
   updateDailySession, viewDay,
 }) {
   const [calendarMonth, setCalendarMonth] = useState(() => { const d = new Date(); d.setDate(1); return d })
@@ -94,7 +94,7 @@ export default function DashboardCoach({
             const realized = weekPlanned.filter(d => d.date <= todayStr)
 
             const allPlayers = [...coachRosterData, ...managedPlayers]
-            const kpiAverages = KPI_CONFIG.map(kpi => {
+            const kpiAverages = kpis.map(kpi => {
               const values = []
               allPlayers.forEach(p => (p.mesuresData || []).forEach(m => {
                 if (m.kpi_id === kpi.id && m.date >= weekMondayStr && m.date <= weekSundayStr) values.push(m.valeur)

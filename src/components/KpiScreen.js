@@ -1,13 +1,27 @@
 import { useState } from 'react'
 import { C, KPI_CONFIG } from '../lib/constants'
+import { inputPropsFor } from '../lib/kpis'
 
 // Onglet Mesures : saisie des performances du joueur, par catégorie de KPI.
 
-export default function KpiScreen({ isMobile, inputValues, setInputValues, getLatest, saveMesure }) {
+export default function KpiScreen({ isMobile, inputValues, setInputValues, getLatest, saveMesure, kpis = KPI_CONFIG, teams = [], activeTeamId = null, onSelectTeam = () => {} }) {
   const [activeCategory, setActiveCategory] = useState('physique')
 
   return (
     <div>
+      {teams.length > 1 && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+          {teams.map(t => {
+            const sel = t.id === activeTeamId
+            return (
+              <button key={t.id} onClick={() => onSelectTeam(t.id)}
+                style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid ' + (sel ? C.accent : C.border), background: sel ? C.accent + '22' : 'transparent', color: sel ? C.accentGlow : C.muted, fontWeight: 500, fontSize: 13, cursor: 'pointer' }}>
+                {t.name}
+              </button>
+            )
+          })}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }}>
         {['physique', 'technique', 'mental'].map(cat => (
           <button key={cat} onClick={() => setActiveCategory(cat)}
@@ -17,7 +31,7 @@ export default function KpiScreen({ isMobile, inputValues, setInputValues, getLa
         ))}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
-        {KPI_CONFIG.filter(k => k.category === activeCategory).map(kpi => {
+        {kpis.filter(k => k.category === activeCategory).map(kpi => {
           const val = getLatest(kpi.id)
           return (
             <div key={kpi.id} style={{ background: C.card, borderRadius: 14, padding: 16, border: '1px solid ' + C.border }}>
@@ -26,7 +40,7 @@ export default function KpiScreen({ isMobile, inputValues, setInputValues, getLa
                 <div className="mono" style={{ fontSize: 12, color: C.muted, flexShrink: 0 }}>{val !== null ? val + ' ' + kpi.unit : 'Non renseigné'}</div>
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
-                <input type="number" placeholder={'Valeur en ' + kpi.unit} value={inputValues[kpi.id] || ''}
+                <input type="number" {...inputPropsFor(kpi)} placeholder={kpi.unit ? 'Valeur en ' + kpi.unit : 'Valeur'} value={inputValues[kpi.id] || ''}
                   onChange={e => setInputValues(v => ({ ...v, [kpi.id]: e.target.value }))}
                   style={{ flex: 1, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 14px', color: C.text, fontSize: 16, outline: 'none' }} />
                 <button onClick={() => inputValues[kpi.id] && saveMesure(kpi.id, inputValues[kpi.id])}

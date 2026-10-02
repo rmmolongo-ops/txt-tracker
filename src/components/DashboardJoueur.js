@@ -8,7 +8,7 @@ import Icon from './Icons'
 export default function DashboardJoueur({
   availableTeams, changeTab, getDashboardKpiIds, getLatest, getProgramForDate, getProgramsForTeam,
   getProgress, getWeekCompliance, inputValues, isMobile, isSeanceDone, myTeamIds,
-  saveDashboardKpis, saveMesure, setInputValues, setSelectedKpi, toggleSeance,
+  saveDashboardKpis, saveMesure, setInputValues, setSelectedKpi, toggleSeance, kpis = KPI_CONFIG,
 }) {
   const [expandedDayDashboard, setExpandedDayDashboard] = useState(null)
   const [editingDashboardKpis, setEditingDashboardKpis] = useState(false)
@@ -117,7 +117,7 @@ export default function DashboardJoueur({
         Choisis jusqu'à {DASHBOARD_KPIS_MAX} performances à afficher sur ton accueil ({dashboardKpisDraft.length}/{DASHBOARD_KPIS_MAX})
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-        {KPI_CONFIG.map(kpi => {
+        {kpis.map(kpi => {
           const selected = dashboardKpisDraft.includes(kpi.id)
           const disabled = !selected && dashboardKpisDraft.length >= DASHBOARD_KPIS_MAX
           return (
@@ -143,7 +143,7 @@ export default function DashboardJoueur({
   )}
 
   <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
-    {KPI_CONFIG.filter(k => getDashboardKpiIds().includes(k.id)).map(kpi => {
+    {kpis.filter(k => getDashboardKpiIds().includes(k.id)).map(kpi => {
       const val = getLatest(kpi.id); const prog = getProgress(kpi.id)
       return (
         <div key={kpi.id} style={{ background: C.card, borderRadius: 14, padding: 14, border: '1px solid ' + C.border, minWidth: 0, overflow: 'hidden' }}>
@@ -170,7 +170,7 @@ export default function DashboardJoueur({
 
   <div style={{ fontSize: 13, color: C.muted, marginBottom: 10, fontWeight: 500 }}>Mental du jour</div>
   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-    {KPI_CONFIG.filter(k => ['motivation', 'sommeil'].includes(k.id)).map(kpi => {
+    {kpis.filter(k => ['motivation', 'sommeil'].includes(k.id)).map(kpi => {
       const val = getLatest(kpi.id)
       return (
         <div key={kpi.id} style={{ background: C.card, borderRadius: 14, padding: 14, border: '1px solid ' + C.border, minWidth: 0, overflow: 'hidden' }}>
