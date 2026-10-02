@@ -35,7 +35,7 @@ export default function AdminScreen({
   const [creatingTeam, setCreatingTeam] = useState(false)
   const [creatingClub, setCreatingClub] = useState(false)
   const [resendingEmail, setResendingEmail] = useState(null)
-  const [inviteClubId, setInviteClubId] = useState('')
+  const [inviteClubId, setInviteClubId] = useState(myClubId || '')
   const [inviteRole, setInviteRole] = useState('coach')
   const [generatingInvite, setGeneratingInvite] = useState(false)
 
@@ -43,7 +43,8 @@ export default function AdminScreen({
   // CLUB_INVITE_ROLES ci-dessus. Un admin plateforme (venu gérer un club pour le compte de son
   // propriétaire) peut tout proposer ; un dirigeant de club, seulement dirigeant/coach.
   const invitableRoles = isAdmin || myClubRole === 'admin' ? CLUB_INVITE_ROLES : CLUB_INVITE_ROLES.filter(r => r.id !== 'admin')
-  const inviteTargetClubId = isClubManager ? myClubId : inviteClubId
+  const inviteTargetClubId = isAdmin ? inviteClubId : myClubId
+  const inviteTargetClub = clubs.find(c => c.id === inviteTargetClubId)
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim()) return
@@ -455,15 +456,21 @@ export default function AdminScreen({
         <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
           <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 10 }}>Inviter un coach ou dirigeant</div>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
-            Génère un lien à usage unique, valable 7 jours, donnant accès à toutes les équipes du club.
+            {inviteTargetClub
+              ? <>Génère un lien à usage unique, valable 7 jours, donnant accès à toutes les équipes du club <strong style={{ color: C.text }}>{inviteTargetClub.name}</strong> uniquement.</>
+              : 'Choisis le club pour lequel tu veux inviter un membre : le lien ne donnera accès qu\'à ce club.'}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {isAdmin && !isClubManager && (
+            {isAdmin ? (
               <select value={inviteClubId} onChange={e => setInviteClubId(e.target.value)}
                 style={{ flex: 1, minWidth: 140, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: inviteClubId ? C.text : C.muted, fontSize: 14, outline: 'none' }}>
                 <option value="">Choisir un club...</option>
                 {clubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+            ) : (
+              <div style={{ flex: 1, minWidth: 140, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, fontWeight: 600 }}>
+                {inviteTargetClub?.name || 'Mon club'}
+              </div>
             )}
             <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
               style={{ minWidth: 140, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none' }}>

@@ -621,18 +621,19 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
   // côté base (create_club_invite), distinct du lien simple ci-dessus utilisé pour les joueurs —
   // l'accès accordé ici couvre tout le club, d'où le mécanisme plus strict (voir migration
   // 20260928000000_multi_tenant_clubs.sql).
-  const createClubInvite = async (clubId, role) => {
+  const createClubInvite = async (clubId, role, knownClubName) => {
     const { data: code, error } = await supabase.rpc('create_club_invite', { p_club_id: clubId, p_role: role })
     if (error) { showToast('❌ ' + error.message); return }
     const roleLabel = role === 'admin' ? 'administrateur' : role === 'dirigeant' ? 'dirigeant' : 'coach'
     const url = `${window.location.origin}/?club_invite=${code}`
+    const clubName = knownClubName || clubs.find(c => c.id === clubId)?.name || 'le club'
     if (navigator.share) {
-      try { await navigator.share({ title: 'TxT Tracker', text: `Rejoins le club en tant que ${roleLabel} sur TxT Tracker !`, url }); return }
+      try { await navigator.share({ title: 'TxT Tracker', text: `Rejoins ${clubName} en tant que ${roleLabel} sur TxT Tracker !`, url }); return }
       catch (e) { if (e.name === 'AbortError') return }
     }
     try {
       await navigator.clipboard.writeText(url)
-      showToast('🔗 Lien d\'invitation ' + roleLabel + ' copié !')
+      showToast('🔗 Lien d\'invitation ' + roleLabel + ' (' + clubName + ') copié !')
     } catch (e) {
       showToast('❌ Impossible de copier le lien')
     }
@@ -646,7 +647,13 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
 
   const createClub = async (name) => {
     const { data, error } = await supabase.from('clubs').insert({ name }).select().single()
-    if (data) { setClubs(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name))); showToast('✅ Club ajouté !'); return true }
+    if (data) {
+      setClubs(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+      showToast('✅ Club ajouté !')
+      // Le premier administrateur du club est invité par le super admin dès la création.
+      if (isAdmin) await createClubInvite(data.id, 'admin', data.name)
+      return true
+    }
     if (error) showToast('❌ ' + error.message)
     return false
   }
@@ -1156,7 +1163,8 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
       {/* ── PROFIL ── */}
       {tab === 'profil' && (
         <ProfilScreen user={user} onSignOut={onSignOut} profil={profil} setProfil={setProfil} clubs={clubs} availableTeams={availableTeams} myTeamIds={myTeamIds}
-          toggleMyTeam={toggleMyTeam} isStandalone={isStandalone} handleInstall={handleInstall} isMobile={isMobile} showToast={showToast} />
+          toggleMyTeam={toggleMyTeam} isStandalone={isStandalone} handleInstall={handleInstall} isMobile={isMobile} showToast={showToast}
+          myClubId={myClubId} myClubRole={myClubRole} createClubInvite={createClubInvite} />
       )}
     </div>
   )
