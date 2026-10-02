@@ -759,6 +759,21 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
     return true
   }
 
+  const saveSessionAsTemplate = async (session) => {
+    if (!session.label?.trim()) { showToast('Donne un nom à la séance pour l’ajouter à la bibliothèque'); return false }
+    const payload = {
+      label: session.label.trim(), icon: session.icon || '', color: session.color || '#3b82f6', duration: (session.duration || '').trim() || '1h',
+      objectif: (session.objectif || '').trim(),
+      blocs: (session.blocs || []).map(b => ({ ...b, exercices: (b.exercices || []).filter(e => e.trim() !== '') })),
+      created_by: user.id,
+    }
+    const { data, error } = await supabase.from('seance_templates').insert(payload).select().single()
+    if (error) { showToast('❌ ' + error.message); return false }
+    setSeanceTemplates(prev => [data, ...prev])
+    showToast('✅ Séance ajoutée à ta bibliothèque')
+    return true
+  }
+
   const saveAnnotation = async (id, draft) => {
     const clean = {
       note_coach: draft.note_coach.trim() || null,
@@ -1090,7 +1105,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
             <DashboardCoach
               activeCoachTeam={activeCoachTeam} assignDailySession={assignDailySession} assignMatchSession={assignMatchSession} changeTab={changeTab} coachRosterData={coachRosterData}
               dailyPickerFor={dailyPickerFor} dailySessions={dailySessions} getDailySession={getDailySession} leadershipTeams={leadershipTeams} managedPlayers={managedPlayers}
-              removeDailySession={removeDailySession} saveAnnotation={saveAnnotation} saveMatchResult={saveMatchResult} seanceTemplates={seanceTemplates} setCoachTeamId={setCoachTeamId}
+              removeDailySession={removeDailySession} saveAnnotation={saveAnnotation} saveMatchResult={saveMatchResult} saveSessionAsTemplate={saveSessionAsTemplate} seanceTemplates={seanceTemplates} setCoachTeamId={setCoachTeamId}
               setDailyPickerFor={setDailyPickerFor} setEquipeTab={setEquipeTab} setViewDay={setViewDay} updateDailySession={updateDailySession} viewDay={viewDay} />
           ) : (
             <DashboardJoueur

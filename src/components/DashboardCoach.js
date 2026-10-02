@@ -3,11 +3,21 @@ import { C, KPI_CONFIG, DAY_MAP, MATCH_COLOR } from '../lib/constants'
 import { toDateStr, getMonday, MATCH_RESULTS, hasScore, resultFromScore } from '../lib/stats'
 import Icon from './Icons'
 
+const normalizeBlocs = (blocs) => JSON.stringify((blocs || []).map(b => ({
+  titre: (b.titre || '').trim(), duree: (b.duree || '').trim(), exercices: (b.exercices || []).map(e => e.trim()).filter(Boolean),
+})))
+const isSessionModified = (original, draft) => !!draft && (
+  (draft.label || '').trim() !== (original.label || '').trim()
+  || (draft.duration || '').trim() !== (original.duration || '').trim()
+  || (draft.objectif || '').trim() !== (original.objectif || '').trim()
+  || normalizeBlocs(draft.blocs) !== normalizeBlocs(original.blocs)
+)
+
 // Accueil, vue coach : équipe, récap de la semaine, calendrier mensuel, séances et matchs du jour.
 export default function DashboardCoach({
   activeCoachTeam, assignDailySession, assignMatchSession, changeTab, coachRosterData, dailyPickerFor,
   dailySessions, getDailySession, leadershipTeams, managedPlayers, removeDailySession, saveAnnotation,
-  saveMatchResult, seanceTemplates, setCoachTeamId, setDailyPickerFor, setEquipeTab, setViewDay,
+  saveMatchResult, saveSessionAsTemplate, seanceTemplates, setCoachTeamId, setDailyPickerFor, setEquipeTab, setViewDay,
   updateDailySession, viewDay,
 }) {
   const [calendarMonth, setCalendarMonth] = useState(() => { const d = new Date(); d.setDate(1); return d })
@@ -17,6 +27,7 @@ export default function DashboardCoach({
   const [annotationDraft, setAnnotationDraft] = useState({ note_coach: '', rating_deroule: 0, rating_ressenti: 0 })
   const [editingDailySession, setEditingDailySession] = useState(false)
   const [dailySessionDraft, setDailySessionDraft] = useState(null)
+  const [confirmLibraryAdd, setConfirmLibraryAdd] = useState(false)
   const [editingMatchId, setEditingMatchId] = useState(null)
   const [matchDraft, setMatchDraft] = useState({ resultat: null, buts: {}, presents: [], score_pour: '', score_contre: '' })
   const swipeStartX = useRef(null)
@@ -25,7 +36,7 @@ export default function DashboardCoach({
     if (await removeDailySession(id)) setEditingDailySession(false)
   }
   const handleUpdateDailySession = async (id, draft) => {
-    if (await updateDailySession(id, draft)) { setEditingDailySession(false); setDailySessionDraft(null) }
+    if (await updateDailySession(id, draft)) { setEditingDailySession(false); setDailySessionDraft(null); setConfirmLibraryAdd(false) }
   }
   const handleSaveAnnotation = async (id, draft) => {
     if (await saveAnnotation(id, draft)) setAnnotatingId(null)
@@ -215,9 +226,8 @@ export default function DashboardCoach({
                       </div>
                       {!editingDailySession && (
                         <div style={{ display: 'flex', gap: 10 }}>
-                          <button onClick={() => { setDailySessionDraft(JSON.parse(JSON.stringify({ label: viewDay.s.label, duration: viewDay.s.duration, objectif: viewDay.s.objectif, blocs: viewDay.s.blocs || [] }))); setEditingDailySession(viewDay.s.id) }}
-                            style={{ background: 'none', border: 'none', color: C.accent, fontSize: 13, fontWeight: 500, cursor: 'pointer', padding: 0 }}>Modifier</button>
-                          <button onClick={() => handleRemoveDailySession(viewDay.s.id)}
+                          <button onClick={() => { setDailySessionDraft(JSON.parse(JSON.stringify({ label: viewDay.s.label, duration: viewDay.s.duration, objectif: viewDay.s.objectif, blocs: viewDay.s.blocs || [] }))); setConfirmLibraryAdd(false); setEditingDailySession(viewDay.s.id) }}
+                            style={{ background: 'none', border: 'none', color: C.accent, fontSize: 13, fontWeight: 500, cursor: 'pointer', padding: 0 }}>Modifier</button>                          <button onClick={() => handleRemoveDailySession(viewDay.s.id)}
                             style={{ background: 'none', border: 'none', color: C.red, fontSize: 13, fontWeight: 500, cursor: 'pointer', padding: 0 }}>Supprimer</button>
                         </div>
                       )}
@@ -261,7 +271,7 @@ export default function DashboardCoach({
                           + Ajouter un bloc
                         </button>
                         <div style={{ display: 'flex', gap: 8 }}>
-                          <button onClick={() => { setEditingDailySession(false); setDailySessionDraft(null) }}
+                          <button onClick={() => { setEditingDailySession(false); setDailySessionDraft(null); setConfirmLibraryAdd(false) }}
                             style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer' }}>
                             Annuler
                           </button>
@@ -270,6 +280,30 @@ export default function DashboardCoach({
                             Enregistrer
                           </button>
                         </div>
+                        {viewDay.s.type !== 'match' && isSessionModified(viewDay.s, dailySessionDraft) && (
+                          confirmLibraryAdd ? (
+                            <div style={{ marginTop: 10, padding: 12, borderRadius: 10, border: '1px solid ' + C.accent + '60', background: C.accent + '10' }}>
+                              <div style={{ fontSize: 13, marginBottom: 10, lineHeight: 1.5 }}>
+                                Ajouter <strong>« {dailySessionDraft.label.trim() || 'Sans nom'} »</strong> à ta bibliothèque ? Cette version modifiée sera enregistrée comme nouveau modèle.
+                              </div>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => setConfirmLibraryAdd(false)}
+                                  style={{ flex: 1, padding: 10, borderRadius: 10, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer' }}>
+                                  Annuler
+                                </button>
+                                <button onClick={async () => { if (await saveSessionAsTemplate({ ...viewDay.s, ...dailySessionDraft })) setConfirmLibraryAdd(false) }}
+                                  style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                                  Confirmer l'ajout
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button onClick={() => setConfirmLibraryAdd(true)}
+                              style={{ width: '100%', marginTop: 8, padding: 10, borderRadius: 10, border: '1px solid ' + C.accent + '60', background: 'transparent', color: C.accent, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                              Ajouter à la bibliothèque
+                            </button>
+                          )
+                        )}
                       </div>
                     ) : (
                       <>
