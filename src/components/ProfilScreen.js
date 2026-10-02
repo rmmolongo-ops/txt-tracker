@@ -126,7 +126,7 @@ export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs
             <div style={{ background: C.card, borderRadius: 12, padding: '12px 16px', marginBottom: 8, border: '1px solid ' + C.border }}>
               <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>INVITER UN MEMBRE DU STAFF</div>
               <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>
-                Lien à usage unique, valable 7 jours, pour ajouter un membre au club <strong style={{ color: C.text }}>{coachClub.name}</strong>.
+                Lien à usage unique, valable 24 h, pour ajouter un membre au club <strong style={{ color: C.text }}>{coachClub.name}</strong>.
               </div>
               <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
                 style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', marginBottom: 8, boxSizing: 'border-box' }}>

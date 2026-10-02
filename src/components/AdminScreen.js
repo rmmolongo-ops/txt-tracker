@@ -457,7 +457,7 @@ export default function AdminScreen({
           <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 10 }}>Inviter un coach ou dirigeant</div>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
             {inviteTargetClub
-              ? <>Génère un lien à usage unique, valable 7 jours, donnant accès à toutes les équipes du club <strong style={{ color: C.text }}>{inviteTargetClub.name}</strong> uniquement.</>
+              ? <>Génère un lien à usage unique, valable 24 h, donnant accès à toutes les équipes du club <strong style={{ color: C.text }}>{inviteTargetClub.name}</strong> uniquement.</>
               : 'Choisis le club pour lequel tu veux inviter un membre : le lien ne donnera accès qu\'à ce club.'}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
