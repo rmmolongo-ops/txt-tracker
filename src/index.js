@@ -3,8 +3,14 @@ import { createRoot } from 'react-dom/client'
 import { supabase } from './lib/supabase'
 import Auth from './components/Auth'
 import App from './components/App'
+import { C } from './lib/constants'
+import { applyTheme, getStoredTheme, useTheme } from './lib/theme'
+
+// Palette appliquée avant le premier rendu : pas d'éclair de la mauvaise couleur.
+applyTheme(getStoredTheme())
 
 function Root() {
+  const [theme, changeTheme] = useTheme()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [inviteTeamId] = useState(() => new URLSearchParams(window.location.search).get('invite'))
@@ -26,13 +32,13 @@ function Root() {
   }
 
   if (loading) return (
-    <div style={{ background: '#0a0e1a', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ fontSize: 40 }}>⚽</div>
+    <div style={{ background: C.bg, minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ fontSize: 20, fontWeight: 600, color: C.accentGlow }}>TxT</div>
     </div>
   )
 
   return user
-    ? <App user={user} onSignOut={handleSignOut} inviteTeamId={inviteTeamId} clubInviteCode={clubInviteCode} />
+    ? <App user={user} onSignOut={handleSignOut} inviteTeamId={inviteTeamId} clubInviteCode={clubInviteCode} theme={theme} onThemeChange={changeTheme} />
     : <Auth inviteTeamId={inviteTeamId} clubInviteCode={clubInviteCode} />
 }
 
