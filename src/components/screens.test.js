@@ -95,6 +95,18 @@ describe('ProfilScreen', () => {
     expect(values).toEqual(expect.arrayContaining(['Molongo', 'Ralph', 'RM']))
   })
 
+  test('apparence : propose Sombre / Clair / Automatique et signale le choix', async () => {
+    const onThemeChange = jest.fn()
+    await render(<ProfilScreen {...props} theme="dark" onThemeChange={onThemeChange} />)
+    expect(container.textContent).toContain('Apparence')
+    expect(buttonWithText('Sombre').getAttribute('aria-pressed')).toBe('true')
+    expect(buttonWithText('Clair').getAttribute('aria-pressed')).toBe('false')
+    await act(async () => { buttonWithText('Clair').click() })
+    expect(onThemeChange).toHaveBeenCalledWith('light')
+    await act(async () => { buttonWithText('Automatique').click() })
+    expect(onThemeChange).toHaveBeenCalledWith('system')
+  })
+
   test('rejoindre / quitter une équipe passe par toggleMyTeam', async () => {
     await render(<ProfilScreen {...props} />)
     await act(async () => { buttonWithText('U12 B').click() })

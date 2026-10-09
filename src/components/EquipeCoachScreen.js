@@ -206,7 +206,7 @@ export default function EquipeCoachScreen({
                                     <XAxis type="number" domain={[0, dataMax => Math.ceil(dataMax * 1.25)]} tick={{ fontSize: 11, fill: C.muted }} axisLine={false} tickLine={false} />
                                     <YAxis type="category" dataKey="name" tick={{ fontSize: 13, fontWeight: 500, fill: C.text }} axisLine={false} tickLine={false} width={80} />
                                     <Tooltip
-                                      cursor={{ fill: '#ffffff', opacity: 0.04 }}
+                                      cursor={{ fill: C.text, opacity: 0.06 }}
                                       contentStyle={{ background: C.card, border: '1px solid ' + C.border, borderRadius: 8, color: C.text, fontSize: 12 }}
                                       formatter={v => [v + ' ' + kpi.unit, kpi.label]} />
                                     <Bar dataKey="val" fill={C.accent} radius={[0, 4, 4, 0]} maxBarSize={24}>

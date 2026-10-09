@@ -1,5 +1,5 @@
 import { Fragment, useState, useRef } from 'react'
-import { C, KPI_CONFIG, DAY_MAP, MATCH_COLOR } from '../lib/constants'
+import { C, KPI_CONFIG, DAY_MAP } from '../lib/constants'
 import { toDateStr, getMonday, MATCH_RESULTS, hasScore, resultFromScore } from '../lib/stats'
 import Icon from './Icons'
 
@@ -118,7 +118,7 @@ export default function DashboardCoach({
                   <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
                     <div style={{ fontSize: 12, color: C.muted, marginBottom: 2 }}>Match de la semaine</div>
                     {matches.length > 0 ? (
-                      <div style={{ fontSize: 13, fontWeight: 600, color: MATCH_COLOR }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: C.match }}>
                         {matches[0].label} · {new Date(matches[0].date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
                       </div>
                     ) : (
@@ -200,7 +200,7 @@ export default function DashboardCoach({
                           <button key={i} onClick={() => setViewDay(selected ? null : { dateStr, date: d, dayCode, s, teamId: activeCoachTeam.id })}
                             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '6px 0', borderRadius: 10, border: selected ? '2px solid ' + C.accent : '2px solid transparent', background: isToday && !selected ? C.accent + '15' : 'transparent', cursor: 'pointer' }}>
                             <div style={{ fontSize: 14, fontWeight: isToday ? 800 : 600, color: isToday ? C.accent : C.text }}>{day}</div>
-                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: planned ? (s.type === 'match' ? MATCH_COLOR : C.accent) : 'transparent' }} />
+                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: planned ? (s.type === 'match' ? C.match : C.accent) : 'transparent' }} />
                           </button>
                         )
                       })}
@@ -333,7 +333,7 @@ export default function DashboardCoach({
                     ) : (
                       <>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                          <div className="mono" style={{ width: 42, height: 42, borderRadius: 10, background: C.bg, border: '1px solid ' + (viewDay.s.type === 'match' ? MATCH_COLOR + '80' : C.border), color: viewDay.s.type === 'match' ? MATCH_COLOR : C.muted, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{viewDay.date.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '').toUpperCase()}</div>
+                          <div className="mono" style={{ width: 42, height: 42, borderRadius: 10, background: C.bg, border: '1px solid ' + (viewDay.s.type === 'match' ? C.match + '80' : C.border), color: viewDay.s.type === 'match' ? C.match : C.muted, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{viewDay.date.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '').toUpperCase()}</div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontWeight: 600, fontSize: 15 }}>{viewDay.s.label}</div>
                             <div style={{ fontSize: 12, color: C.muted }}>{viewDay.s.duration}{viewDay.s.objectif ? ' · ' + viewDay.s.objectif : ''}</div>
@@ -415,7 +415,7 @@ export default function DashboardCoach({
                                     <div onClick={togglePresent} style={{ flex: 1, fontSize: 13, fontWeight: n > 0 ? 700 : 400, color: present ? C.text : C.muted, cursor: 'pointer' }}>{p.prenom || '—'} {p.nom || ''}</div>
                                     <button onClick={() => setN(n - 1)} disabled={n === 0}
                                       style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid ' + C.border, background: C.surface, color: C.text, fontSize: 16, cursor: n === 0 ? 'default' : 'pointer', opacity: n === 0 ? 0.4 : 1 }}>−</button>
-                                    <div style={{ width: 22, textAlign: 'center', fontWeight: 800, fontSize: 15, color: n > 0 ? '#eab308' : C.muted }}>{n}</div>
+                                    <div style={{ width: 22, textAlign: 'center', fontWeight: 800, fontSize: 15, color: n > 0 ? C.match : C.muted }}>{n}</div>
                                     <button onClick={() => setN(n + 1)}
                                       style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid ' + C.border, background: C.surface, color: C.text, fontSize: 16, cursor: 'pointer' }}>+</button>
                                   </div>
@@ -452,7 +452,7 @@ export default function DashboardCoach({
                                 <div style={{ marginBottom: 8 }}>
                                   <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{totalButs} but{totalButs > 1 ? 's' : ''}</div>
                                   {savedButs.map(([k, n]) => (
-                                    <div key={k} style={{ fontSize: 13, marginBottom: 2 }}>{nameOf(k)} <b style={{ color: '#eab308' }}>× {n}</b></div>
+                                    <div key={k} style={{ fontSize: 13, marginBottom: 2 }}>{nameOf(k)} <b style={{ color: C.match }}>× {n}</b></div>
                                   ))}
                                 </div>
                               )}
@@ -534,7 +534,7 @@ export default function DashboardCoach({
                 Entraînement
               </button>
               <button onClick={() => setPickerMode('match')}
-                style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, background: pickerMode === 'match' ? '#eab308' : C.surface, color: pickerMode === 'match' ? '#fff' : C.muted }}>
+                style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, background: pickerMode === 'match' ? C.match : C.surface, color: pickerMode === 'match' ? '#fff' : C.muted }}>
                 Match
               </button>
             </div>
@@ -564,7 +564,7 @@ export default function DashboardCoach({
                   onChange={e => setMatchOpponent(e.target.value)}
                   style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 14 }} />
                 <button onClick={() => { assignMatchSession(dailyPickerFor.teamId, dailyPickerFor.dateStr, matchOpponent.trim()); setMatchOpponent('') }}
-                  style={{ width: '100%', padding: 10, borderRadius: 10, border: 'none', background: '#eab308', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', marginBottom: 8 }}>
+                  style={{ width: '100%', padding: 10, borderRadius: 10, border: 'none', background: C.match, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', marginBottom: 8 }}>
                   Planifier ce match
                 </button>
               </>

@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { C, DEFAULT_PROFIL } from '../lib/constants'
 import Icon from './Icons'
+import { THEME_OPTIONS } from '../lib/theme'
 
 // Onglet Profil : photo, infos joueur (consultation / édition), équipes rejointes, installation de l'appli.
-export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs, availableTeams, myTeamIds, toggleMyTeam, isStandalone, handleInstall, isMobile, showToast, myClubId, myClubRole, createClubInvite }) {
+export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs, availableTeams, myTeamIds, toggleMyTeam, isStandalone, handleInstall, isMobile, showToast, myClubId, myClubRole, createClubInvite, theme = 'dark', onThemeChange = () => {} }) {
   const [inviteRole, setInviteRole] = useState('coach')
   const coachClub = myClubRole === 'coach' ? clubs.find(c => c.id === myClubId) : null
   // Profil incomplet (ex: inscription via Google, sans club/poste saisis au préalable) :
@@ -139,6 +140,19 @@ export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs
               </button>
             </div>
           )}
+
+          <div style={{ padding: '16px 4px 4px' }}>
+            <div id="apparence-label" style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>Apparence</div>
+            <div role="group" aria-labelledby="apparence-label" style={{ display: 'flex', borderRadius: 10, padding: 3, gap: 2, border: '1px solid ' + C.border }}>
+              {THEME_OPTIONS.map(o => (
+                <button key={o.id} type="button" aria-pressed={theme === o.id} onClick={() => onThemeChange(o.id)}
+                  style={{ flex: 1, padding: '9px 6px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500, fontSize: 14, background: theme === o.id ? C.surface : 'transparent', color: theme === o.id ? C.text : C.muted }}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>Automatique suit le réglage de ton appareil. Ce choix est enregistré sur cet appareil.</div>
+          </div>
 
           <button onClick={() => { setProfilEdit(profil); setEditMode(true) }}
             style={{ width: '100%', padding: 13, borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 15, background: C.accent, color: '#fff', marginTop: 16 }}>

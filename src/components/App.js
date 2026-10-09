@@ -19,7 +19,7 @@ import DashboardCoach from './DashboardCoach'
 import DashboardJoueur from './DashboardJoueur'
 import useChatUnread from '../hooks/useChatUnread'
 
-export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
+export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, theme, onThemeChange }) {
   const [tab, setTab] = useState(() => localStorage.getItem('txt_tab') || 'dashboard')
   const [mesures, setMesures] = useState([])
   const [seances, setSeances] = useState([])
@@ -1246,7 +1246,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode }) {
       {tab === 'profil' && (
         <ProfilScreen user={user} onSignOut={onSignOut} profil={profil} setProfil={setProfil} clubs={clubs} availableTeams={availableTeams} myTeamIds={myTeamIds}
           toggleMyTeam={toggleMyTeam} isStandalone={isStandalone} handleInstall={handleInstall} isMobile={isMobile} showToast={showToast}
-          myClubId={myClubId} myClubRole={myClubRole} createClubInvite={createClubInvite} />
+          myClubId={myClubId} myClubRole={myClubRole} createClubInvite={createClubInvite} theme={theme} onThemeChange={onThemeChange} />
       )}
     </div>
   )

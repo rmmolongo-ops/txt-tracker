@@ -1,16 +1,30 @@
 // Configuration et constantes partagées par les écrans de l'application.
 
-export const C = {
-  bg: '#0a0e1a', card: '#111827', border: '#1e293b',
-  accent: '#3b82f6', accentGlow: '#60a5fa', gold: '#f59e0b',
-  green: '#10b981', red: '#ef4444', text: '#f1f5f9',
-  muted: '#94a3b8', surface: '#1e293b',
+// Deux palettes, même structure : un seul accent bleu, neutres bleu-ardoise.
+// Toutes les valeurs sont des hex à 6 chiffres : le code compose des transparences
+// en ajoutant un suffixe (C.accent + '22'), ce qui ne marche pas avec var() ou rgb().
+// Clair : fond blanc cassé froid, texte ardoise foncé, accents assombris pour garder
+// un contraste AA (texte 4.5:1) sur fond blanc.
+export const PALETTES = {
+  dark: {
+    bg: '#0a0e1a', card: '#111827', border: '#1e293b', surface: '#1e293b',
+    text: '#f1f5f9', muted: '#94a3b8',
+    accent: '#3b82f6', accentGlow: '#60a5fa',
+    green: '#10b981', red: '#ef4444', gold: '#f59e0b', match: '#eab308',
+  },
+  light: {
+    bg: '#f3f5f9', card: '#ffffff', border: '#dde3ee', surface: '#e8edf5',
+    text: '#0f172a', muted: '#566680',
+    accent: '#2563eb', accentGlow: '#1d4ed8',
+    green: '#047857', red: '#dc2626', gold: '#b45309', match: '#a16207',
+  },
 }
 
-export const TEAM_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#14b8a6','#ec4899']
+// Objet partagé et volontairement mutable : applyTheme() (lib/theme.js) en change les valeurs,
+// puis l'appli se re-rend. Les écrans lisent C.* au rendu, jamais au chargement du module.
+export const C = { ...PALETTES.dark }
 
-// Couleur dorée qui distingue un match d'un entraînement (calendrier coach).
-export const MATCH_COLOR = '#eab308'
+export const TEAM_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#14b8a6','#ec4899']
 
 export const DAY_ORDER = ['LUN','MAR','MER','JEU','VEN','SAM','DIM']
 
