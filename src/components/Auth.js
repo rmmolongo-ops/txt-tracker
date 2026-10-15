@@ -69,7 +69,9 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
   const passwordValid = rules.every(r => r.test(password))
   // Une invitation club (coach/dirigeant) ne rattache pas à une équipe précise à l'inscription
   // (ce sera fait ensuite depuis l'espace admin du club) : l'équipe n'est alors pas obligatoire.
-  const profilValid = mode === 'login' || (nom.trim() && prenom.trim() && selectedClub && poste1.trim() && (equipeValue || clubInviteCode))
+  // Un membre du staff invité (coach, dirigeant, administrateur) n'a pas de poste de jeu : le poste n'est alors pas obligatoire.
+  const posteOptional = ['coach', 'dirigeant', 'admin'].includes(clubInvite?.role)
+  const profilValid = mode === 'login' || (nom.trim() && prenom.trim() && selectedClub && (poste1.trim() || posteOptional) && (equipeValue || clubInviteCode))
 
   const borderFor = (val) => '1px solid ' + (attemptedSubmit && !String(val).trim() ? C.red : C.border)
 
@@ -258,9 +260,9 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Poste 1</div>
+                <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Poste 1{posteOptional ? ' (optionnel)' : ''}</div>
                 <input type="text" placeholder="Ex: Milieu Gauche" value={poste1} onChange={e => setPoste1(e.target.value)}
-                  style={{ width: '100%', background: C.surface, border: borderFor(poste1), borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                  style={{ width: '100%', background: C.surface, border: posteOptional ? '1px solid ' + C.border : borderFor(poste1), borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Poste 2</div>

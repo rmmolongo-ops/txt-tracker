@@ -11,7 +11,8 @@ jest.mock('../lib/supabase', () => {
   }
   const query = (table) => ({ select: () => ({ order: () => Promise.resolve({ data: tables[table] || [] }) }) })
   // Fonction simple (pas jest.fn) : la config CRA remet les mocks à zéro entre les tests.
-  const rpc = (name, args) => Promise.resolve({ data: name === 'get_club_invite_info' && args.p_code === 'bon-code' ? [{ club_id: 'c1', club_name: 'FO Plaisir', role: 'coach' }] : [] })
+  const staffRoles = { 'bon-code': 'coach', 'code-dirigeant': 'dirigeant', 'code-admin': 'admin' }
+  const rpc = (name, args) => Promise.resolve({ data: name === 'get_club_invite_info' && staffRoles[args.p_code] ? [{ club_id: 'c1', club_name: 'FO Plaisir', role: staffRoles[args.p_code] }] : [] })
   return { supabase: { from: query, rpc, auth: { signUp: jest.fn(() => Promise.resolve({ error: null })), signInWithPassword: jest.fn(), signInWithOAuth: jest.fn() } } }
 })
 
@@ -113,6 +114,45 @@ test("invitation staff : le club du lien est fixé, l'équipe reste optionnelle 
   expect(container.querySelectorAll('select').length).toBe(1)
   expect(container.querySelector('select').disabled).toBe(false)
   expect([...container.querySelector('select').querySelectorAll('option')].filter(o => o.value).map(o => o.value)).toEqual(['t1'])
+})
+
+test("invitation coach : le poste n'est pas obligatoire pour créer le compte", async () => {
+  const { supabase } = require('../lib/supabase')
+  supabase.auth.signUp.mockClear()
+  await render(<Auth clubInviteCode="bon-code" />)
+  expect(container.textContent).toContain('Poste 1 (optionnel)')
+
+  await act(async () => { typeIn(container.querySelector('input[type="email"]'), 'coach@test.fr') })
+  await act(async () => { typeIn(container.querySelector('input[type="password"]'), 'Motdepasse1!') })
+  await act(async () => { typeIn(container.querySelector('input[placeholder="Nom"]'), 'Martin') })
+  await act(async () => { typeIn(container.querySelector('input[placeholder="Prénom"]'), 'Paul') })
+  await act(async () => { container.querySelector('input[type="checkbox"]').click() })
+  await act(async () => { buttonWithText('Créer mon compte').click() })
+
+  expect(supabase.auth.signUp).toHaveBeenCalledTimes(1)
+  expect(supabase.auth.signUp.mock.calls[0][0].options.data).toMatchObject({ club: 'FO Plaisir', poste1: '' })
+})
+
+test("invitation dirigeant ou administrateur : le poste est aussi facultatif", async () => {
+  await render(<Auth clubInviteCode="code-dirigeant" />)
+  expect(container.textContent).toContain('Poste 1 (optionnel)')
+  await render(<Auth clubInviteCode="code-admin" key="admin" />)
+  expect(container.textContent).toContain('Poste 1 (optionnel)')
+})
+
+test("inscription joueur : le poste reste obligatoire", async () => {
+  const { supabase } = require('../lib/supabase')
+  supabase.auth.signUp.mockClear()
+  await render(<Auth inviteTeamId="t1" />)
+  expect(container.textContent).not.toContain('(optionnel)')
+
+  await act(async () => { typeIn(container.querySelector('input[type="email"]'), 'joueur@test.fr') })
+  await act(async () => { typeIn(container.querySelector('input[type="password"]'), 'Motdepasse1!') })
+  await act(async () => { typeIn(container.querySelector('input[placeholder="Nom"]'), 'Dupont') })
+  await act(async () => { typeIn(container.querySelector('input[placeholder="Prénom"]'), 'Jean') })
+  await act(async () => { container.querySelector('input[type="checkbox"]').click() })
+  await act(async () => { buttonWithText('Créer mon compte').click() })
+  expect(supabase.auth.signUp).not.toHaveBeenCalled()
 })
 
 test("lien d'invitation invalide ou expiré : message d'erreur et formulaire d'inscription normal", async () => {
