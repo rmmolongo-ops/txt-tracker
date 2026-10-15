@@ -86,6 +86,9 @@ export const SESSIONS = [
 
 export const DEFAULT_PROFIL = { nom: '', prenom: '', surnom: 'TxT', club: '', division: '', poste1: '', poste2: '', photo_url: '', dashboard_kpis: null }
 export const DASHBOARD_KPIS_MAX = 4
+
+// Formule gratuite : nombre maximum de joueurs sans compte par équipe (le super admin en est exempté).
+export const MANAGED_PLAYERS_FREE_LIMIT = 12
 export const LEADERSHIP_ROLES = ['coach', 'dirigeant']
 export const DEFAULT_TEMPLATE_BLOCS = [
   { titre: 'Mise en route & causerie', duree: '10 min', exercices: [''] },

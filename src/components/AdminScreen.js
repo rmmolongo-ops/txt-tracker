@@ -38,6 +38,7 @@ export default function AdminScreen({
   const [resendingEmail, setResendingEmail] = useState(null)
   const [inviteClubId, setInviteClubId] = useState(myClubId || '')
   const [inviteRole, setInviteRole] = useState('coach')
+  const [inviteTeamId, setInviteTeamId] = useState('')
   const [generatingInvite, setGeneratingInvite] = useState(false)
 
   // Rôles que l'utilisateur courant peut proposer à l'invitation club-level, cf. commentaire
@@ -46,6 +47,10 @@ export default function AdminScreen({
   const invitableRoles = isAdmin || myClubRole === 'admin' ? CLUB_INVITE_ROLES : CLUB_INVITE_ROLES.filter(r => r.id !== 'admin')
   const inviteTargetClubId = isAdmin ? inviteClubId : myClubId
   const inviteTargetClub = clubs.find(c => c.id === inviteTargetClubId)
+  // Coach et dirigeant sont invités dans UNE équipe du club ; seul l'administrateur l'est au niveau du club.
+  const inviteNeedsTeam = inviteRole !== 'admin'
+  const inviteTeams = teams.filter(t => t.club_id === inviteTargetClubId)
+  const inviteTeamValid = inviteTeams.some(t => t.id === inviteTeamId)
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim()) return
@@ -62,9 +67,9 @@ export default function AdminScreen({
   }
 
   const handleGenerateInvite = async () => {
-    if (!inviteTargetClubId) return
+    if (!inviteTargetClubId || (inviteNeedsTeam && !inviteTeamValid)) return
     setGeneratingInvite(true)
-    await createClubInvite(inviteTargetClubId, inviteRole)
+    await createClubInvite(inviteTargetClubId, inviteRole, null, inviteNeedsTeam ? inviteTeamId : null)
     setGeneratingInvite(false)
   }
 
@@ -458,12 +463,14 @@ export default function AdminScreen({
           <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 10 }}>Inviter un coach ou dirigeant</div>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
             {inviteTargetClub
-              ? <>Génère un lien à usage unique, valable 24 h, donnant accès à toutes les équipes du club <strong style={{ color: C.text }}>{inviteTargetClub.name}</strong> uniquement.</>
+              ? (inviteNeedsTeam
+                ? <>Génère un lien à usage unique, valable 24 h, pour rejoindre <strong style={{ color: C.text }}>une équipe</strong> du club <strong style={{ color: C.text }}>{inviteTargetClub.name}</strong> uniquement.</>
+                : <>Génère un lien à usage unique, valable 24 h, donnant la gestion de tout le club <strong style={{ color: C.text }}>{inviteTargetClub.name}</strong>.</>)
               : 'Choisis le club pour lequel tu veux inviter un membre : le lien ne donnera accès qu\'à ce club.'}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {isAdmin ? (
-              <select value={inviteClubId} onChange={e => setInviteClubId(e.target.value)}
+              <select value={inviteClubId} onChange={e => { setInviteClubId(e.target.value); setInviteTeamId('') }}
                 style={{ flex: 1, minWidth: 140, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: inviteClubId ? C.text : C.muted, fontSize: 14, outline: 'none' }}>
                 <option value="">Choisir un club...</option>
                 {clubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -473,12 +480,19 @@ export default function AdminScreen({
                 {inviteTargetClub?.name || 'Mon club'}
               </div>
             )}
+            {inviteNeedsTeam && (
+              <select value={inviteTeamId} onChange={e => setInviteTeamId(e.target.value)} aria-label="Équipe"
+                style={{ flex: 1, minWidth: 140, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: inviteTeamId ? C.text : C.muted, fontSize: 14, outline: 'none' }}>
+                <option value="">Choisir l'équipe...</option>
+                {inviteTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            )}
             <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
               style={{ minWidth: 140, background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none' }}>
               {invitableRoles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
             </select>
-            <button onClick={handleGenerateInvite} disabled={generatingInvite || !inviteTargetClubId}
-              style={{ padding: '10px 18px', background: inviteTargetClubId ? C.accent : C.surface, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14, whiteSpace: 'nowrap', opacity: generatingInvite ? 0.6 : 1 }}>
+            <button onClick={handleGenerateInvite} disabled={generatingInvite || !inviteTargetClubId || (inviteNeedsTeam && !inviteTeamValid)}
+              style={{ padding: '10px 18px', background: inviteTargetClubId && (!inviteNeedsTeam || inviteTeamValid) ? C.accent : C.surface, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14, whiteSpace: 'nowrap', opacity: generatingInvite ? 0.6 : 1 }}>
               Générer le lien
             </button>
           </div>

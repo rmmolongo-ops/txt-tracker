@@ -82,7 +82,7 @@ describe('ProfilScreen', () => {
   const profil = { nom: 'Molongo', prenom: 'Ralph', surnom: 'RM', club: 'FO Plaisir', division: 'U12', poste1: 'Milieu', poste2: '', photo_url: '' }
   const props = {
     user: { id: 'u1' }, onSignOut: jest.fn(), profil, setProfil: jest.fn(), clubs: [{ id: 'c1', name: 'FO Plaisir' }],
-    availableTeams: [{ id: 't1', name: 'U12 B', color: '#3b82f6' }], myTeamIds: new Set(['t1']), toggleMyTeam: jest.fn(),
+    availableTeams: [{ id: 't1', name: 'U12 B', color: '#3b82f6', club_id: 'c1' }, { id: 't2', name: 'U14', color: '#10b981', club_id: 'c1' }], myTeamIds: new Set(['t1']), myTeamRoles: { t1: 'joueur' }, createClubInvite: jest.fn(),
     isStandalone: true, handleInstall: jest.fn(), isMobile: false, showToast: jest.fn(),
   }
 
@@ -107,10 +107,23 @@ describe('ProfilScreen', () => {
     expect(onThemeChange).toHaveBeenCalledWith('system')
   })
 
-  test('rejoindre / quitter une équipe passe par toggleMyTeam', async () => {
+  test("cloisonnement : « Mes équipes » ne liste que les équipes de l'utilisateur, sans pouvoir en rejoindre d'autres", async () => {
     await render(<ProfilScreen {...props} />)
-    await act(async () => { buttonWithText('U12 B').click() })
-    expect(props.toggleMyTeam).toHaveBeenCalledWith('t1')
+    expect(container.textContent).toContain('U12 B')
+    expect(container.textContent).not.toContain('U14')
+    expect(buttonWithText('U12 B')).toBeUndefined()
+  })
+
+  test("invitation staff : un joueur n'a pas la carte, un coach d'équipe invite pour son équipe seulement", async () => {
+    await render(<ProfilScreen {...props} />)
+    expect(container.textContent).not.toContain('INVITER UN MEMBRE DU STAFF')
+
+    const createClubInvite = jest.fn()
+    await render(<ProfilScreen {...props} myTeamRoles={{ t1: 'coach' }} createClubInvite={createClubInvite} />)
+    expect(container.textContent).toContain('INVITER UN MEMBRE DU STAFF')
+    expect(container.textContent).toContain("l'équipe U12 B")
+    await act(async () => { buttonWithText('Générer le lien').click() })
+    expect(createClubInvite).toHaveBeenCalledWith('c1', 'coach', null, 't1')
   })
 
   test('profil incomplet (ex : inscription Google) : s’ouvre directement en édition avec un message d’accueil', async () => {

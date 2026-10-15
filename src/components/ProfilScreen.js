@@ -5,9 +5,13 @@ import Icon from './Icons'
 import { THEME_OPTIONS } from '../lib/theme'
 
 // Onglet Profil : photo, infos joueur (consultation / édition), équipes rejointes, installation de l'appli.
-export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs, availableTeams, myTeamIds, toggleMyTeam, isStandalone, handleInstall, isMobile, showToast, myClubId, myClubRole, createClubInvite, theme = 'dark', onThemeChange = () => {} }) {
+export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs = [], availableTeams, myTeamIds, myTeamRoles = {}, isStandalone, handleInstall, isMobile, showToast, createClubInvite, theme = 'dark', onThemeChange = () => {} }) {
   const [inviteRole, setInviteRole] = useState('coach')
-  const coachClub = myClubRole === 'coach' ? clubs.find(c => c.id === myClubId) : null
+  const [inviteTeamId, setInviteTeamId] = useState('')
+  const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
+  // Un coach ou dirigeant d'une équipe peut inviter, pour CETTE équipe seulement.
+  const leaderTeams = myTeams.filter(t => ['coach', 'dirigeant'].includes(myTeamRoles[t.id]) && t.club_id)
+  const inviteTeam = leaderTeams.find(t => t.id === inviteTeamId) || leaderTeams[0]
   // Profil incomplet (ex: inscription via Google, sans club/poste saisis au préalable) :
   // on ouvre directement l'écran en mode édition pour guider la première saisie.
   const [profilIncomplet] = useState(() => !profil.club || !profil.poste1)
@@ -101,40 +105,47 @@ export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs
             </div>
           ))}
 
-          {/* Sélecteur d'équipes (multi) pour l'utilisateur */}
-          {availableTeams.length > 0 && (
+          {/* Mes équipes : lecture seule, on ne rejoint une équipe que par lien d'invitation */}
+          {myTeams.length > 0 && (
             <div style={{ padding: '16px 4px 8px' }}>
               <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>Mes équipes</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {availableTeams.map(team => {
-                  const selected = myTeamIds.has(team.id)
-                  return (
-                    <button key={team.id} onClick={() => toggleMyTeam(team.id)}
-                      style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid ' + (selected ? C.accent : C.border), background: selected ? C.accent + '22' : 'transparent', color: selected ? C.accentGlow : C.muted, fontWeight: 500, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {team.photo_url
-                        ? <img src={team.photo_url} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover' }} />
-                        : <span style={{ width: 8, height: 8, borderRadius: '50%', background: team.color, display: 'inline-block' }} />}
-                      {selected ? '✓ ' : ''}{team.name}
-                    </button>
-                  )
-                })}
+                {myTeams.map(team => (
+                  <div key={team.id}
+                    style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid ' + C.border, color: C.text, fontWeight: 500, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {team.photo_url
+                      ? <img src={team.photo_url} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover' }} />
+                      : <span style={{ width: 8, height: 8, borderRadius: '50%', background: team.color, display: 'inline-block' }} />}
+                    {team.name}
+                  </div>
+                ))}
               </div>
-              {myTeamIds.size === 0 && <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>Appuie sur une équipe pour la rejoindre</div>}
+            </div>
+          )}
+          {myTeams.length === 0 && (
+            <div style={{ padding: '16px 4px 8px', fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+              Tu n'es dans aucune équipe pour le moment. Utilise le lien d'invitation de ton coach pour en rejoindre une.
             </div>
           )}
 
-          {coachClub && (
+          {inviteTeam && (
             <div style={{ background: C.card, borderRadius: 12, padding: '12px 16px', marginBottom: 8, border: '1px solid ' + C.border }}>
               <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>INVITER UN MEMBRE DU STAFF</div>
               <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>
-                Lien à usage unique, valable 24 h, pour ajouter un membre au club <strong style={{ color: C.text }}>{coachClub.name}</strong>.
+                Lien à usage unique, valable 24 h, pour ajouter un membre à l'équipe <strong style={{ color: C.text }}>{inviteTeam.name}</strong> uniquement.
               </div>
-              <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
+              {leaderTeams.length > 1 && (
+                <select value={inviteTeam.id} onChange={e => setInviteTeamId(e.target.value)} aria-label="Équipe"
+                  style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', marginBottom: 8, boxSizing: 'border-box' }}>
+                  {leaderTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              )}
+              <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} aria-label="Rôle"
                 style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, outline: 'none', marginBottom: 8, boxSizing: 'border-box' }}>
                 <option value="coach">Coach</option>
                 <option value="dirigeant">Dirigeant</option>
               </select>
-              <button onClick={() => createClubInvite(coachClub.id, inviteRole)}
+              <button onClick={() => createClubInvite(inviteTeam.club_id, inviteRole, null, inviteTeam.id)}
                 style={{ width: '100%', padding: 12, borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, background: C.accent, color: '#fff' }}>
                 Générer le lien
               </button>

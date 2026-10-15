@@ -19,6 +19,8 @@ import DashboardCoach from './DashboardCoach'
 import DashboardJoueur from './DashboardJoueur'
 import useChatUnread from '../hooks/useChatUnread'
 
+const TEAM_COLUMNS = 'id, name, color, photo_url, dashboard_kpis, club_id'
+
 export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, theme, onThemeChange }) {
   const [tab, setTab] = useState(() => localStorage.getItem('txt_tab') || 'dashboard')
   const [mesures, setMesures] = useState([])
@@ -225,12 +227,27 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
   const userRef = useRef(user)
   userRef.current = user
 
+  // Équipes visibles (selon l'appartenance, cf. règles d'accès) et rôles de l'utilisateur dans chacune.
+  const refreshTeams = useCallback(async () => {
+    const [{ data: t }, { data: mm }] = await Promise.all([
+      supabase.from('teams').select(TEAM_COLUMNS).order('created_at'),
+      supabase.from('team_members').select('team_id, role').eq('user_id', user.id),
+    ])
+    if (t) setAvailableTeams(t)
+    if (mm) {
+      setMyTeamIds(new Set(mm.map(x => x.team_id)))
+      const roleMap = {}
+      mm.forEach(x => { roleMap[x.team_id] = x.role })
+      setMyTeamRoles(roleMap)
+    }
+  }, [user.id])
+
   const loadAll = useCallback(async () => {
     const [{ data: m }, { data: s }, { data: p }, { data: t }, { data: myMemberships }, { data: progs }, { data: cl }, { data: tk }] = await Promise.all([
       supabase.from('mesures').select('*').eq('user_id', user.id).order('date', { ascending: true }),
       supabase.from('seances').select('*').eq('user_id', user.id),
       supabase.from('profils').select('*').eq('user_id', user.id).maybeSingle(),
-      supabase.from('teams').select('id, name, color, photo_url, dashboard_kpis').order('created_at'),
+      supabase.from('teams').select(TEAM_COLUMNS).order('created_at'),
       supabase.from('team_members').select('team_id, role').eq('user_id', user.id),
       supabase.from('team_programs').select('*').order('start_date'),
       supabase.from('clubs').select('*').order('name'),
@@ -269,8 +286,8 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
       // Profil pour qu'il les complète plutôt que de le laisser sur un accueil vide.
       if (!initial.club || !initial.poste1) changeTab('profil')
       if (meta.equipe) {
-        const { error: joinError } = await supabase.from('team_members').insert({ user_id: user.id, team_id: meta.equipe })
-        if (!joinError) setMyTeamIds(prev => new Set([...prev, meta.equipe]))
+        const { error: joinError } = await supabase.rpc('join_team_via_link', { p_team_id: meta.equipe })
+        if (!joinError) await refreshTeams()
       }
     }
     let becameAdmin = false
@@ -287,28 +304,23 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
     if (memberships) setClubMemberships(memberships)
     if (becameAdmin || becameClubManager) await loadAdminOverview()
     setLoading(false)
-  }, [user.id])
+  }, [user.id, refreshTeams])
 
   useEffect(() => { loadAll() }, [loadAll])
 
   const inviteHandledRef = useRef(false)
   useEffect(() => {
     if (!inviteTeamId || inviteHandledRef.current) return
-    const team = availableTeams.find(t => t.id === inviteTeamId)
-    if (!team) return
     inviteHandledRef.current = true
+    // Une équipe n'est pas lisible avant d'en être membre : on la rejoint par la fonction dédiée,
+    // qui valide le lien, puis on recharge les équipes visibles.
     ;(async () => {
-      if (!myTeamIds.has(inviteTeamId)) {
-        const { error } = await supabase.from('team_members').insert({ user_id: user.id, team_id: inviteTeamId })
-        if (!error) {
-          setMyTeamIds(prev => new Set([...prev, inviteTeamId]))
-          setMyTeamRoles(prev => ({ ...prev, [inviteTeamId]: 'joueur' }))
-          showToast(`✅ Ajouté à l'équipe "${team.name}" !`)
-        }
-      }
+      const { data: teamName, error } = await supabase.rpc('join_team_via_link', { p_team_id: inviteTeamId })
+      if (error) showToast('❌ ' + error.message)
+      else { await refreshTeams(); showToast(`✅ Ajouté à l'équipe "${teamName}" !`) }
       window.history.replaceState({}, '', window.location.pathname)
     })()
-  }, [inviteTeamId, availableTeams, myTeamIds, user.id])
+  }, [inviteTeamId, refreshTeams])
 
   const clubInviteHandledRef = useRef(false)
   useEffect(() => {
@@ -321,12 +333,13 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
       } else if (joinedClubId) {
         const { data: memberships } = await supabase.from('club_members').select('club_id, role').eq('user_id', user.id)
         if (memberships) setClubMemberships(memberships)
+        await refreshTeams()
         await loadAdminOverview()
         showToast('✅ Invitation acceptée, bienvenue dans le club !')
       }
       window.history.replaceState({}, '', window.location.pathname)
     })()
-  }, [clubInviteCode, user.id])
+  }, [clubInviteCode, user.id, refreshTeams])
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768)
@@ -589,21 +602,6 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
     return true
   }
 
-  const toggleMyTeam = async (teamId) => {
-    const isIn = myTeamIds.has(teamId)
-    if (isIn) {
-      await supabase.from('team_members').delete().eq('user_id', user.id).eq('team_id', teamId)
-      setMyTeamIds(prev => { const next = new Set(prev); next.delete(teamId); return next })
-      setMyTeamRoles(prev => { const next = { ...prev }; delete next[teamId]; return next })
-    } else {
-      await supabase.from('team_members').insert({ user_id: user.id, team_id: teamId })
-      setMyTeamIds(prev => new Set([...prev, teamId]))
-      setMyTeamRoles(prev => ({ ...prev, [teamId]: 'joueur' }))
-    }
-    const team = availableTeams.find(t => t.id === teamId)
-    showToast(isIn ? `Retiré de "${team?.name}"` : `✅ Ajouté à "${team?.name}" !`)
-  }
-
   const uploadTeamPhoto = async (teamId, file) => {
     setUploadingTeamPhoto(teamId)
     try {
@@ -670,19 +668,21 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
   // côté base (create_club_invite), distinct du lien simple ci-dessus utilisé pour les joueurs —
   // l'accès accordé ici couvre tout le club, d'où le mécanisme plus strict (voir migration
   // 20260928000000_multi_tenant_clubs.sql).
-  const createClubInvite = async (clubId, role, knownClubName) => {
-    const { data: code, error } = await supabase.rpc('create_club_invite', { p_club_id: clubId, p_role: role })
+  const createClubInvite = async (clubId, role, knownClubName, teamId = null) => {
+    const { data: code, error } = await supabase.rpc('create_club_invite', { p_club_id: clubId, p_role: role, p_team_id: teamId })
     if (error) { showToast('❌ ' + error.message); return }
     const roleLabel = role === 'admin' ? 'administrateur' : role === 'dirigeant' ? 'dirigeant' : 'coach'
     const url = `${window.location.origin}/?club_invite=${code}`
     const clubName = knownClubName || clubs.find(c => c.id === clubId)?.name || 'le club'
+    const teamName = teamId ? (availableTeams.find(t => t.id === teamId)?.name || teams.find(t => t.id === teamId)?.name) : null
+    const target = teamName ? `${teamName} (${clubName})` : clubName
     if (navigator.share) {
-      try { await navigator.share({ title: 'TxT Tracker', text: `Rejoins ${clubName} en tant que ${roleLabel} sur TxT Tracker !`, url }); return }
+      try { await navigator.share({ title: 'TxT Tracker', text: `Rejoins ${target} en tant que ${roleLabel} sur TxT Tracker !`, url }); return }
       catch (e) { if (e.name === 'AbortError') return }
     }
     try {
       await navigator.clipboard.writeText(url)
-      showToast('🔗 Lien d\'invitation ' + roleLabel + ' (' + clubName + ') copié !')
+      showToast('🔗 Lien d\'invitation ' + roleLabel + ' (' + target + ') copié !')
     } catch (e) {
       showToast('❌ Impossible de copier le lien')
     }
@@ -1245,8 +1245,8 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
       {/* ── PROFIL ── */}
       {tab === 'profil' && (
         <ProfilScreen user={user} onSignOut={onSignOut} profil={profil} setProfil={setProfil} clubs={clubs} availableTeams={availableTeams} myTeamIds={myTeamIds}
-          toggleMyTeam={toggleMyTeam} isStandalone={isStandalone} handleInstall={handleInstall} isMobile={isMobile} showToast={showToast}
-          myClubId={myClubId} myClubRole={myClubRole} createClubInvite={createClubInvite} theme={theme} onThemeChange={onThemeChange} />
+          isStandalone={isStandalone} handleInstall={handleInstall} isMobile={isMobile} showToast={showToast}
+          myTeamRoles={myTeamRoles} createClubInvite={createClubInvite} theme={theme} onThemeChange={onThemeChange} />
       )}
     </div>
   )

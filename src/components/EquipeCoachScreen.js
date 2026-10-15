@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { LineChart, Line, BarChart, Bar, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import KpiManager from './KpiManager'
-import { C, KPI_CONFIG, DAY_ORDER, LEADERSHIP_ROLES, seanceRowKey } from '../lib/constants'
+import { C, KPI_CONFIG, DAY_ORDER, LEADERSHIP_ROLES, MANAGED_PLAYERS_FREE_LIMIT, seanceRowKey } from '../lib/constants'
 import { toDateStr, getMonday } from '../lib/stats'
 import Icon from './Icons'
 
@@ -68,19 +68,25 @@ export default function EquipeCoachScreen({
           const realPlayers = isAdmin ? adminData.filter(j => (j.teams || []).some(t => t.id === equipeTeamId)) : coachRosterData
           const teamPlayers = [...realPlayers, ...managedPlayers]
           const canManagePlayers = isAdmin || LEADERSHIP_ROLES.includes(myTeamRoles[equipeTeamId])
+          const managedLimitReached = !isAdmin && managedPlayers.length >= MANAGED_PLAYERS_FREE_LIMIT
           return (
             <>
               {canManagePlayers && (
                 <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: managedPlayers.length > 0 || addingManagedPlayer ? 12 : 0 }}>
-                    <div style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>Joueurs sans compte</div>
-                    {!addingManagedPlayer && (
+                    <div style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>Joueurs sans compte{!isAdmin && <span className="mono" style={{ marginLeft: 8 }}>{managedPlayers.length}/{MANAGED_PLAYERS_FREE_LIMIT}</span>}</div>
+                    {!addingManagedPlayer && !managedLimitReached && (
                       <button onClick={() => setAddingManagedPlayer(true)}
                         style={{ background: 'none', border: 'none', color: C.accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
                         + Ajouter un joueur
                       </button>
                     )}
                   </div>
+                  {managedLimitReached && (
+                    <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, marginBottom: 12 }}>
+                      Limite de la formule gratuite atteinte ({MANAGED_PLAYERS_FREE_LIMIT} joueurs sans compte par équipe). Une formule payante arrivera prochainement.
+                    </div>
+                  )}
                   {addingManagedPlayer && (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
                       <input placeholder="Prénom" value={managedPlayerDraft.prenom} onChange={e => setManagedPlayerDraft(d => ({ ...d, prenom: e.target.value }))}

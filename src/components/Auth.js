@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../lib/constants'
-import { teamsOfClub } from '../lib/stats'
 
 const CLUB_ROLE_LABELS = { admin: 'administrateur', dirigeant: 'dirigeant', coach: 'coach' }
 
@@ -15,7 +14,8 @@ const rules = [
 ]
 
 export default function Auth({ inviteTeamId, clubInviteCode }) {
-  const [mode, setMode] = useState((inviteTeamId || clubInviteCode) ? 'register' : 'login')
+  const hasInvite = !!(inviteTeamId || clubInviteCode)
+  const [mode, setMode] = useState(hasInvite ? 'register' : 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -24,54 +24,41 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
   const [success, setSuccess] = useState(null)
   const [nom, setNom] = useState('')
   const [prenom, setPrenom] = useState('')
-  const [club, setClub] = useState('')
-  const [equipe, setEquipe] = useState('')
   const [poste1, setPoste1] = useState('')
   const [poste2, setPoste2] = useState('')
-  const [clubs, setClubs] = useState([])
-  const [teams, setTeams] = useState([])
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
-  const [teamsLoaded, setTeamsLoaded] = useState(false)
-  // undefined = en cours de vérification, null = code invalide/expiré, objet = club visé par le lien staff.
-  const [clubInvite, setClubInvite] = useState(undefined)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
-
-  const inviteTeam = teams.find(t => t.id === inviteTeamId)
-  const inviteClubName = clubs.find(c => c.id === inviteTeam?.club_id)?.name || ''
-  // Un lien d'invitation fixe le choix : équipe (et son club) pour un lien d'équipe, club pour un
-  // lien staff. Ces champs sont alors affichés en lecture seule et ne peuvent pas être changés.
-  const lockedClubName = inviteTeam ? inviteClubName : (clubInvite?.club_name || '')
-  const clubLocked = !!lockedClubName
-  const teamLocked = !!inviteTeam
-  const selectedClub = clubLocked ? lockedClubName : club
-  const equipeValue = teamLocked ? inviteTeam.id : equipe
-  const teamInviteInvalid = !!inviteTeamId && teamsLoaded && !inviteTeam
-  const clubInviteInvalid = !!clubInviteCode && clubInvite === null
-  const clubTeams = teamsOfClub(teams, clubs, selectedClub, inviteTeamId)
-
-  const changeClub = (name) => {
-    if (clubLocked) return
-    setClub(name)
-    // L'équipe choisie doit appartenir au club : on la réinitialise sinon.
-    setEquipe(prev => teamsOfClub(teams, clubs, name, inviteTeamId).some(t => t.id === prev) ? prev : '')
-  }
+  // Informations du lien, lues par fonction (la page d'inscription ne lit aucune table) :
+  // undefined = vérification en cours, null = lien invalide/expiré, objet = lien valide.
+  const [teamInvite, setTeamInvite] = useState(inviteTeamId ? undefined : null)
+  const [clubInvite, setClubInvite] = useState(clubInviteCode ? undefined : null)
 
   useEffect(() => {
-    supabase.from('clubs').select('*').order('name').then(({ data }) => { if (data) setClubs(data) })
-    supabase.from('teams').select('id, name, club_id').order('name').then(({ data }) => { if (data) setTeams(data); setTeamsLoaded(true) })
-  }, [])
+    if (!inviteTeamId) return
+    supabase.rpc('get_team_invite_info', { p_team_id: inviteTeamId }).then(({ data }) => setTeamInvite(data?.[0] || null))
+  }, [inviteTeamId])
 
   useEffect(() => {
     if (!clubInviteCode) return
     supabase.rpc('get_club_invite_info', { p_code: clubInviteCode }).then(({ data }) => setClubInvite(data?.[0] || null))
   }, [clubInviteCode])
 
-  const passwordValid = rules.every(r => r.test(password))
-  // Une invitation club (coach/dirigeant) ne rattache pas à une équipe précise à l'inscription
-  // (ce sera fait ensuite depuis l'espace admin du club) : l'équipe n'est alors pas obligatoire.
-  // Un membre du staff invité (coach, dirigeant, administrateur) n'a pas de poste de jeu : le poste n'est alors pas obligatoire.
+  // L'inscription n'est possible que sur invitation valide : le club et l'équipe viennent du lien
+  // et ne sont jamais choisis par l'utilisateur.
+  const checking = (inviteTeamId && teamInvite === undefined) || (clubInviteCode && clubInvite === undefined)
+  const inviteInvalid = hasInvite && !checking && !teamInvite && !clubInvite
+  const canRegister = !!(teamInvite || clubInvite)
+  const clubName = teamInvite?.club_name || clubInvite?.club_name || ''
+  const teamName = teamInvite?.team_name || clubInvite?.team_name || ''
+  // Un lien joueur rattache à l'équipe à l'inscription ; un lien staff rattache à l'équipe à
+  // l'utilisation du code (avec le rôle coach/dirigeant), jamais comme simple joueur.
+  const equipeValue = teamInvite ? inviteTeamId : ''
+  // Un membre du staff invité (coach, dirigeant, administrateur) n'a pas de poste de jeu.
   const posteOptional = ['coach', 'dirigeant', 'admin'].includes(clubInvite?.role)
-  const profilValid = mode === 'login' || (nom.trim() && prenom.trim() && selectedClub && (poste1.trim() || posteOptional) && (equipeValue || clubInviteCode))
+  const registering = mode === 'register' && canRegister
+
+  const passwordValid = rules.every(r => r.test(password))
+  const profilValid = !registering || (nom.trim() && prenom.trim() && (poste1.trim() || posteOptional))
 
   const borderFor = (val) => '1px solid ' + (attemptedSubmit && !String(val).trim() ? C.red : C.border)
 
@@ -101,21 +88,21 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
       setError('Merci de renseigner ton email et ton mot de passe.')
       return
     }
-    if (mode === 'register' && !passwordValid) {
+    if (registering && !passwordValid) {
       setError('Le mot de passe ne respecte pas les conditions requises.')
       return
     }
-    if (mode === 'register' && !profilValid) {
+    if (registering && !profilValid) {
       setError('Merci de renseigner tous les champs en rouge.')
       return
     }
-    if (mode === 'register' && !acceptedTerms) {
+    if (registering && !acceptedTerms) {
       setError("Merci d'accepter les CGU et la politique de confidentialité pour créer un compte.")
       return
     }
     setLoading(true)
     try {
-      if (mode === 'login') {
+      if (!registering) {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
       } else {
@@ -124,7 +111,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
           password,
           options: {
             emailRedirectTo: signupRedirect,
-            data: { nom: nom.trim(), prenom: prenom.trim(), club: selectedClub, equipe: equipeValue, poste1: poste1.trim(), poste2: poste2.trim() },
+            data: { nom: nom.trim(), prenom: prenom.trim(), club: clubName, equipe: equipeValue, poste1: poste1.trim(), poste2: poste2.trim() },
           },
         })
         if (error) throw error
@@ -144,6 +131,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
         <div style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>Talent × Travail × Temps</div>
       </div>
       <div style={{ background: C.card, borderRadius: 16, padding: 28, width: '100%', maxWidth: 380, border: '1px solid ' + C.border }}>
+        {canRegister && (
         <div style={{ display: 'flex', borderRadius: 10, padding: 3, marginBottom: 24, border: '1px solid ' + C.border }}>
           {['login', 'register'].map(m => (
             <button key={m} onClick={() => switchMode(m)}
@@ -152,20 +140,26 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
             </button>
           ))}
         </div>
-        {inviteTeam && (
-          <div style={{ background: C.accent + '15', border: '1px solid ' + C.accent + '40', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: C.text }}>
-            Invitation à rejoindre l'équipe <strong>{inviteTeam.name}</strong>
+        )}
+        {!hasInvite && (
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.5 }}>
+            L'inscription se fait sur invitation : demande un lien à ton coach ou à ton club.
           </div>
         )}
-        {clubInviteCode && clubInvite && (
+        {teamInvite && (
           <div style={{ background: C.accent + '15', border: '1px solid ' + C.accent + '40', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: C.text }}>
-            Invitation à rejoindre le club <strong>{clubInvite.club_name}</strong> en tant que <strong>{CLUB_ROLE_LABELS[clubInvite.role] || clubInvite.role}</strong>
+            Invitation à rejoindre l'équipe <strong>{teamInvite.team_name}</strong>
           </div>
         )}
-        {clubInviteCode && clubInvite === undefined && (
+        {clubInvite && (
+          <div style={{ background: C.accent + '15', border: '1px solid ' + C.accent + '40', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: C.text }}>
+            Invitation à rejoindre <strong>{clubInvite.team_name ? clubInvite.team_name + ' (' + clubInvite.club_name + ')' : 'le club ' + clubInvite.club_name}</strong> en tant que <strong>{CLUB_ROLE_LABELS[clubInvite.role] || clubInvite.role}</strong>
+          </div>
+        )}
+        {checking && (
           <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Vérification de l'invitation…</div>
         )}
-        {(clubInviteInvalid || teamInviteInvalid) && (
+        {inviteInvalid && (
           <div style={{ background: C.red + '15', border: '1px solid ' + C.red + '40', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: C.text }}>
             Ce lien d'invitation n'est plus valide (expiré, déjà utilisé ou introuvable). Demande-en un nouveau à ton club.
           </div>
@@ -190,7 +184,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
           <input type="email" placeholder="ton@email.com" value={email} onChange={e => setEmail(e.target.value)}
             style={{ width: '100%', background: C.surface, border: borderFor(email), borderRadius: 10, padding: '12px 14px', color: C.text, fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
         </div>
-        <div style={{ marginBottom: mode === 'register' ? 12 : 20 }}>
+        <div style={{ marginBottom: registering ? 12 : 20 }}>
           <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Mot de passe</div>
           <div style={{ position: 'relative' }}>
             <input type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password}
@@ -204,7 +198,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
             </button>
           </div>
         </div>
-        {mode === 'register' && password.length > 0 && (
+        {registering && password.length > 0 && (
           <div style={{ background: C.surface, borderRadius: 10, padding: '10px 14px', marginBottom: 16 }}>
             {rules.map(r => {
               const ok = r.test(password)
@@ -217,9 +211,9 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
             })}
           </div>
         )}
-        {mode === 'register' && (
+        {registering && (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, color: C.muted, marginBottom: 10, fontWeight: 500 }}>Profil joueur</div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 10, fontWeight: 500 }}>{posteOptional ? 'Ton profil' : 'Profil joueur'}</div>
             <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Nom</div>
@@ -234,30 +228,14 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
             </div>
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Club</div>
-              {clubLocked ? (
-                <div style={lockedBox} data-testid="club-locked"><span>{lockedClubName}</span><span style={{ fontSize: 11, color: C.muted }}>Fixé par l'invitation</span></div>
-              ) : (
-              <select value={selectedClub} onChange={e => changeClub(e.target.value)}
-                style={{ width: '100%', background: C.surface, border: borderFor(selectedClub), borderRadius: 10, padding: '10px 12px', color: selectedClub ? C.text : C.muted, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}>
-                <option value="">Sélectionne ton club...</option>
-                {clubs.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-              </select>
-              )}
-              {!clubLocked && clubs.length === 0 && <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>Aucun club disponible pour l'instant, contacte ton coach.</div>}
+              <div style={lockedBox} data-testid="club-locked"><span>{clubName}</span><span style={{ fontSize: 11, color: C.muted }}>Fixé par l'invitation</span></div>
             </div>
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Équipe{clubInviteCode ? ' (optionnel)' : ''}</div>
-              {teamLocked ? (
-                <div style={lockedBox} data-testid="team-locked"><span>{inviteTeam.name}</span><span style={{ fontSize: 11, color: C.muted }}>Fixée par l'invitation</span></div>
-              ) : (
-              <select value={equipe} onChange={e => setEquipe(e.target.value)} disabled={!selectedClub}
-                style={{ width: '100%', background: C.surface, border: clubInviteCode ? '1px solid ' + C.border : borderFor(equipe), borderRadius: 10, padding: '10px 12px', color: equipe ? C.text : C.muted, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}>
-                <option value="">{selectedClub ? 'Sélectionne ton équipe...' : "Choisis d'abord ton club..."}</option>
-                {clubTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-              )}
-              {!teamLocked && selectedClub && clubTeams.length === 0 && <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>Aucune équipe disponible dans ce club pour l'instant, contacte ton coach.</div>}
-            </div>
+            {teamName && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Équipe</div>
+                <div style={lockedBox} data-testid="team-locked"><span>{teamName}</span><span style={{ fontSize: 11, color: C.muted }}>Fixée par l'invitation</span></div>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 10 }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>Poste 1{posteOptional ? ' (optionnel)' : ''}</div>
@@ -272,7 +250,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
             </div>
           </div>
         )}
-        {mode === 'register' && (
+        {registering && (
           <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 16, fontSize: 12, color: C.muted, cursor: 'pointer' }}>
             <input type="checkbox" checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)}
               style={{ marginTop: 2, flexShrink: 0 }} />
@@ -284,9 +262,9 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
         )}
         {error && <div role="alert" style={{ background: C.red + '20', border: '1px solid ' + C.red + '40', borderRadius: 10, padding: '10px 14px', color: C.red, fontSize: 13, marginBottom: 14 }}>{error}</div>}
         {success && <div style={{ background: C.green + '20', border: '1px solid ' + C.green + '40', borderRadius: 10, padding: '10px 14px', color: C.green, fontSize: 13, marginBottom: 14 }}>{success}</div>}
-        <button onClick={handleAuth} disabled={loading}
+        <button onClick={handleAuth} disabled={loading || checking}
           style={{ width: '100%', padding: 13, borderRadius: 10, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 16, background: C.accent, color: '#fff', opacity: loading ? 0.7 : 1 }}>
-          {loading ? '...' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
+          {loading ? '...' : registering ? 'Créer mon compte' : 'Se connecter'}
         </button>
       </div>
       <div style={{ marginTop: 20, fontSize: 12, color: C.muted, textAlign: 'center' }}>
