@@ -10,7 +10,9 @@ jest.mock('../lib/supabase', () => {
     teams: [{ id: 't1', name: 'U12 B', club_id: 'c1' }, { id: 't2', name: 'U14', club_id: 'c2' }],
   }
   const query = (table) => ({ select: () => ({ order: () => Promise.resolve({ data: tables[table] || [] }) }) })
-  return { supabase: { from: query, auth: { signUp: jest.fn(() => Promise.resolve({ error: null })), signInWithPassword: jest.fn(), signInWithOAuth: jest.fn() } } }
+  // Fonction simple (pas jest.fn) : la config CRA remet les mocks à zéro entre les tests.
+  const rpc = (name, args) => Promise.resolve({ data: name === 'get_club_invite_info' && args.p_code === 'bon-code' ? [{ club_id: 'c1', club_name: 'FO Plaisir', role: 'coach' }] : [] })
+  return { supabase: { from: query, rpc, auth: { signUp: jest.fn(() => Promise.resolve({ error: null })), signInWithPassword: jest.fn(), signInWithOAuth: jest.fn() } } }
 })
 
 let container, root
@@ -81,10 +83,48 @@ test("inscription : l'équipe n'est proposée qu'après le choix du club, et seu
   expect(equipeSelect().value).toBe('')
 })
 
-test("invitation d'équipe : le club de l'équipe est présélectionné et l'équipe reste choisie", async () => {
+test("invitation d'équipe : club et équipe sont fixés par le lien et ne peuvent pas être changés", async () => {
+  const { supabase } = require('../lib/supabase')
+  supabase.auth.signUp.mockClear()
   await render(<Auth inviteTeamId="t1" />)
-  const selects = container.querySelectorAll('select')
-  expect(selects[0].value).toBe('FO Plaisir')
-  expect(teamOptions()).toEqual(['t1'])
-  expect(selects[1].value).toBe('t1')
+
+  expect(container.querySelectorAll('select').length).toBe(0)
+  expect(container.querySelector('[data-testid="club-locked"]').textContent).toContain('FO Plaisir')
+  expect(container.querySelector('[data-testid="team-locked"]').textContent).toContain('U12 B')
+
+  await act(async () => { typeIn(container.querySelector('input[type="email"]'), 'joueur@test.fr') })
+  await act(async () => { typeIn(container.querySelector('input[type="password"]'), 'Motdepasse1!') })
+  await act(async () => { typeIn(container.querySelector('input[placeholder="Nom"]'), 'Dupont') })
+  await act(async () => { typeIn(container.querySelector('input[placeholder="Prénom"]'), 'Jean') })
+  await act(async () => { typeIn(container.querySelector('input[placeholder="Ex: Milieu Gauche"]'), 'Attaquant') })
+  await act(async () => { container.querySelector('input[type="checkbox"]').click() })
+  await act(async () => { buttonWithText('Créer mon compte').click() })
+
+  expect(supabase.auth.signUp).toHaveBeenCalledTimes(1)
+  const { options } = supabase.auth.signUp.mock.calls[0][0]
+  expect(options.data).toMatchObject({ club: 'FO Plaisir', equipe: 't1' })
+})
+
+test("invitation staff : le club du lien est fixé, l'équipe reste optionnelle parmi les équipes de ce club", async () => {
+  await render(<Auth clubInviteCode="bon-code" />)
+
+  expect(container.querySelector('[data-testid="club-locked"]').textContent).toContain('FO Plaisir')
+  expect(container.textContent).toContain('en tant que coach')
+  expect(container.querySelectorAll('select').length).toBe(1)
+  expect(container.querySelector('select').disabled).toBe(false)
+  expect([...container.querySelector('select').querySelectorAll('option')].filter(o => o.value).map(o => o.value)).toEqual(['t1'])
+})
+
+test("lien d'invitation invalide ou expiré : message d'erreur et formulaire d'inscription normal", async () => {
+  await render(<Auth clubInviteCode="code-expire" />)
+  expect(container.textContent).toContain("n'est plus valide")
+  expect(container.querySelector('[data-testid="club-locked"]')).toBeNull()
+  expect(container.querySelectorAll('select').length).toBe(2)
+
+  await act(async () => root.unmount())
+  root = createRoot(container)
+  await render(<Auth inviteTeamId="equipe-inconnue" />)
+  expect(container.textContent).toContain("n'est plus valide")
+  expect(container.querySelector('[data-testid="team-locked"]')).toBeNull()
+  expect(container.querySelectorAll('select').length).toBe(2)
 })
