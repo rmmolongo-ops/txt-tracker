@@ -15,6 +15,7 @@ import SeancesScreen from './SeancesScreen'
 import EquipeJoueurScreen from './EquipeJoueurScreen'
 import EquipeCoachScreen from './EquipeCoachScreen'
 import AdminScreen from './AdminScreen'
+import InviteConfirm from './InviteConfirm'
 import DashboardCoach from './DashboardCoach'
 import DashboardJoueur from './DashboardJoueur'
 import useChatUnread from '../hooks/useChatUnread'
@@ -308,19 +309,56 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
 
   useEffect(() => { loadAll() }, [loadAll])
 
+  const clearInviteUrl = () => window.history.replaceState({}, '', window.location.pathname)
+
+  // Lien joueur : rejoint l'équipe par la fonction dédiée (une équipe n'est pas lisible avant d'en être membre).
+  const joinTeamFromInvite = async (teamId) => {
+    const { data: teamName, error } = await supabase.rpc('join_team_via_link', { p_team_id: teamId })
+    if (error) showToast('❌ ' + error.message)
+    else { await refreshTeams(); showToast(`✅ Ajouté à l'équipe "${teamName}" !`) }
+    clearInviteUrl()
+  }
+
+  // Lien staff : attribue le rôle du lien (coach, dirigeant, administrateur) au compte connecté.
+  const redeemClubInvite = async (code) => {
+    const { data: joinedClubId, error } = await supabase.rpc('redeem_club_invite', { p_code: code })
+    // Succès, ou code définitivement inutilisable : on l'efface du compte pour ne pas réessayer à chaque ouverture.
+    if (user.user_metadata?.club_invite && (!error || /déjà été utilisé|expiré|invalide/.test(error.message))) {
+      await supabase.auth.updateUser({ data: { club_invite: '' } })
+    }
+    if (error) {
+      showToast('❌ ' + error.message)
+    } else if (joinedClubId) {
+      const { data: memberships } = await supabase.from('club_members').select('club_id, role').eq('user_id', user.id)
+      if (memberships) setClubMemberships(memberships)
+      await refreshTeams()
+      await loadAdminOverview()
+      showToast('✅ Invitation acceptée, bienvenue dans le club !')
+    }
+    clearInviteUrl()
+  }
+
+  // Un lien est appliqué sans demander quand le compte vient d'être créé AVEC ce lien (code gardé dans
+  // le compte). Un compte déjà existant qui ouvre un lien doit d'abord confirmer : sinon le lien
+  // s'applique en silence au compte connecté dans ce navigateur, pas forcément à la personne invitée.
+  // Les effets d'invitation ne s'exécutent qu'une fois par lien : ils lisent les dernières fonctions via une ref.
+  const inviteActionsRef = useRef({})
+  inviteActionsRef.current = { joinTeamFromInvite, redeemClubInvite, user }
+  const [inviteConfirm, setInviteConfirm] = useState(null)
+  const [inviteBusy, setInviteBusy] = useState(false)
   const inviteHandledRef = useRef(false)
   useEffect(() => {
     if (!inviteTeamId || inviteHandledRef.current) return
     inviteHandledRef.current = true
-    // Une équipe n'est pas lisible avant d'en être membre : on la rejoint par la fonction dédiée,
-    // qui valide le lien, puis on recharge les équipes visibles.
     ;(async () => {
-      const { data: teamName, error } = await supabase.rpc('join_team_via_link', { p_team_id: inviteTeamId })
-      if (error) showToast('❌ ' + error.message)
-      else { await refreshTeams(); showToast(`✅ Ajouté à l'équipe "${teamName}" !`) }
-      window.history.replaceState({}, '', window.location.pathname)
+      const actions = inviteActionsRef.current
+      if (actions.user.user_metadata?.equipe === inviteTeamId) { await actions.joinTeamFromInvite(inviteTeamId); return }
+      const { data } = await supabase.rpc('get_team_invite_info', { p_team_id: inviteTeamId })
+      const info = data?.[0]
+      if (!info) { showToast("❌ Ce lien d'invitation n'est plus valide"); clearInviteUrl(); return }
+      setInviteConfirm({ kind: 'team', teamId: inviteTeamId, label: info.team_name + (info.club_name ? ' (' + info.club_name + ')' : ''), roleLabel: 'joueur' })
     })()
-  }, [inviteTeamId, refreshTeams])
+  }, [inviteTeamId])
 
   // Le code d'un lien staff vient de l'adresse ou, après l'inscription, du compte lui-même : le lien
   // de confirmation d'email peut ramener sur l'appli sans le paramètre de l'adresse (autre navigateur,
@@ -331,23 +369,25 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
     if (!pendingClubInvite || clubInviteHandledRef.current) return
     clubInviteHandledRef.current = true
     ;(async () => {
-      const { data: joinedClubId, error } = await supabase.rpc('redeem_club_invite', { p_code: pendingClubInvite })
-      // Succès, ou code définitivement inutilisable : on l'efface du compte pour ne pas réessayer à chaque ouverture.
-      if (user.user_metadata?.club_invite && (!error || /déjà été utilisé|expiré|invalide/.test(error.message))) {
-        await supabase.auth.updateUser({ data: { club_invite: '' } })
-      }
-      if (error) {
-        showToast('❌ ' + error.message)
-      } else if (joinedClubId) {
-        const { data: memberships } = await supabase.from('club_members').select('club_id, role').eq('user_id', user.id)
-        if (memberships) setClubMemberships(memberships)
-        await refreshTeams()
-        await loadAdminOverview()
-        showToast('✅ Invitation acceptée, bienvenue dans le club !')
-      }
-      window.history.replaceState({}, '', window.location.pathname)
+      const actions = inviteActionsRef.current
+      if (actions.user.user_metadata?.club_invite === pendingClubInvite) { await actions.redeemClubInvite(pendingClubInvite); return }
+      const { data } = await supabase.rpc('get_club_invite_info', { p_code: pendingClubInvite })
+      const info = data?.[0]
+      if (!info) { showToast("❌ Ce lien d'invitation n'est plus valide (expiré ou déjà utilisé)"); clearInviteUrl(); return }
+      const roleLabel = info.role === 'admin' ? 'administrateur' : info.role
+      const label = info.team_name ? info.team_name + ' (' + info.club_name + ')' : 'le club ' + info.club_name
+      setInviteConfirm({ kind: 'club', code: pendingClubInvite, label, roleLabel })
     })()
-  }, [pendingClubInvite, user.id, user.user_metadata, refreshTeams])
+  }, [pendingClubInvite])
+
+  const confirmInvite = async () => {
+    setInviteBusy(true)
+    if (inviteConfirm.kind === 'team') await joinTeamFromInvite(inviteConfirm.teamId)
+    else await redeemClubInvite(inviteConfirm.code)
+    setInviteBusy(false)
+    setInviteConfirm(null)
+  }
+  const cancelInvite = () => { clearInviteUrl(); setInviteConfirm(null) }
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768)
@@ -1260,6 +1300,10 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
 
   return (
     <div style={{ background: C.bg, minHeight: '100vh', fontFamily: "'Segoe UI', system-ui, sans-serif", color: C.text }}>
+
+      {inviteConfirm && (
+        <InviteConfirm invite={inviteConfirm} email={user.email} busy={inviteBusy} onConfirm={confirmInvite} onCancel={cancelInvite} onSwitchAccount={onSignOut} />
+      )}
 
       {toast && (
         <div style={{ position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)', background: C.green, color: '#fff', padding: '10px 20px', borderRadius: 20, zIndex: 999, fontSize: 14, fontWeight: 600, boxShadow: '0 4px 20px rgba(16,185,129,0.4)', whiteSpace: 'nowrap' }}>
