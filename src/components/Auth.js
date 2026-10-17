@@ -111,7 +111,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
           password,
           options: {
             emailRedirectTo: signupRedirect,
-            data: { nom: nom.trim(), prenom: prenom.trim(), club: clubName, equipe: equipeValue, poste1: poste1.trim(), poste2: poste2.trim() },
+            data: { nom: nom.trim(), prenom: prenom.trim(), club: clubName, equipe: equipeValue, poste1: poste1.trim(), poste2: poste2.trim(), club_invite: clubInvite ? clubInviteCode : '' },
           },
         })
         if (error) throw error

@@ -69,7 +69,7 @@ test("lien d'équipe (joueur) : club et équipe viennent du lien, sans aucun men
   await fillAccount()
   await act(async () => { buttonWithText('Créer mon compte').click() })
   expect(supabase.auth.signUp).toHaveBeenCalledTimes(1)
-  expect(supabase.auth.signUp.mock.calls[0][0].options.data).toMatchObject({ club: 'FO Plaisir', equipe: 't1', poste1: 'Attaquant' })
+  expect(supabase.auth.signUp.mock.calls[0][0].options.data).toMatchObject({ club: 'FO Plaisir', equipe: 't1', poste1: 'Attaquant', club_invite: '' })
 })
 
 test('lien joueur : le poste reste obligatoire', async () => {
@@ -96,7 +96,7 @@ test('lien staff coach : club ET équipe fixés par le lien, poste facultatif, j
   await fillAccount({ poste: false })
   await act(async () => { buttonWithText('Créer mon compte').click() })
   expect(supabase.auth.signUp).toHaveBeenCalledTimes(1)
-  expect(supabase.auth.signUp.mock.calls[0][0].options.data).toMatchObject({ club: 'FO Plaisir', equipe: '', poste1: '' })
+  expect(supabase.auth.signUp.mock.calls[0][0].options.data).toMatchObject({ club: 'FO Plaisir', equipe: '', poste1: '', club_invite: 'code-coach' })
 })
 
 test('lien dirigeant ou administrateur : poste facultatif, et un lien administrateur ne cible aucune équipe', async () => {

@@ -322,12 +322,20 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
     })()
   }, [inviteTeamId, refreshTeams])
 
+  // Le code d'un lien staff vient de l'adresse ou, après l'inscription, du compte lui-même : le lien
+  // de confirmation d'email peut ramener sur l'appli sans le paramètre de l'adresse (autre navigateur,
+  // adresse de redirection non autorisée), le code serait alors perdu et le coach jamais rattaché.
+  const pendingClubInvite = clubInviteCode || user.user_metadata?.club_invite || null
   const clubInviteHandledRef = useRef(false)
   useEffect(() => {
-    if (!clubInviteCode || clubInviteHandledRef.current) return
+    if (!pendingClubInvite || clubInviteHandledRef.current) return
     clubInviteHandledRef.current = true
     ;(async () => {
-      const { data: joinedClubId, error } = await supabase.rpc('redeem_club_invite', { p_code: clubInviteCode })
+      const { data: joinedClubId, error } = await supabase.rpc('redeem_club_invite', { p_code: pendingClubInvite })
+      // Succès, ou code définitivement inutilisable : on l'efface du compte pour ne pas réessayer à chaque ouverture.
+      if (user.user_metadata?.club_invite && (!error || /déjà été utilisé|expiré|invalide/.test(error.message))) {
+        await supabase.auth.updateUser({ data: { club_invite: '' } })
+      }
       if (error) {
         showToast('❌ ' + error.message)
       } else if (joinedClubId) {
@@ -339,7 +347,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
       }
       window.history.replaceState({}, '', window.location.pathname)
     })()
-  }, [clubInviteCode, user.id, refreshTeams])
+  }, [pendingClubInvite, user.id, user.user_metadata, refreshTeams])
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768)
