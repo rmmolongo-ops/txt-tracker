@@ -757,17 +757,15 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
     loadDailySessions(coachTeamId)
   }, [tab, coachTeamId])
 
-  const getDailySession = (teamId, dateStr) => dailySessions.find(d => d.team_id === teamId && d.date === dateStr)
-
   const assignDailySession = async (teamId, dateStr, template) => {
     const payload = {
       team_id: teamId, date: dateStr, template_id: template.id,
       label: template.label, icon: template.icon, color: template.color, duration: template.duration, objectif: template.objectif, blocs: template.blocs,
       created_by: user.id, type: 'entrainement',
     }
-    const { data, error } = await supabase.from('team_daily_sessions').upsert(payload, { onConflict: 'team_id,date' }).select().single()
+    const { data, error } = await supabase.from('team_daily_sessions').insert(payload).select().single()
     if (error) { showToast('❌ ' + error.message); return }
-    setDailySessions(prev => [...prev.filter(d => !(d.team_id === teamId && d.date === dateStr)), data])
+    setDailySessions(prev => [...prev, data])
     setDailyPickerFor(null)
     setViewDay(v => v && v.dateStr === dateStr ? { ...v, s: data } : v)
     showToast('✅ Séance planifiée !')
@@ -779,18 +777,19 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
       label: opponent ? `Match vs ${opponent}` : 'Match', icon: '🏆', color: '#eab308', duration: '', objectif: '', blocs: [],
       created_by: user.id, type: 'match',
     }
-    const { data, error } = await supabase.from('team_daily_sessions').upsert(payload, { onConflict: 'team_id,date' }).select().single()
+    const { data, error } = await supabase.from('team_daily_sessions').insert(payload).select().single()
     if (error) { showToast('❌ ' + error.message); return }
-    setDailySessions(prev => [...prev.filter(d => !(d.team_id === teamId && d.date === dateStr)), data])
+    setDailySessions(prev => [...prev, data])
     setDailyPickerFor(null)
     setViewDay(v => v && v.dateStr === dateStr ? { ...v, s: data } : v)
-    showToast('✅ Séance planifiée !')
+    showToast('✅ Match planifié !')
   }
 
   const removeDailySession = async (id) => {
     await supabase.from('team_daily_sessions').delete().eq('id', id)
     setDailySessions(prev => prev.filter(d => d.id !== id))
-    setViewDay(v => v ? { ...v, s: null } : v)
+    // S'il reste un autre événement ce jour-là, on l'affiche ; sinon le jour redevient vide.
+    setViewDay(v => v ? { ...v, s: dailySessions.find(d => d.id !== id && d.team_id === v.teamId && d.date === v.dateStr) || null } : v)
     showToast('🗑️ Séance retirée')
     return true
   }
@@ -1168,7 +1167,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
           {effectiveHomeView === 'coach' ? (
             <DashboardCoach
               activeCoachTeam={activeCoachTeam} assignDailySession={assignDailySession} assignMatchSession={assignMatchSession} changeTab={changeTab} coachRosterData={coachRosterData}
-              dailyPickerFor={dailyPickerFor} dailySessions={dailySessions} getDailySession={getDailySession} leadershipTeams={leadershipTeams} managedPlayers={managedPlayers}
+              dailyPickerFor={dailyPickerFor} dailySessions={dailySessions} leadershipTeams={leadershipTeams} managedPlayers={managedPlayers}
               removeDailySession={removeDailySession} saveAnnotation={saveAnnotation} saveMatchResult={saveMatchResult} saveSessionAsTemplate={saveSessionAsTemplate} kpis={activeCoachTeam ? kpisForTeam(activeCoachTeam.id) : KPI_CONFIG} seanceCategories={seanceCategories} createSeanceCategory={createSeanceCategory} seanceTemplates={seanceTemplates} setCoachTeamId={setCoachTeamId}
               setDailyPickerFor={setDailyPickerFor} setEquipeTab={setEquipeTab} setViewDay={setViewDay} updateDailySession={updateDailySession} viewDay={viewDay} />
           ) : (

@@ -3,6 +3,8 @@ import { C, KPI_CONFIG, DAY_MAP } from '../lib/constants'
 import { toDateStr, getMonday, MATCH_RESULTS, hasScore, resultFromScore } from '../lib/stats'
 import Icon from './Icons'
 
+const byCreated = (a, b) => (a.created_at || '').localeCompare(b.created_at || '')
+
 const normalizeBlocs = (blocs) => JSON.stringify((blocs || []).map(b => ({
   titre: (b.titre || '').trim(), duree: (b.duree || '').trim(), exercices: (b.exercices || []).map(e => e.trim()).filter(Boolean),
 })))
@@ -16,7 +18,7 @@ const isSessionModified = (original, draft) => !!draft && (
 // Accueil, vue coach : équipe, récap de la semaine, calendrier mensuel, séances et matchs du jour.
 export default function DashboardCoach({
   activeCoachTeam, assignDailySession, assignMatchSession, changeTab, coachRosterData, dailyPickerFor,
-  dailySessions, getDailySession, leadershipTeams, managedPlayers, removeDailySession, saveAnnotation,
+  dailySessions, leadershipTeams, managedPlayers, removeDailySession, saveAnnotation,
   saveMatchResult, saveSessionAsTemplate, seanceCategories = [], createSeanceCategory, seanceTemplates, kpis = KPI_CONFIG, setCoachTeamId, setDailyPickerFor, setEquipeTab, setViewDay,
   updateDailySession, viewDay,
 }) {
@@ -116,10 +118,12 @@ export default function DashboardCoach({
                     <div className="mono" style={{ fontSize: 18, fontWeight: 600 }}>{realized.length} / {weekPlanned.length}</div>
                   </div>
                   <div style={{ background: C.surface, borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 2 }}>Match de la semaine</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 2 }}>{matches.length > 1 ? 'Matchs de la semaine' : 'Match de la semaine'}</div>
                     {matches.length > 0 ? (
                       <div style={{ fontSize: 13, fontWeight: 600, color: C.match }}>
-                        {matches[0].label} · {new Date(matches[0].date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        {matches.length > 1
+                          ? matches.length + ' matchs cette semaine'
+                          : matches[0].label + ' · ' + new Date(matches[0].date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
                       </div>
                     ) : (
                       <div style={{ fontSize: 13, color: C.muted }}>Aucun</div>
@@ -192,15 +196,17 @@ export default function DashboardCoach({
                         const d = new Date(year, month, day)
                         const dateStr = toDateStr(d)
                         const dayCode = Object.keys(DAY_MAP).find(k => DAY_MAP[k] === d.getDay())
-                        const s = getDailySession(activeCoachTeam.id, dateStr)
-                        const planned = !!s
+                        const events = dailySessions.filter(e => e.team_id === activeCoachTeam.id && e.date === dateStr).sort(byCreated)
+                        const s = events[0]
                         const selected = viewDay?.dateStr === dateStr
                         const isToday = dateStr === todayStr
                         return (
                           <button key={i} onClick={() => setViewDay(selected ? null : { dateStr, date: d, dayCode, s, teamId: activeCoachTeam.id })}
                             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '6px 0', borderRadius: 10, border: selected ? '2px solid ' + C.accent : '2px solid transparent', background: isToday && !selected ? C.accent + '15' : 'transparent', cursor: 'pointer' }}>
                             <div style={{ fontSize: 14, fontWeight: isToday ? 800 : 600, color: isToday ? C.accent : C.text }}>{day}</div>
-                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: planned ? (s.type === 'match' ? C.match : C.accent) : 'transparent' }} />
+                            <div style={{ display: 'flex', gap: 2, height: 6 }}>
+                              {events.slice(0, 3).map(e => <div key={e.id} style={{ width: 6, height: 6, borderRadius: '50%', background: e.type === 'match' ? C.match : C.accent }} />)}
+                            </div>
                           </button>
                         )
                       })}
@@ -208,7 +214,7 @@ export default function DashboardCoach({
                   </div>
                   {monthSessions.length > 0 && (
                     <div style={{ padding: '0 14px 12px', fontSize: 11, color: C.muted }}>
-                      {monthSessions.length} séance{monthSessions.length > 1 ? 's' : ''} planifiée{monthSessions.length > 1 ? 's' : ''} ce mois-ci
+                      {monthSessions.length} événement{monthSessions.length > 1 ? 's' : ''} planifié{monthSessions.length > 1 ? 's' : ''} ce mois-ci
                     </div>
                   )}
                 </div>
@@ -217,11 +223,31 @@ export default function DashboardCoach({
                     <div style={{ fontSize: 12, color: C.muted, textTransform: 'capitalize', marginBottom: 6 }}>
                       {viewDay.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
                     </div>
-                    <div style={{ color: C.muted, fontSize: 13 }}>Aucune séance planifiée</div>
+                    <div style={{ color: C.muted, fontSize: 13, marginBottom: 12 }}>Aucun événement planifié</div>
+                    <button onClick={() => setDailyPickerFor({ teamId: viewDay.teamId, dateStr: viewDay.dateStr })}
+                      style={{ padding: '9px 16px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                      + Ajouter un événement
+                    </button>
                   </div>
                 )}
+                {viewDay && viewDay.s && (() => {
+                  const dayEvents = dailySessions.filter(e => e.team_id === viewDay.teamId && e.date === viewDay.dateStr).sort(byCreated)
+                  return dayEvents.length > 1 ? (
+                    <div role="tablist" aria-label="Événements du jour" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                      {dayEvents.map(e => {
+                        const sel = e.id === viewDay.s.id
+                        return (
+                          <button key={e.id} role="tab" aria-selected={sel} onClick={() => { setConfirmLibraryAdd(false); setViewDay(v => ({ ...v, s: e })) }}
+                            style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid ' + (sel ? (e.type === 'match' ? C.match : C.accent) : C.border), background: sel ? (e.type === 'match' ? C.match : C.accent) + '22' : 'transparent', color: sel ? C.text : C.muted, fontWeight: 500, fontSize: 13, cursor: 'pointer' }}>
+                            {e.label || (e.type === 'match' ? 'Match' : 'Séance')}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : null
+                })()}
                 {viewDay && viewDay.s && (
-                  <div style={{ background: C.card, borderRadius: 14, padding: 16, marginBottom: 16, border: '1px solid ' + C.border }}>
+                  <div style={{ background: C.card, borderRadius: 14, padding: 16, marginBottom: 10, border: '1px solid ' + C.border }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                       <div style={{ fontSize: 12, color: C.muted, textTransform: 'capitalize' }}>
                         {viewDay.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
@@ -518,6 +544,12 @@ export default function DashboardCoach({
                       </div>
                     )}
                   </div>
+                )}
+                {viewDay && viewDay.s && (
+                  <button onClick={() => setDailyPickerFor({ teamId: viewDay.teamId, dateStr: viewDay.dateStr })}
+                    style={{ width: '100%', marginBottom: 16, padding: 11, borderRadius: 10, border: '1px dashed ' + C.border, background: 'transparent', color: C.accent, fontWeight: 500, fontSize: 14, cursor: 'pointer' }}>
+                    + Ajouter un événement ce jour
+                  </button>
                 )}
               </>
             )

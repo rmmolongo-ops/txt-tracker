@@ -36,7 +36,7 @@ describe('DashboardCoach : saisie d’un match', () => {
   const managedPlayers = [{ user_id: 'ghost:m1', prenom: 'Siriman', role: 'joueur' }]
   const props = {
     activeCoachTeam: team, leadershipTeams: [team], coachRosterData, managedPlayers,
-    dailySessions: [match], getDailySession: () => match, seanceTemplates: [],
+    dailySessions: [match], seanceTemplates: [],
     viewDay: { dateStr: '2026-09-20', date: new Date(2026, 8, 20), s: match, teamId: 't1' },
     dailyPickerFor: null, setDailyPickerFor: jest.fn(), setViewDay: jest.fn(), setCoachTeamId: jest.fn(),
     changeTab: jest.fn(), setEquipeTab: jest.fn(),
@@ -80,6 +80,32 @@ describe('DashboardCoach : saisie d’un match', () => {
     expect(draft.buts).toEqual({ u2: 2 })
     // Après succès, l'éditeur se referme
     expect(buttonWithText('Tous présents')).toBeUndefined()
+  })
+
+  test('plusieurs événements le même jour : sélecteur, bascule de l’un à l’autre et ajout d’un nouvel événement', async () => {
+    const second = { id: 'd2', team_id: 't1', date: '2026-09-20', type: 'match', label: 'Match vs Plaisir', icon: '🏆', color: '#eab308', blocs: [], buts: {}, presents: [], created_at: '2026-09-20T15:00:00Z' }
+    const first = { ...match, created_at: '2026-09-20T10:00:00Z' }
+    const setViewDay = jest.fn(), setDailyPickerFor = jest.fn()
+    await render(<DashboardCoach {...props} dailySessions={[first, second]} viewDay={{ ...props.viewDay, s: first }} setViewDay={setViewDay} setDailyPickerFor={setDailyPickerFor} saveMatchResult={jest.fn()} />)
+
+    const tabs = [...container.querySelectorAll('[role="tab"]')]
+    expect(tabs.map(t => t.textContent)).toEqual(['Match vs Meudon', 'Match vs Plaisir'])
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true')
+
+    await act(async () => { tabs[1].click() })
+    const updater = setViewDay.mock.calls[0][0]
+    expect(updater({ dateStr: '2026-09-20', teamId: 't1', s: first }).s).toBe(second)
+
+    await act(async () => { buttonWithText('Ajouter un événement ce jour').click() })
+    expect(setDailyPickerFor).toHaveBeenCalledWith({ teamId: 't1', dateStr: '2026-09-20' })
+  })
+
+  test('un seul événement : pas de sélecteur, mais on peut en ajouter un autre ce jour-là', async () => {
+    const setDailyPickerFor = jest.fn()
+    await render(<DashboardCoach {...props} setDailyPickerFor={setDailyPickerFor} saveMatchResult={jest.fn()} />)
+    expect(container.querySelectorAll('[role="tab"]').length).toBe(0)
+    await act(async () => { buttonWithText('Ajouter un événement ce jour').click() })
+    expect(setDailyPickerFor).toHaveBeenCalledWith({ teamId: 't1', dateStr: '2026-09-20' })
   })
 })
 
