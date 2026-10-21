@@ -26,7 +26,7 @@ export default function AdminScreen({
   kpiCatalog = KPI_CONFIG, kpisForTeam = () => KPI_CONFIG,
   selectedAdminTeam, setAddingManagedPlayer, setAdminView, setEditingProg, setEditingProgramId, setManagedPlayerDraft,
   setPlayerRole, setProgDraft, setSelectedAdminTeam, shareInviteLink, regenerateJoinCode, teams, togglePlayerTeam,
-  unconfirmedSignups, clientErrors = [], clearClientErrors, uploadTeamPhoto, uploadingTeamPhoto,
+  unconfirmedSignups, uploadTeamPhoto, uploadingTeamPhoto,
 }) {
   const [adminDetailTab, setAdminDetailTab] = useState('joueurs')
   const [expandedAdmin, setExpandedAdmin] = useState(null)
@@ -324,24 +324,14 @@ export default function AdminScreen({
           ))}
         </div>
 
-        {/* Journal des erreurs de l'appli (super admin) */}
-        {isAdmin && clientErrors.length > 0 && (
-          <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.red + '40' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <div style={{ fontSize: 13, color: C.red, fontWeight: 500 }}>Erreurs récentes de l'appli ({clientErrors.length})</div>
-              <button onClick={clearClientErrors} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 12, cursor: 'pointer', padding: 0 }}>Tout effacer</button>
-            </div>
-            {clientErrors.slice(0, 10).map(e => (
-              <details key={e.id} style={{ borderTop: '1px solid ' + C.border, padding: '8px 0' }}>
-                <summary style={{ cursor: 'pointer', fontSize: 13, lineHeight: 1.4 }}>
-                  <span style={{ color: C.text }}>{e.message}</span>
-                  <span style={{ color: C.muted, fontSize: 12 }}> · {new Date(e.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {e.user_id ? memberDisplayName(e.user_id) : '—'} · {e.source}</span>
-                </summary>
-                {e.stack && <pre style={{ fontSize: 11, color: C.muted, whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: '8px 0 0', maxHeight: 200, overflow: 'auto' }}>{e.stack}</pre>}
-                {e.user_agent && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{e.user_agent}</div>}
-              </details>
-            ))}
-          </div>
+        {isAdmin && (
+          <a href="/backoffice" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: C.card, borderRadius: 16, padding: '14px 16px', marginBottom: 20, border: '1px solid ' + C.accent + '50', color: C.text, textDecoration: 'none' }}>
+            <span>
+              <span style={{ display: 'block', fontWeight: 600, fontSize: 14 }}>Back-office</span>
+              <span style={{ display: 'block', fontSize: 12, color: C.muted, marginTop: 2 }}>Vue globale des clubs, comptes, statistiques et erreurs</span>
+            </span>
+            <span aria-hidden="true" style={{ color: C.accentGlow, fontSize: 18 }}>›</span>
+          </a>
         )}
 
         {/* Inscriptions non confirmées */}

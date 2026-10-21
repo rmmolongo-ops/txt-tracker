@@ -52,7 +52,6 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
   const canManageClub = isAdmin || isClubManager
   const [adminData, setAdminData] = useState([])
   const [unconfirmedSignups, setUnconfirmedSignups] = useState([])
-  const [clientErrors, setClientErrors] = useState([])
   const [ficheJoueur, setFicheJoueur] = useState(null)
   const [adminError, setAdminError] = useState(null)
   const [adminLoading, setAdminLoading] = useState(false)
@@ -131,7 +130,6 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
         { data: allManagedPlayers },
         { data: allClubMembers },
         { data: allClubInvites },
-        { data: recentErrors },
       ] = await Promise.all([
         supabase.from('profils').select('*'),
         supabase.rpc('get_user_emails_for_admins'),
@@ -141,8 +139,6 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
         supabase.from('managed_players').select('*'),
         supabase.from('club_members').select('*'),
         supabase.from('club_invites').select('*').order('created_at', { ascending: false }),
-        // Journal des erreurs : lisible par le super admin seulement (vide pour les autres).
-        supabase.from('client_errors').select('*').order('created_at', { ascending: false }).limit(30),
       ])
       if (errP) { setAdminError('Erreur lecture profils : ' + errP.message); setAdminLoading(false); return }
       setTeams(allTeams || [])
@@ -151,7 +147,6 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
       // de club ne voit que les membres et invitations de son propre club.
       setClubMembers(allClubMembers || [])
       setClubInvites(allClubInvites || [])
-      setClientErrors(recentErrors || [])
       const emailMap = {}
       ;(allEmails || []).forEach(e => { emailMap[e.user_id] = e.email })
       const teamMap = {}
@@ -753,13 +748,6 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
     }
   }
 
-  const clearClientErrors = async () => {
-    const { error } = await supabase.from('client_errors').delete().not('id', 'is', null)
-    if (error) { showToast('❌ ' + error.message); return }
-    setClientErrors([])
-    showToast('Journal des erreurs vidé')
-  }
-
   const resendConfirmation = async (email) => {
     const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: window.location.origin } })
     if (error) showToast('❌ ' + error.message)
@@ -1310,7 +1298,7 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
           managedPlayers={managedPlayers} myClubId={myClubId} myClubRole={myClubRole} openFiche={openFiche} renderProgrammeCatalog={renderProgrammeCatalog} resendConfirmation={resendConfirmation} selectedAdminTeam={selectedAdminTeam}
           setAddingManagedPlayer={setAddingManagedPlayer} setAdminView={setAdminView} setEditingProg={setEditingProg} setEditingProgramId={setEditingProgramId} setManagedPlayerDraft={setManagedPlayerDraft}
           setPlayerRole={setPlayerRole} setProgDraft={setProgDraft} setSelectedAdminTeam={setSelectedAdminTeam} shareInviteLink={shareInviteLink} regenerateJoinCode={regenerateJoinCode} teams={teams}
-          togglePlayerTeam={togglePlayerTeam} unconfirmedSignups={unconfirmedSignups} clientErrors={clientErrors} clearClientErrors={clearClientErrors} uploadTeamPhoto={uploadTeamPhoto} uploadingTeamPhoto={uploadingTeamPhoto} />
+          togglePlayerTeam={togglePlayerTeam} unconfirmedSignups={unconfirmedSignups} uploadTeamPhoto={uploadTeamPhoto} uploadingTeamPhoto={uploadingTeamPhoto} />
       )}
 
       {/* ── PROFIL ── */}

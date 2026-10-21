@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { supabase } from './lib/supabase'
 import Auth from './components/Auth'
@@ -7,6 +7,10 @@ import { C } from './lib/constants'
 import { applyTheme, getStoredTheme, useTheme } from './lib/theme'
 import ErrorBoundary from './components/ErrorBoundary'
 import { installGlobalErrorHandlers } from './lib/errorReporting'
+
+// Back-office chargé à part : seul le super admin qui ouvre /backoffice télécharge ce code.
+const Backoffice = lazy(() => import('./components/backoffice/Backoffice'))
+const isBackoffice = window.location.pathname.replace(/\/+$/, '') === '/backoffice'
 
 // Palette appliquée avant le premier rendu : pas d'éclair de la mauvaise couleur.
 applyTheme(getStoredTheme())
@@ -44,7 +48,9 @@ function Root() {
 
   return (
     <ErrorBoundary>
-      {user
+      {user && isBackoffice
+        ? <Suspense fallback={<div style={{ background: C.bg, minHeight: '100dvh' }} />}><Backoffice user={user} onSignOut={handleSignOut} /></Suspense>
+        : user
         ? <App user={user} onSignOut={handleSignOut} teamJoinCode={teamJoinCode} clubInviteCode={clubInviteCode} theme={theme} onThemeChange={changeTheme} />
         : <Auth teamJoinCode={teamJoinCode} clubInviteCode={clubInviteCode} />}
     </ErrorBoundary>
