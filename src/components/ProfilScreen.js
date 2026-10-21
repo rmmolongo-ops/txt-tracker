@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { C, DEFAULT_PROFIL } from '../lib/constants'
 import Icon from './Icons'
 import { THEME_OPTIONS } from '../lib/theme'
+import SecureImg from './SecureImg'
 
 // Onglet Profil : photo, infos joueur (consultation / édition), équipes rejointes, installation de l'appli.
 export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs = [], availableTeams, myTeamIds, myTeamRoles = {}, isStandalone, handleInstall, isMobile, showToast, createClubInvite, theme = 'dark', onThemeChange = () => {} }) {
@@ -66,7 +67,7 @@ export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24, paddingTop: 8 }}>
         <div style={{ position: 'relative', marginBottom: 12 }}>
           <div style={{ width: 90, height: 90, borderRadius: 22, background: C.card, border: '1px solid ' + C.border, color: C.accentGlow, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, fontWeight: 600 }}>
-            {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (((profil.prenom || '').charAt(0) + (profil.nom || '').charAt(0)).toUpperCase() || 'TxT')}
+            {profil.photo_url ? <SecureImg src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (((profil.prenom || '').charAt(0) + (profil.nom || '').charAt(0)).toUpperCase() || 'TxT')}
           </div>
           <label title="Changer la photo" style={{ position: 'absolute', bottom: -6, right: -6, width: 32, height: 32, borderRadius: 10, background: C.accent, color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', border: '2px solid ' + C.bg, opacity: uploadingPhoto ? 0.6 : 1 }}>
             <Icon name="camera" size={16} />
@@ -114,7 +115,7 @@ export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs
                   <div key={team.id}
                     style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid ' + C.border, color: C.text, fontWeight: 500, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
                     {team.photo_url
-                      ? <img src={team.photo_url} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover' }} />
+                      ? <SecureImg src={team.photo_url} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover' }} />
                       : <span style={{ width: 8, height: 8, borderRadius: '50%', background: team.color, display: 'inline-block' }} />}
                     {team.name}
                   </div>

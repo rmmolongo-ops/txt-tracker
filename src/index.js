@@ -13,7 +13,9 @@ function Root() {
   const [theme, changeTheme] = useTheme()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [inviteTeamId] = useState(() => new URLSearchParams(window.location.search).get('invite'))
+  // ?join=<code> : lien joueur révocable. Un ancien lien ?invite=<id d'équipe> est traité comme un
+  // code : il n'en correspond à aucun, la page indique donc que le lien n'est plus valide.
+  const [teamJoinCode] = useState(() => { const p = new URLSearchParams(window.location.search); return p.get('join') || p.get('invite') })
   const [clubInviteCode] = useState(() => new URLSearchParams(window.location.search).get('club_invite'))
 
   useEffect(() => {
@@ -38,8 +40,8 @@ function Root() {
   )
 
   return user
-    ? <App user={user} onSignOut={handleSignOut} inviteTeamId={inviteTeamId} clubInviteCode={clubInviteCode} theme={theme} onThemeChange={changeTheme} />
-    : <Auth inviteTeamId={inviteTeamId} clubInviteCode={clubInviteCode} />
+    ? <App user={user} onSignOut={handleSignOut} teamJoinCode={teamJoinCode} clubInviteCode={clubInviteCode} theme={theme} onThemeChange={changeTheme} />
+    : <Auth teamJoinCode={teamJoinCode} clubInviteCode={clubInviteCode} />
 }
 
 const root = createRoot(document.getElementById('root'))

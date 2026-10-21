@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../lib/constants'
 import Icon from './Icons'
+import SecureImg from './SecureImg'
 
 // Onglet Chat : tchat d'équipe en temps réel (Supabase Realtime), une conversation par équipe.
 export default function ChatScreen({ user, profil, isAdmin, isMobile, myTeams, chatTeamId, onSelectTeam, unreadCounts, markChatRead, showToast }) {
@@ -91,7 +92,7 @@ export default function ChatScreen({ user, profil, isAdmin, isMobile, myTeams, c
           return (
             <div key={m.id} style={{ display: 'flex', flexDirection: mine ? 'row-reverse' : 'row', gap: 8, alignItems: 'flex-end' }}>
               <div style={{ width: 30, height: 30, borderRadius: 8, overflow: 'hidden', background: C.card, border: '1px solid ' + C.border, color: C.accentGlow, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
-                {m.sender_photo_url ? <img src={m.sender_photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((m.sender_prenom || '?').charAt(0) + (m.sender_nom || '').charAt(0)).toUpperCase()}
+                {m.sender_photo_url ? <SecureImg src={m.sender_photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((m.sender_prenom || '?').charAt(0) + (m.sender_nom || '').charAt(0)).toUpperCase()}
               </div>
               <div style={{ maxWidth: '72%' }}>
                 {!mine && <div style={{ fontSize: 11, color: C.muted, marginBottom: 2, marginLeft: 4 }}>{m.sender_prenom}{m.sender_surnom ? ' "' + m.sender_surnom + '"' : ''}</div>}

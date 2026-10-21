@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { C, KPI_CONFIG, ROLE_CONFIG, GHOST_PREFIX } from '../lib/constants'
 import Icon from './Icons'
+import SecureImg from './SecureImg'
+import PlayerInviteLink from './PlayerInviteLink'
 
 // Onglet Admin : vue d'ensemble (stats, inscriptions, équipes, clubs, joueurs sans équipe)
 // et détail d'une équipe (joueurs, programmes). Les actions en base restent dans App ;
@@ -23,7 +25,7 @@ export default function AdminScreen({
   loadAdminOverview, loadAdminTeamDetail, managedPlayerDraft, managedPlayers, myClubId, myClubRole, openFiche, renderProgrammeCatalog, resendConfirmation,
   kpiCatalog = KPI_CONFIG, kpisForTeam = () => KPI_CONFIG,
   selectedAdminTeam, setAddingManagedPlayer, setAdminView, setEditingProg, setEditingProgramId, setManagedPlayerDraft,
-  setPlayerRole, setProgDraft, setSelectedAdminTeam, shareInviteLink, teams, togglePlayerTeam,
+  setPlayerRole, setProgDraft, setSelectedAdminTeam, shareInviteLink, regenerateJoinCode, teams, togglePlayerTeam,
   unconfirmedSignups, uploadTeamPhoto, uploadingTeamPhoto,
 }) {
   const [adminDetailTab, setAdminDetailTab] = useState('joueurs')
@@ -105,7 +107,7 @@ export default function AdminScreen({
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedAdmin(expanded ? null : cardKey) } }}
           style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
           <div style={{ width: 46, height: 46, borderRadius: '50%', background: C.surface, color: C.accentGlow, fontWeight: 600, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
-            {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((j.prenom || '?').charAt(0) + (j.nom || '').charAt(0)).toUpperCase()}
+            {j.photo_url ? <SecureImg src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((j.prenom || '?').charAt(0) + (j.nom || '').charAt(0)).toUpperCase()}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -521,7 +523,7 @@ export default function AdminScreen({
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div style={{ width: 56, height: 56, borderRadius: 12, background: C.bg, border: '1px solid ' + C.border, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           {team.photo_url
-                            ? <img src={team.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ? <SecureImg src={team.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             : <span style={{ fontSize: 16, fontWeight: 600, color: C.accentGlow }}>{(team.name || '?').slice(0, 3).toUpperCase()}</span>}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -537,7 +539,7 @@ export default function AdminScreen({
                         <div style={{ display: 'flex', marginTop: 12 }}>
                           {teamPlayers.slice(0, 6).map((j, idx) => (
                             <div key={j.user_id} style={{ width: 28, height: 28, borderRadius: '50%', background: C.surface, color: C.accentGlow, fontWeight: 600, border: '2px solid ' + C.card, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, marginLeft: idx > 0 ? -8 : 0 }}>
-                              {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((j.prenom || '?').charAt(0) + (j.nom || '').charAt(0)).toUpperCase()}
+                              {j.photo_url ? <SecureImg src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((j.prenom || '?').charAt(0) + (j.nom || '').charAt(0)).toUpperCase()}
                             </div>
                           ))}
                           {teamPlayers.length > 6 && (
@@ -617,7 +619,7 @@ export default function AdminScreen({
                   {uploadingTeamPhoto === selectedAdminTeam.id
                     ? <span style={{ fontSize: 12, color: C.muted }}>Envoi…</span>
                     : selectedAdminTeam.photo_url
-                      ? <img src={selectedAdminTeam.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ? <SecureImg src={selectedAdminTeam.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       : <span style={{ fontSize: 22, fontWeight: 600, color: C.accentGlow }}>{(selectedAdminTeam.name || '?').slice(0, 3).toUpperCase()}</span>}
                 </div>
                 <div style={{ position: 'absolute', bottom: -4, right: -4, width: 24, height: 24, borderRadius: 8, background: C.accent, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="camera" size={13} /></div>
@@ -630,10 +632,6 @@ export default function AdminScreen({
                   {adminData.filter(j => (j.teams || []).some(t => t.id === selectedAdminTeam.id)).length} joueur{adminData.filter(j => (j.teams || []).some(t => t.id === selectedAdminTeam.id)).length !== 1 ? 's' : ''}
                 </div>
               </div>
-              <button onClick={() => shareInviteLink(selectedAdminTeam.id, selectedAdminTeam.name)} title="Partager le lien d'invitation" aria-label="Partager le lien d'invitation"
-                style={{ width: 38, height: 38, borderRadius: 10, background: 'transparent', border: '1px solid ' + C.border, color: C.accentGlow, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Icon name="install" size={18} style={{ transform: 'rotate(180deg)' }} />
-              </button>
               <button onClick={() => deleteTeam(selectedAdminTeam.id)}
                 style={{ width: 38, height: 38, borderRadius: 10, background: 'transparent', border: '1px solid ' + C.red + '40', color: C.red, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} aria-label="Supprimer l'équipe" title="Supprimer l'équipe">
                 <Icon name="trash" size={18} />
@@ -641,6 +639,8 @@ export default function AdminScreen({
             </div>
           </div>
         </div>
+
+        <PlayerInviteLink key={selectedAdminTeam.id} teamId={selectedAdminTeam.id} teamName={selectedAdminTeam.name} onShare={shareInviteLink} onRegenerate={regenerateJoinCode} />
 
         {/* Sub-tabs */}
         <div style={{ display: 'flex', borderRadius: 10, padding: 3, marginBottom: 20, gap: 2, border: '1px solid ' + C.border }}>
@@ -666,7 +666,7 @@ export default function AdminScreen({
                       <button key={j.user_id} onClick={() => togglePlayerTeam(j.user_id, selectedAdminTeam.id)}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid ' + C.border, background: 'transparent', color: C.text, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
                         <div style={{ width: 22, height: 22, borderRadius: '50%', background: C.surface, color: C.accentGlow, fontWeight: 600, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, flexShrink: 0 }}>
-                          {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((j.prenom || '?').charAt(0) + (j.nom || '').charAt(0)).toUpperCase()}
+                          {j.photo_url ? <SecureImg src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((j.prenom || '?').charAt(0) + (j.nom || '').charAt(0)).toUpperCase()}
                         </div>
                         + {j.prenom || '?'} {j.nom || ''}
                       </button>

@@ -19,10 +19,11 @@ import InviteConfirm from './InviteConfirm'
 import DashboardCoach from './DashboardCoach'
 import DashboardJoueur from './DashboardJoueur'
 import useChatUnread from '../hooks/useChatUnread'
+import SecureImg from './SecureImg'
 
 const TEAM_COLUMNS = 'id, name, color, photo_url, dashboard_kpis, club_id'
 
-export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, theme, onThemeChange }) {
+export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, theme, onThemeChange }) {
   const [tab, setTab] = useState(() => localStorage.getItem('txt_tab') || 'dashboard')
   const [mesures, setMesures] = useState([])
   const [seances, setSeances] = useState([])
@@ -286,8 +287,8 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
       // vient d'être créé avec des champs manquants, on amène directement le joueur sur l'écran
       // Profil pour qu'il les complète plutôt que de le laisser sur un accueil vide.
       if (!initial.club || !initial.poste1) changeTab('profil')
-      if (meta.equipe) {
-        const { error: joinError } = await supabase.rpc('join_team_via_link', { p_team_id: meta.equipe })
+      if (meta.team_join_code) {
+        const { error: joinError } = await supabase.rpc('join_team_with_code', { p_code: meta.team_join_code })
         if (!joinError) await refreshTeams()
       }
     }
@@ -311,9 +312,9 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
 
   const clearInviteUrl = () => window.history.replaceState({}, '', window.location.pathname)
 
-  // Lien joueur : rejoint l'équipe par la fonction dédiée (une équipe n'est pas lisible avant d'en être membre).
-  const joinTeamFromInvite = async (teamId) => {
-    const { data: teamName, error } = await supabase.rpc('join_team_via_link', { p_team_id: teamId })
+  // Lien joueur : rejoint l'équipe avec le code du lien (une équipe n'est pas lisible avant d'en être membre).
+  const joinTeamFromInvite = async (code) => {
+    const { data: teamName, error } = await supabase.rpc('join_team_with_code', { p_code: code })
     if (error) showToast('❌ ' + error.message)
     else { await refreshTeams(); showToast(`✅ Ajouté à l'équipe "${teamName}" !`) }
     clearInviteUrl()
@@ -348,17 +349,17 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
   const [inviteBusy, setInviteBusy] = useState(false)
   const inviteHandledRef = useRef(false)
   useEffect(() => {
-    if (!inviteTeamId || inviteHandledRef.current) return
+    if (!teamJoinCode || inviteHandledRef.current) return
     inviteHandledRef.current = true
     ;(async () => {
       const actions = inviteActionsRef.current
-      if (actions.user.user_metadata?.equipe === inviteTeamId) { await actions.joinTeamFromInvite(inviteTeamId); return }
-      const { data } = await supabase.rpc('get_team_invite_info', { p_team_id: inviteTeamId })
+      if (actions.user.user_metadata?.team_join_code === teamJoinCode) { await actions.joinTeamFromInvite(teamJoinCode); return }
+      const { data } = await supabase.rpc('get_team_join_info', { p_code: teamJoinCode })
       const info = data?.[0]
       if (!info) { showToast("❌ Ce lien d'invitation n'est plus valide"); clearInviteUrl(); return }
-      setInviteConfirm({ kind: 'team', teamId: inviteTeamId, label: info.team_name + (info.club_name ? ' (' + info.club_name + ')' : ''), roleLabel: 'joueur' })
+      setInviteConfirm({ kind: 'team', code: teamJoinCode, label: info.team_name + (info.club_name ? ' (' + info.club_name + ')' : ''), roleLabel: 'joueur' })
     })()
-  }, [inviteTeamId])
+  }, [teamJoinCode])
 
   // Le code d'un lien staff vient de l'adresse ou, après l'inscription, du compte lui-même : le lien
   // de confirmation d'email peut ramener sur l'appli sans le paramètre de l'adresse (autre navigateur,
@@ -382,7 +383,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
 
   const confirmInvite = async () => {
     setInviteBusy(true)
-    if (inviteConfirm.kind === 'team') await joinTeamFromInvite(inviteConfirm.teamId)
+    if (inviteConfirm.kind === 'team') await joinTeamFromInvite(inviteConfirm.code)
     else await redeemClubInvite(inviteConfirm.code)
     setInviteBusy(false)
     setInviteConfirm(null)
@@ -698,8 +699,12 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
     showToast('🗑️ Équipe supprimée')
   }
 
+  // Lien joueur : contient le code de l'équipe, que le staff peut renouveler (l'ancien lien cesse
+  // alors de fonctionner, par exemple après le départ d'un joueur ou une diffusion trop large).
   const shareInviteLink = async (teamId, teamName) => {
-    const url = `${window.location.origin}/?invite=${teamId}`
+    const { data: row } = await supabase.from('team_join_codes').select('code').eq('team_id', teamId).maybeSingle()
+    if (!row?.code) { showToast("❌ Lien d'invitation indisponible pour cette équipe"); return }
+    const url = `${window.location.origin}/?join=${row.code}`
     if (navigator.share) {
       try { await navigator.share({ title: 'TxT Tracker', text: `Rejoins l'équipe ${teamName} sur TxT Tracker !`, url }); return }
       catch (e) { if (e.name === 'AbortError') return }
@@ -710,6 +715,13 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
     } catch (e) {
       showToast('❌ Impossible de copier le lien')
     }
+  }
+
+  const regenerateJoinCode = async (teamId) => {
+    const { error } = await supabase.rpc('regenerate_team_join_code', { p_team_id: teamId })
+    if (error) { showToast('❌ ' + error.message); return false }
+    showToast("🔗 Nouveau lien créé : l'ancien ne fonctionne plus")
+    return true
   }
 
   // Invitation club-level (coach/dirigeant/admin) : code à usage unique et expirant généré
@@ -1256,7 +1268,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
 
       {/* ── ÉQUIPE (ADMIN / COACH) ── */}
       {tab === 'equipe' && (isAdmin || hasLeadership) && (
-        <EquipeCoachScreen kpisForTeam={kpisForTeam} archivedKpisForTeam={archivedKpisForTeam} saveTeamKpi={saveTeamKpi} setTeamKpiArchived={setTeamKpiArchived}
+        <EquipeCoachScreen shareInviteLink={shareInviteLink} regenerateJoinCode={regenerateJoinCode} kpisForTeam={kpisForTeam} archivedKpisForTeam={archivedKpisForTeam} saveTeamKpi={saveTeamKpi} setTeamKpiArchived={setTeamKpiArchived}
           addManagedPlayer={addManagedPlayer} addingManagedPlayer={addingManagedPlayer} adminData={adminData} coachRosterData={coachRosterData} coachTeamId={coachTeamId}
           deleteManagedPlayer={deleteManagedPlayer} entryValue={entryValue} equipeTab={equipeTab} equipeTeamId={equipeTeamId} getProgramForDate={getProgramForDate}
           getProgramsForTeam={getProgramsForTeam} isAdmin={isAdmin} isMobile={isMobile} leadershipTeams={leadershipTeams} managedPlayerDraft={managedPlayerDraft}
@@ -1285,7 +1297,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
           deleteUserAccount={deleteUserAccount} isAdmin={isAdmin} isClubManager={isClubManager} isMobile={isMobile} loadAdminOverview={loadAdminOverview} loadAdminTeamDetail={loadAdminTeamDetail} managedPlayerDraft={managedPlayerDraft}
           managedPlayers={managedPlayers} myClubId={myClubId} myClubRole={myClubRole} openFiche={openFiche} renderProgrammeCatalog={renderProgrammeCatalog} resendConfirmation={resendConfirmation} selectedAdminTeam={selectedAdminTeam}
           setAddingManagedPlayer={setAddingManagedPlayer} setAdminView={setAdminView} setEditingProg={setEditingProg} setEditingProgramId={setEditingProgramId} setManagedPlayerDraft={setManagedPlayerDraft}
-          setPlayerRole={setPlayerRole} setProgDraft={setProgDraft} setSelectedAdminTeam={setSelectedAdminTeam} shareInviteLink={shareInviteLink} teams={teams}
+          setPlayerRole={setPlayerRole} setProgDraft={setProgDraft} setSelectedAdminTeam={setSelectedAdminTeam} shareInviteLink={shareInviteLink} regenerateJoinCode={regenerateJoinCode} teams={teams}
           togglePlayerTeam={togglePlayerTeam} unconfirmedSignups={unconfirmedSignups} uploadTeamPhoto={uploadTeamPhoto} uploadingTeamPhoto={uploadingTeamPhoto} />
       )}
 
@@ -1320,7 +1332,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); changeTab('dashboard') } }}
             style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
             <div style={{ width: 40, height: 40, borderRadius: 10, overflow: 'hidden', background: C.card, border: '1px solid ' + C.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, color: C.accentGlow, flexShrink: 0 }}>
-              {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'TxT'}
+              {profil.photo_url ? <SecureImg src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'TxT'}
             </div>
             <div>
               <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.5 }}>TxT Tracker</div>
@@ -1336,7 +1348,7 @@ export default function App({ user, onSignOut, inviteTeamId, clubInviteCode, the
                 <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{profil.division || '—'} • {profil.club || '—'}</div>
               </div>
               <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', background: C.card, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, color: C.accentGlow, flexShrink: 0, border: '1px solid ' + C.border }}>
-                {profil.photo_url ? <img src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((profil.prenom || 'J')[0] || 'J').toUpperCase()}
+                {profil.photo_url ? <SecureImg src={profil.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((profil.prenom || 'J')[0] || 'J').toUpperCase()}
               </div>
             </div>
             <button onClick={onSignOut} title="Se déconnecter"

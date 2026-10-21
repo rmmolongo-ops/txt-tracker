@@ -7,14 +7,14 @@ import Auth from './Auth'
 // La page d'inscription ne lit aucune table : seulement les fonctions d'information d'un lien.
 // Fonctions simples (pas jest.fn) : la config CRA remet les mocks à zéro entre les tests.
 jest.mock('../lib/supabase', () => {
-  const teamInvites = { t1: { team_name: 'U12 B', club_name: 'FO Plaisir' } }
+  const teamInvites = { 'code-equipe': { team_name: 'U12 B', club_name: 'FO Plaisir' } }
   const clubInvites = {
     'code-coach': { club_id: 'c1', club_name: 'FO Plaisir', role: 'coach', team_id: 't1', team_name: 'U12 B' },
     'code-dirigeant': { club_id: 'c1', club_name: 'FO Plaisir', role: 'dirigeant', team_id: 't1', team_name: 'U12 B' },
     'code-admin': { club_id: 'c1', club_name: 'FO Plaisir', role: 'admin', team_id: null, team_name: null },
   }
   const rpc = (name, args) => {
-    const row = name === 'get_team_invite_info' ? teamInvites[args.p_team_id] : name === 'get_club_invite_info' ? clubInvites[args.p_code] : null
+    const row = name === 'get_team_join_info' ? teamInvites[args.p_code] : name === 'get_club_invite_info' ? clubInvites[args.p_code] : null
     return Promise.resolve({ data: row ? [row] : [] })
   }
   const forbidden = () => { throw new Error('La page d’inscription ne doit lire aucune table') }
@@ -59,7 +59,7 @@ test('sans lien : connexion seulement, aucune inscription libre ni aucun club ou
 test("lien d'équipe (joueur) : club et équipe viennent du lien, sans aucun menu de choix", async () => {
   const { supabase } = require('../lib/supabase')
   supabase.auth.signUp.mockClear()
-  await render(<Auth inviteTeamId="t1" />)
+  await render(<Auth teamJoinCode="code-equipe" />)
 
   expect(container.querySelectorAll('select').length).toBe(0)
   expect(container.querySelector('[data-testid="club-locked"]').textContent).toContain('FO Plaisir')
@@ -69,13 +69,13 @@ test("lien d'équipe (joueur) : club et équipe viennent du lien, sans aucun men
   await fillAccount()
   await act(async () => { buttonWithText('Créer mon compte').click() })
   expect(supabase.auth.signUp).toHaveBeenCalledTimes(1)
-  expect(supabase.auth.signUp.mock.calls[0][0].options.data).toMatchObject({ club: 'FO Plaisir', equipe: 't1', poste1: 'Attaquant', club_invite: '' })
+  expect(supabase.auth.signUp.mock.calls[0][0].options.data).toMatchObject({ club: 'FO Plaisir', team_join_code: 'code-equipe', poste1: 'Attaquant', club_invite: '' })
 })
 
 test('lien joueur : le poste reste obligatoire', async () => {
   const { supabase } = require('../lib/supabase')
   supabase.auth.signUp.mockClear()
-  await render(<Auth inviteTeamId="t1" />)
+  await render(<Auth teamJoinCode="code-equipe" />)
   expect(container.textContent).not.toContain('(optionnel)')
   await fillAccount({ poste: false })
   await act(async () => { buttonWithText('Créer mon compte').click() })
@@ -96,7 +96,7 @@ test('lien staff coach : club ET équipe fixés par le lien, poste facultatif, j
   await fillAccount({ poste: false })
   await act(async () => { buttonWithText('Créer mon compte').click() })
   expect(supabase.auth.signUp).toHaveBeenCalledTimes(1)
-  expect(supabase.auth.signUp.mock.calls[0][0].options.data).toMatchObject({ club: 'FO Plaisir', equipe: '', poste1: '', club_invite: 'code-coach' })
+  expect(supabase.auth.signUp.mock.calls[0][0].options.data).toMatchObject({ club: 'FO Plaisir', team_join_code: '', poste1: '', club_invite: 'code-coach' })
 })
 
 test('lien dirigeant ou administrateur : poste facultatif, et un lien administrateur ne cible aucune équipe', async () => {
@@ -118,7 +118,7 @@ test("lien invalide ou expiré : message d'erreur, pas d'inscription, connexion 
   expect(buttonWithText('Inscription')).toBeUndefined()
   expect(buttonWithText('Se connecter')).toBeDefined()
 
-  await render(<Auth inviteTeamId="equipe-inconnue" key="team" />)
+  await render(<Auth teamJoinCode="ancien-lien-ou-code-renouvele" key="team" />)
   expect(container.textContent).toContain("n'est plus valide")
   expect(container.querySelector('input[placeholder="Nom"]')).toBeNull()
 })

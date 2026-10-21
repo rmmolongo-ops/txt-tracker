@@ -3,6 +3,7 @@ import { C, KPI_CONFIG, SESSIONS, DASHBOARD_KPIS_MAX, DAY_MAP } from '../lib/con
 import { toDateStr } from '../lib/stats'
 import { renderSessionBlocs } from './SessionBlocs'
 import Icon from './Icons'
+import SecureImg from './SecureImg'
 
 // Accueil, vue joueur : séance du jour, KPIs clés, régularité, saisie rapide.
 export default function DashboardJoueur({
@@ -89,7 +90,7 @@ export default function DashboardJoueur({
         {myTeams.map(team => (
           <div key={team.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', minWidth: 0 }}>
             <div style={{ width: 40, height: 40, borderRadius: 9, background: C.card, border: '1px solid ' + C.border, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13, fontWeight: 600, color: C.accentGlow }}>
-              {team.photo_url ? <img src={team.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (team.name || '?').slice(0, 3).toUpperCase()}
+              {team.photo_url ? <SecureImg src={team.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (team.name || '?').slice(0, 3).toUpperCase()}
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.name}</div>

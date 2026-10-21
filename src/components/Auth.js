@@ -13,8 +13,8 @@ const rules = [
   { id: 'special', label: '1 caractère spécial (!@#$...)', test: p => /[^A-Za-z0-9]/.test(p) },
 ]
 
-export default function Auth({ inviteTeamId, clubInviteCode }) {
-  const hasInvite = !!(inviteTeamId || clubInviteCode)
+export default function Auth({ teamJoinCode, clubInviteCode }) {
+  const hasInvite = !!(teamJoinCode || clubInviteCode)
   const [mode, setMode] = useState(hasInvite ? 'register' : 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -30,13 +30,13 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   // Informations du lien, lues par fonction (la page d'inscription ne lit aucune table) :
   // undefined = vérification en cours, null = lien invalide/expiré, objet = lien valide.
-  const [teamInvite, setTeamInvite] = useState(inviteTeamId ? undefined : null)
+  const [teamInvite, setTeamInvite] = useState(teamJoinCode ? undefined : null)
   const [clubInvite, setClubInvite] = useState(clubInviteCode ? undefined : null)
 
   useEffect(() => {
-    if (!inviteTeamId) return
-    supabase.rpc('get_team_invite_info', { p_team_id: inviteTeamId }).then(({ data }) => setTeamInvite(data?.[0] || null))
-  }, [inviteTeamId])
+    if (!teamJoinCode) return
+    supabase.rpc('get_team_join_info', { p_code: teamJoinCode }).then(({ data }) => setTeamInvite(data?.[0] || null))
+  }, [teamJoinCode])
 
   useEffect(() => {
     if (!clubInviteCode) return
@@ -45,14 +45,14 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
 
   // L'inscription n'est possible que sur invitation valide : le club et l'équipe viennent du lien
   // et ne sont jamais choisis par l'utilisateur.
-  const checking = (inviteTeamId && teamInvite === undefined) || (clubInviteCode && clubInvite === undefined)
+  const checking = (teamJoinCode && teamInvite === undefined) || (clubInviteCode && clubInvite === undefined)
   const inviteInvalid = hasInvite && !checking && !teamInvite && !clubInvite
   const canRegister = !!(teamInvite || clubInvite)
   const clubName = teamInvite?.club_name || clubInvite?.club_name || ''
   const teamName = teamInvite?.team_name || clubInvite?.team_name || ''
-  // Un lien joueur rattache à l'équipe à l'inscription ; un lien staff rattache à l'équipe à
-  // l'utilisation du code (avec le rôle coach/dirigeant), jamais comme simple joueur.
-  const equipeValue = teamInvite ? inviteTeamId : ''
+  // Un lien joueur rattache à l'équipe à la création du compte (code gardé dans le compte) ; un
+  // lien staff rattache à l'utilisation du code (rôle coach/dirigeant), jamais comme simple joueur.
+  const teamCodeValue = teamInvite ? teamJoinCode : ''
   // Un membre du staff invité (coach, dirigeant, administrateur) n'a pas de poste de jeu.
   const posteOptional = ['coach', 'dirigeant', 'admin'].includes(clubInvite?.role)
   const registering = mode === 'register' && canRegister
@@ -67,7 +67,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
   const handleGoogleAuth = async () => {
     setError(null)
     setSuccess(null)
-    const redirectTo = inviteTeamId ? `${window.location.origin}/?invite=${inviteTeamId}`
+    const redirectTo = teamJoinCode ? `${window.location.origin}/?join=${teamJoinCode}`
       : clubInviteCode ? `${window.location.origin}/?club_invite=${clubInviteCode}`
       : window.location.origin
     const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
@@ -76,7 +76,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
 
   // Le lien de confirmation d'email doit ramener sur l'invitation (équipe ou club) suivie,
   // sinon le code est perdu et l'utilisateur n'est jamais rattaché.
-  const signupRedirect = inviteTeamId ? `${window.location.origin}/?invite=${inviteTeamId}`
+  const signupRedirect = teamJoinCode ? `${window.location.origin}/?join=${teamJoinCode}`
     : clubInviteCode ? `${window.location.origin}/?club_invite=${clubInviteCode}`
     : window.location.origin
 
@@ -111,7 +111,7 @@ export default function Auth({ inviteTeamId, clubInviteCode }) {
           password,
           options: {
             emailRedirectTo: signupRedirect,
-            data: { nom: nom.trim(), prenom: prenom.trim(), club: clubName, equipe: equipeValue, poste1: poste1.trim(), poste2: poste2.trim(), club_invite: clubInvite ? clubInviteCode : '' },
+            data: { nom: nom.trim(), prenom: prenom.trim(), club: clubName, equipe: '', team_join_code: teamCodeValue, poste1: poste1.trim(), poste2: poste2.trim(), club_invite: clubInvite ? clubInviteCode : '' },
           },
         })
         if (error) throw error

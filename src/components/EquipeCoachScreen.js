@@ -4,12 +4,14 @@ import KpiManager from './KpiManager'
 import { C, KPI_CONFIG, DAY_ORDER, LEADERSHIP_ROLES, MANAGED_PLAYERS_FREE_LIMIT, seanceRowKey } from '../lib/constants'
 import { toDateStr, getMonday } from '../lib/stats'
 import Icon from './Icons'
+import SecureImg from './SecureImg'
+import PlayerInviteLink from './PlayerInviteLink'
 
 // Onglet Équipe, vue coach / admin : effectif, performances, suivi des séances, programmes.
 
 export default function EquipeCoachScreen({
   addManagedPlayer, addingManagedPlayer, adminData, coachRosterData, coachTeamId, deleteManagedPlayer,
-  entryValue, kpisForTeam, archivedKpisForTeam, saveTeamKpi, setTeamKpiArchived, equipeTab, equipeTeamId, getProgramForDate, getProgramsForTeam, isAdmin,
+  entryValue, shareInviteLink, regenerateJoinCode, kpisForTeam, archivedKpisForTeam, saveTeamKpi, setTeamKpiArchived, equipeTab, equipeTeamId, getProgramForDate, getProgramsForTeam, isAdmin,
   isMobile, leadershipTeams, managedPlayerDraft, managedPlayers, myTeamRoles, openFiche,
   renderProgrammeCatalog, saveMesureForPlayer, setAddingManagedPlayer, setCoachTeamId, setEditingProg, setEditingProgramId,
   setEntryValue, setEquipeTab, setEquipeTeamId, setManagedPlayerDraft, setProgDraft, setSuiviSelected,
@@ -48,7 +50,7 @@ export default function EquipeCoachScreen({
                 <button key={team.id} onClick={() => selectEquipeTeam(team.id)}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 8, border: '1px solid ' + (sel ? C.accent : C.border), background: sel ? C.accent + '22' : 'transparent', color: sel ? C.accentGlow : C.muted, fontWeight: 500, fontSize: 14, cursor: 'pointer' }}>
                   {team.photo_url
-                    ? <img src={team.photo_url} alt="" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
+                    ? <SecureImg src={team.photo_url} alt="" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
                     : <span style={{ width: 10, height: 10, borderRadius: '50%', background: team.color, display: 'inline-block' }} />}
                   {team.name}
                 </button>
@@ -71,6 +73,9 @@ export default function EquipeCoachScreen({
           const managedLimitReached = !isAdmin && managedPlayers.length >= MANAGED_PLAYERS_FREE_LIMIT
           return (
             <>
+              {canManagePlayers && shareInviteLink && (
+                <PlayerInviteLink key={equipeTeamId} teamId={equipeTeamId} teamName={equipeViewTeams.find(t => t.id === equipeTeamId)?.name || ''} onShare={shareInviteLink} onRegenerate={regenerateJoinCode} />
+              )}
               {canManagePlayers && (
                 <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.border }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: managedPlayers.length > 0 || addingManagedPlayer ? 12 : 0 }}>
@@ -234,7 +239,7 @@ export default function EquipeCoachScreen({
                                   <div style={{ padding: '12px 14px 8px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                                       <div style={{ width: 36, height: 36, borderRadius: 10, background: C.surface, color: C.accentGlow, fontWeight: 600, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>
-                                        {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((j.prenom || '?').charAt(0) + (j.nom || '').charAt(0)).toUpperCase()}
+                                        {j.photo_url ? <SecureImg src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((j.prenom || '?').charAt(0) + (j.nom || '').charAt(0)).toUpperCase()}
                                       </div>
                                       <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ fontWeight: 600, fontSize: 14 }}>{j.prenom} {j.nom}</div>
@@ -375,7 +380,7 @@ export default function EquipeCoachScreen({
                                     {(isDone || isSelected) && '✓'}
                                   </div>
                                   <div style={{ width: 30, height: 30, borderRadius: 8, overflow: 'hidden', background: C.surface, color: C.accentGlow, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flexShrink: 0 }}>
-                                    {p.photo_url ? <img src={p.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((p.prenom || '?').charAt(0) + (p.nom || '').charAt(0)).toUpperCase()}
+                                    {p.photo_url ? <SecureImg src={p.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : ((p.prenom || '?').charAt(0) + (p.nom || '').charAt(0)).toUpperCase()}
                                   </div>
                                   <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {p.prenom || '—'} {p.nom || ''}

@@ -3,6 +3,7 @@ import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadius
 import { supabase } from '../lib/supabase'
 import { C, KPI_CONFIG, RADAR_AXES } from '../lib/constants'
 import { buildRadarData, kpiProgression, MATCH_RESULTS, hasScore, playerMatchStats } from '../lib/stats'
+import SecureImg from './SecureImg'
 
 // Fiche joueur façon scouting (modale) : infos, radar, matchs, KPIs, export.
 // `player` porte `__pool` : les joueurs de référence pour situer le radar.
@@ -38,7 +39,7 @@ export default function FicheJoueur({ player, onClose, kpis = KPI_CONFIG }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ width: 58, height: 58, borderRadius: 14, background: C.surface, color: C.accentGlow, fontWeight: 600, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
-              {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (((j.prenom || '').charAt(0) + (j.nom || '').charAt(0)).toUpperCase() || 'TxT')}
+              {j.photo_url ? <SecureImg src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (((j.prenom || '').charAt(0) + (j.nom || '').charAt(0)).toUpperCase() || 'TxT')}
             </div>
             <div>
               <div style={{ fontWeight: 600, fontSize: 18, letterSpacing: '-0.01em' }}>{j.prenom || '—'} {j.nom || ''}</div>
