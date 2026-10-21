@@ -5,9 +5,12 @@ import Auth from './components/Auth'
 import App from './components/App'
 import { C } from './lib/constants'
 import { applyTheme, getStoredTheme, useTheme } from './lib/theme'
+import ErrorBoundary from './components/ErrorBoundary'
+import { installGlobalErrorHandlers } from './lib/errorReporting'
 
 // Palette appliquée avant le premier rendu : pas d'éclair de la mauvaise couleur.
 applyTheme(getStoredTheme())
+installGlobalErrorHandlers()
 
 function Root() {
   const [theme, changeTheme] = useTheme()
@@ -39,9 +42,13 @@ function Root() {
     </div>
   )
 
-  return user
-    ? <App user={user} onSignOut={handleSignOut} teamJoinCode={teamJoinCode} clubInviteCode={clubInviteCode} theme={theme} onThemeChange={changeTheme} />
-    : <Auth teamJoinCode={teamJoinCode} clubInviteCode={clubInviteCode} />
+  return (
+    <ErrorBoundary>
+      {user
+        ? <App user={user} onSignOut={handleSignOut} teamJoinCode={teamJoinCode} clubInviteCode={clubInviteCode} theme={theme} onThemeChange={changeTheme} />
+        : <Auth teamJoinCode={teamJoinCode} clubInviteCode={clubInviteCode} />}
+    </ErrorBoundary>
+  )
 }
 
 const root = createRoot(document.getElementById('root'))
