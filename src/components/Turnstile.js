@@ -5,7 +5,9 @@ import { TURNSTILE_SITE_KEY, loadTurnstile } from '../lib/turnstile'
 // Widget anti-robot. Appelle onToken(jeton) quand la vérification réussit, onToken(null) quand le
 // jeton expire ou échoue. Un jeton ne sert qu'une fois : le parent remonte le composant (changer
 // sa prop key) après chaque tentative pour en obtenir un nouveau.
-export default function Turnstile({ onToken, action }) {
+// appearance 'interaction-only' : le widget reste invisible tant que Cloudflare n'a pas besoin
+// d'une action de la personne (cas le plus courant).
+export default function Turnstile({ onToken, action, appearance = 'always' }) {
   const container = useRef(null)
   const callback = useRef(onToken)
   callback.current = onToken
@@ -20,6 +22,7 @@ export default function Turnstile({ onToken, action }) {
         widgetId = ts.render(container.current, {
           sitekey: TURNSTILE_SITE_KEY,
           action,
+          appearance,
           language: 'fr',
           theme: C.bg === PALETTES.light.bg ? 'light' : 'dark',
           callback: token => callback.current(token),
@@ -32,11 +35,11 @@ export default function Turnstile({ onToken, action }) {
       cancelled = true
       if (widgetId !== undefined && window.turnstile) window.turnstile.remove(widgetId)
     }
-  }, [action])
+  }, [action, appearance])
 
   return (
     <div>
-      <div ref={container} style={{ minHeight: 65, display: 'flex', justifyContent: 'center' }} />
+      <div ref={container} style={{ minHeight: appearance === 'always' ? 65 : 0, display: 'flex', justifyContent: 'center' }} />
       {failed && (
         <div role="alert" style={{ fontSize: 12, color: C.red, textAlign: 'center' }}>
           La vérification anti-robot n'a pas pu se charger. Vérifie ta connexion ou désactive un bloqueur de contenu, puis recharge la page.

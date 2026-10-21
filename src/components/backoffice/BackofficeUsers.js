@@ -25,9 +25,10 @@ export default function BackofficeUsers({ currentUserId }) {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [busy, setBusy] = useState(null)
   const [notice, setNotice] = useState(null)
-  // Le renvoi d'email exige un jeton anti-robot (Supabase Attack Protection), à usage unique.
-  const [captchaToken, setCaptchaToken] = useState(null)
-  const [captchaKey, setCaptchaKey] = useState(0)
+  // Le renvoi d'email exige un jeton anti-robot (Supabase Attack Protection). La vérification
+  // n'est lancée qu'au clic sur « Relancer l'email », sous le compte concerné, et l'envoi part dès
+  // qu'elle est validée ; elle reste invisible quand Cloudflare n'a pas besoin d'intervention.
+  const [resendTarget, setResendTarget] = useState(null)
 
   useEffect(() => {
     supabase.rpc('backoffice_users').then(({ data, error: e }) => { if (e) setError(e.message); else setUsers(data || []) })
@@ -40,12 +41,11 @@ export default function BackofficeUsers({ currentUserId }) {
     return users.filter(f.test).filter(u => !q || [u.email, u.prenom, u.nom, ...u.equipes.map(e => e.team), ...u.equipes.map(e => e.club)].some(v => (v || '').toLowerCase().includes(q)))
   }, [users, filter, query])
 
-  const resend = async (u) => {
+  const resend = async (u, captchaToken) => {
+    setResendTarget(null)
     setBusy(u.user_id)
     const { error: e } = await supabase.auth.resend({ type: 'signup', email: u.email, options: { emailRedirectTo: window.location.origin, captchaToken } })
     setBusy(null)
-    setCaptchaToken(null)
-    setCaptchaKey(k => k + 1)
     setNotice(e ? { error: true, text: 'Relance impossible : ' + e.message } : { text: 'Email de confirmation renvoyé à ' + u.email })
   }
 
@@ -70,12 +70,6 @@ export default function BackofficeUsers({ currentUserId }) {
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
         {FILTERS.map(f => <Chip key={f.id} active={filter === f.id} onClick={() => setFilter(f.id)}>{f.label} ({users.filter(f.test).length})</Chip>)}
       </div>
-      {users.some(u => !u.email_confirmed_at) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12, fontSize: 12, color: C.muted }}>
-          <span>Vérification requise pour relancer un email :</span>
-          <Turnstile key={captchaKey} action="relance" onToken={setCaptchaToken} />
-        </div>
-      )}
       {notice && (
         <div role="status" style={{ background: (notice.error ? C.red : C.green) + '15', border: '1px solid ' + (notice.error ? C.red : C.green) + '50', borderRadius: 10, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>{notice.text}</div>
       )}
@@ -101,8 +95,8 @@ export default function BackofficeUsers({ currentUserId }) {
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {!u.email_confirmed_at && (
-                    <button onClick={() => resend(u)} disabled={busy === u.user_id || !captchaToken} title={captchaToken ? undefined : 'Valide d’abord la vérification anti-robot'}
-                      style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid ' + C.border, background: 'transparent', color: C.text, fontSize: 13, cursor: 'pointer' }}>Relancer l'email</button>
+                    <button onClick={() => { setNotice(null); setResendTarget(u.user_id) }} disabled={busy === u.user_id || resendTarget === u.user_id}
+                      style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid ' + C.border, background: 'transparent', color: C.text, fontSize: 13, cursor: 'pointer' }}>{busy === u.user_id ? 'Envoi…' : resendTarget === u.user_id ? 'Vérification…' : "Relancer l'email"}</button>
                   )}
                   {!self && !u.is_super_admin && (
                     <button onClick={() => setConfirmDelete(u.user_id)} disabled={busy === u.user_id}
@@ -110,6 +104,16 @@ export default function BackofficeUsers({ currentUserId }) {
                   )}
                 </div>
               </div>
+
+              {resendTarget === u.user_id && (
+                <div style={{ marginTop: 10 }}>
+                  <Turnstile action="relance" appearance="interaction-only" onToken={token => {
+                    if (token) { resend(u, token); return }
+                    setResendTarget(null)
+                    setNotice({ error: true, text: 'La vérification anti-robot a échoué, réessaie.' })
+                  }} />
+                </div>
+              )}
 
               {(u.equipes.length > 0 || u.clubs.length > 0) && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>

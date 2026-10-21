@@ -23,6 +23,9 @@ export default function Auth({ teamJoinCode, clubInviteCode }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
+  // Après une inscription réussie, le formulaire laisse place à un écran de confirmation : un
+  // second clic renverrait la demande, refusée par Supabase (une par minute et par adresse).
+  const [signupDoneEmail, setSignupDoneEmail] = useState(null)
   const [nom, setNom] = useState('')
   const [prenom, setPrenom] = useState('')
   const [poste1, setPoste1] = useState('')
@@ -124,7 +127,7 @@ export default function Auth({ teamJoinCode, clubInviteCode }) {
           },
         })
         if (error) throw error
-        setSuccess('Compte créé. Vérifie ton email pour confirmer.')
+        setSignupDoneEmail(email)
       }
     } catch (e) {
       setError(e.message)
@@ -141,6 +144,15 @@ export default function Auth({ teamJoinCode, clubInviteCode }) {
         <h1 style={{ fontSize: 28, fontWeight: 600, color: C.text, letterSpacing: '-0.03em' }}>TxT Tracker</h1>
         <div style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>Talent × Travail × Temps</div>
       </div>
+      {signupDoneEmail ? (
+      <div role="status" style={{ background: C.card, borderRadius: 16, padding: 28, width: '100%', maxWidth: 380, border: '1px solid ' + C.border, textAlign: 'center' }}>
+        <div style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 10 }}>Vérifie ta boîte mail</div>
+        <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6, marginBottom: 20 }}>
+          Ton compte est créé. Un email de confirmation a été envoyé à <strong style={{ color: C.text }}>{signupDoneEmail}</strong>. Clique sur le bouton qu'il contient pour activer ton compte et rejoindre ton équipe.
+        </div>
+        <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Rien reçu ? Regarde dans les courriers indésirables. L'email peut mettre quelques minutes à arriver.</div>
+      </div>
+      ) : (
       <div style={{ background: C.card, borderRadius: 16, padding: 28, width: '100%', maxWidth: 380, border: '1px solid ' + C.border }}>
         {canRegister && (
         <div style={{ display: 'flex', borderRadius: 10, padding: 3, marginBottom: 24, border: '1px solid ' + C.border }}>
@@ -283,6 +295,7 @@ export default function Auth({ teamJoinCode, clubInviteCode }) {
           {loading ? '...' : registering ? 'Créer mon compte' : 'Se connecter'}
         </button>
       </div>
+      )}
       <div style={{ marginTop: 20, fontSize: 12, color: C.muted, textAlign: 'center' }}>
         Suivi de performance pour les joueurs de ton club
       </div>

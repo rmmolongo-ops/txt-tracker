@@ -161,3 +161,16 @@ test('sans vérification anti-robot validée, rien n’est envoyé et un message
   expect(supabase.auth.signInWithPassword).not.toHaveBeenCalled()
   expect(container.textContent).toContain('vérification anti-robot')
 })
+
+test('après une inscription réussie, le formulaire laisse place à « Vérifie ta boîte mail » (pas de second envoi possible)', async () => {
+  const { supabase } = require('../lib/supabase')
+  supabase.auth.signUp.mockImplementation(() => Promise.resolve({ error: null }))
+  await render(<Auth teamJoinCode="code-equipe" />)
+  await fillAccount()
+  await act(async () => { buttonWithText('Créer mon compte').click() })
+
+  expect(container.textContent).toContain('Vérifie ta boîte mail')
+  expect(container.textContent).toContain('nouveau@test.fr')
+  expect(buttonWithText('Créer mon compte')).toBeUndefined()
+  expect(container.querySelector('input[type="password"]')).toBeNull()
+})

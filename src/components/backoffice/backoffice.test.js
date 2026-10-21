@@ -18,6 +18,7 @@ jest.mock('../Turnstile', () => {
 // Fonctions simples (pas jest.fn) : la config CRA remet les mocks à zéro entre les tests.
 let mockIsAdmin = false
 const mockDeleted = []
+const mockResends = []
 const mockUsers = [
   { user_id: 'moi', email: 'ralph@test.fr', prenom: 'Ralph', nom: 'M', created_at: '2026-06-10', email_confirmed_at: '2026-06-10', last_sign_in_at: '2026-10-20', provider: 'email', is_super_admin: true, equipes: [], clubs: [], nb_mesures: 3 },
   { user_id: 'u2', email: 'joueur@test.fr', prenom: 'Léo', nom: 'K', created_at: '2026-10-01', email_confirmed_at: null, last_sign_in_at: null, provider: 'email', is_super_admin: false, equipes: [], clubs: [], nb_mesures: 0 },
@@ -34,7 +35,7 @@ jest.mock('../../lib/supabase', () => ({
       if (name === 'delete_user_as_admin') { mockDeleted.push(args.target_user_id); return Promise.resolve({ error: null }) }
       return Promise.resolve({ data: null })
     },
-    auth: { resend: () => Promise.resolve({ error: null }) },
+    auth: { resend: (args) => { mockResends.push(args); return Promise.resolve({ error: null }) } },
   },
 }))
 
@@ -92,4 +93,15 @@ test('suppression : rien sans confirmation, puis le compte disparaît de la list
   expect(mockDeleted).toEqual(['u2'])
   expect(container.textContent).not.toContain('joueur@test.fr (')
   expect(container.textContent).toContain('Comptes (2/2)')
+})
+
+test('relance : aucune vérification affichée avant le clic, puis l’email part avec le jeton anti-robot', async () => {
+  mockResends.length = 0
+  mockCaptchaOk = true
+  await render(<BackofficeUsers currentUserId="moi" />)
+  expect(mockResends).toHaveLength(0)
+  await act(async () => { buttonWithText('Relancer l').click() })
+  expect(mockResends).toHaveLength(1)
+  expect(mockResends[0]).toMatchObject({ type: 'signup', email: 'joueur@test.fr', options: { captchaToken: 'jeton-test' } })
+  expect(container.textContent).toContain('Email de confirmation renvoyé à joueur@test.fr')
 })
