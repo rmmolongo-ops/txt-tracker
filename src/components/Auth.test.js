@@ -4,6 +4,16 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import Auth from './Auth'
 
+// Faux widget anti-robot : fournit un jeton, sauf si mockCaptchaOk est à false.
+let mockCaptchaOk = true
+jest.mock('./Turnstile', () => {
+  const { useEffect } = require('react')
+  return function MockTurnstile({ onToken }) {
+    useEffect(() => { if (mockCaptchaOk) onToken('jeton-test') }, [onToken])
+    return null
+  }
+})
+
 // La page d'inscription ne lit aucune table : seulement les fonctions d'information d'un lien.
 // Fonctions simples (pas jest.fn) : la config CRA remet les mocks à zéro entre les tests.
 jest.mock('../lib/supabase', () => {
@@ -23,6 +33,7 @@ jest.mock('../lib/supabase', () => {
 
 let container, root
 beforeEach(() => {
+  mockCaptchaOk = true
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -121,4 +132,32 @@ test("lien invalide ou expiré : message d'erreur, pas d'inscription, connexion 
   await render(<Auth teamJoinCode="ancien-lien-ou-code-renouvele" key="team" />)
   expect(container.textContent).toContain("n'est plus valide")
   expect(container.querySelector('input[placeholder="Nom"]')).toBeNull()
+})
+
+test('le jeton anti-robot est transmis à l’inscription et à la connexion', async () => {
+  const { supabase } = require('../lib/supabase')
+  supabase.auth.signUp.mockClear()
+  await render(<Auth teamJoinCode="code-equipe" />)
+  await fillAccount()
+  await act(async () => { buttonWithText('Créer mon compte').click() })
+  expect(supabase.auth.signUp.mock.calls[0][0].options.captchaToken).toBe('jeton-test')
+
+  supabase.auth.signInWithPassword.mockImplementation(() => Promise.resolve({ error: null }))
+  await render(<Auth key="connexion" />)
+  await act(async () => { typeIn(container.querySelector('input[type="email"]'), 'joueur@test.fr') })
+  await act(async () => { typeIn(container.querySelector('input[type="password"]'), 'Motdepasse1!') })
+  await act(async () => { buttonWithText('Se connecter').click() })
+  expect(supabase.auth.signInWithPassword.mock.calls[0][0].options.captchaToken).toBe('jeton-test')
+})
+
+test('sans vérification anti-robot validée, rien n’est envoyé et un message le demande', async () => {
+  mockCaptchaOk = false
+  const { supabase } = require('../lib/supabase')
+  supabase.auth.signInWithPassword.mockClear()
+  await render(<Auth />)
+  await act(async () => { typeIn(container.querySelector('input[type="email"]'), 'joueur@test.fr') })
+  await act(async () => { typeIn(container.querySelector('input[type="password"]'), 'Motdepasse1!') })
+  await act(async () => { buttonWithText('Se connecter').click() })
+  expect(supabase.auth.signInWithPassword).not.toHaveBeenCalled()
+  expect(container.textContent).toContain('vérification anti-robot')
 })

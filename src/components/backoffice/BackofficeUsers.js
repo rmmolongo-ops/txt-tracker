@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { C, ROLE_CONFIG } from '../../lib/constants'
 import { Section, Chip, Badge, formatDate, searchInputStyle, Loading, ErrorBox } from './ui'
+import Turnstile from '../Turnstile'
 
 const FILTERS = [
   { id: 'tous', label: 'Tous', test: () => true },
@@ -24,6 +25,9 @@ export default function BackofficeUsers({ currentUserId }) {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [busy, setBusy] = useState(null)
   const [notice, setNotice] = useState(null)
+  // Le renvoi d'email exige un jeton anti-robot (Supabase Attack Protection), à usage unique.
+  const [captchaToken, setCaptchaToken] = useState(null)
+  const [captchaKey, setCaptchaKey] = useState(0)
 
   useEffect(() => {
     supabase.rpc('backoffice_users').then(({ data, error: e }) => { if (e) setError(e.message); else setUsers(data || []) })
@@ -38,8 +42,10 @@ export default function BackofficeUsers({ currentUserId }) {
 
   const resend = async (u) => {
     setBusy(u.user_id)
-    const { error: e } = await supabase.auth.resend({ type: 'signup', email: u.email, options: { emailRedirectTo: window.location.origin } })
+    const { error: e } = await supabase.auth.resend({ type: 'signup', email: u.email, options: { emailRedirectTo: window.location.origin, captchaToken } })
     setBusy(null)
+    setCaptchaToken(null)
+    setCaptchaKey(k => k + 1)
     setNotice(e ? { error: true, text: 'Relance impossible : ' + e.message } : { text: 'Email de confirmation renvoyé à ' + u.email })
   }
 
@@ -64,6 +70,12 @@ export default function BackofficeUsers({ currentUserId }) {
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
         {FILTERS.map(f => <Chip key={f.id} active={filter === f.id} onClick={() => setFilter(f.id)}>{f.label} ({users.filter(f.test).length})</Chip>)}
       </div>
+      {users.some(u => !u.email_confirmed_at) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12, fontSize: 12, color: C.muted }}>
+          <span>Vérification requise pour relancer un email :</span>
+          <Turnstile key={captchaKey} action="relance" onToken={setCaptchaToken} />
+        </div>
+      )}
       {notice && (
         <div role="status" style={{ background: (notice.error ? C.red : C.green) + '15', border: '1px solid ' + (notice.error ? C.red : C.green) + '50', borderRadius: 10, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>{notice.text}</div>
       )}
@@ -89,7 +101,7 @@ export default function BackofficeUsers({ currentUserId }) {
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {!u.email_confirmed_at && (
-                    <button onClick={() => resend(u)} disabled={busy === u.user_id}
+                    <button onClick={() => resend(u)} disabled={busy === u.user_id || !captchaToken} title={captchaToken ? undefined : 'Valide d’abord la vérification anti-robot'}
                       style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid ' + C.border, background: 'transparent', color: C.text, fontSize: 13, cursor: 'pointer' }}>Relancer l'email</button>
                   )}
                   {!self && !u.is_super_admin && (

@@ -5,6 +5,16 @@ import { createRoot } from 'react-dom/client'
 import Backoffice from './Backoffice'
 import BackofficeUsers from './BackofficeUsers'
 
+// Faux widget anti-robot : fournit un jeton, sauf si mockCaptchaOk est à false.
+let mockCaptchaOk = true
+jest.mock('../Turnstile', () => {
+  const { useEffect } = require('react')
+  return function MockTurnstile({ onToken }) {
+    useEffect(() => { if (mockCaptchaOk) onToken('jeton-test') }, [onToken])
+    return null
+  }
+})
+
 // Fonctions simples (pas jest.fn) : la config CRA remet les mocks à zéro entre les tests.
 let mockIsAdmin = false
 const mockDeleted = []

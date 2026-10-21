@@ -22,11 +22,11 @@ export default function AdminScreen({
   addManagedPlayer, addingManagedPlayer, adminData, adminDeleteMesure, adminError, adminLoading,
   adminManagedPlayers, adminView, assignTeamClub, clubInvites = [], clubMembers = [], clubs, coachRosterData, createClub, createClubInvite, createTeam,
   deleteClub, deleteManagedPlayer, deleteTeam, deleteUserAccount, isAdmin, isClubManager, isMobile,
-  loadAdminOverview, loadAdminTeamDetail, managedPlayerDraft, managedPlayers, myClubId, myClubRole, openFiche, renderProgrammeCatalog, resendConfirmation,
+  loadAdminOverview, loadAdminTeamDetail, managedPlayerDraft, managedPlayers, myClubId, myClubRole, openFiche, renderProgrammeCatalog,
   kpiCatalog = KPI_CONFIG, kpisForTeam = () => KPI_CONFIG,
   selectedAdminTeam, setAddingManagedPlayer, setAdminView, setEditingProg, setEditingProgramId, setManagedPlayerDraft,
   setPlayerRole, setProgDraft, setSelectedAdminTeam, shareInviteLink, regenerateJoinCode, teams, togglePlayerTeam,
-  unconfirmedSignups, uploadTeamPhoto, uploadingTeamPhoto,
+  uploadTeamPhoto, uploadingTeamPhoto,
 }) {
   const [adminDetailTab, setAdminDetailTab] = useState('joueurs')
   const [expandedAdmin, setExpandedAdmin] = useState(null)
@@ -37,7 +37,6 @@ export default function AdminScreen({
   const [newClubName, setNewClubName] = useState('')
   const [creatingTeam, setCreatingTeam] = useState(false)
   const [creatingClub, setCreatingClub] = useState(false)
-  const [resendingEmail, setResendingEmail] = useState(null)
   const [inviteClubId, setInviteClubId] = useState(myClubId || '')
   const [inviteRole, setInviteRole] = useState('coach')
   const [inviteTeamId, setInviteTeamId] = useState('')
@@ -73,12 +72,6 @@ export default function AdminScreen({
     setGeneratingInvite(true)
     await createClubInvite(inviteTargetClubId, inviteRole, null, inviteNeedsTeam ? inviteTeamId : null)
     setGeneratingInvite(false)
-  }
-
-  const handleResend = async (email) => {
-    setResendingEmail(email)
-    await resendConfirmation(email)
-    setResendingEmail(null)
   }
 
   const handleDeleteUser = async (userId) => {
@@ -332,27 +325,6 @@ export default function AdminScreen({
             </span>
             <span aria-hidden="true" style={{ color: C.accentGlow, fontSize: 18 }}>›</span>
           </a>
-        )}
-
-        {/* Inscriptions non confirmées */}
-        {unconfirmedSignups.length > 0 && (
-          <div style={{ background: C.card, borderRadius: 16, padding: 16, marginBottom: 20, border: '1px solid ' + C.gold + '40' }}>
-            <div style={{ fontSize: 13, color: C.gold, fontWeight: 500, marginBottom: 10 }}>
-              ⏳ Inscriptions non confirmées ({unconfirmedSignups.length})
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {unconfirmedSignups.map(u => (
-                <div key={u.user_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: C.surface, borderRadius: 10, padding: '8px 12px', gap: 10 }}>
-                  <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{u.email}</span>
-                  <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{new Date(u.created_at).toLocaleDateString('fr-FR')}</span>
-                  <button onClick={() => handleResend(u.email)} disabled={resendingEmail === u.email}
-                    style={{ flexShrink: 0, padding: '5px 10px', background: C.gold + '20', color: C.gold, border: '1px solid ' + C.gold + '40', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: resendingEmail === u.email ? 'default' : 'pointer', opacity: resendingEmail === u.email ? 0.6 : 1 }}>
-                    {resendingEmail === u.email ? '...' : 'Relancer'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
         )}
 
         {/* Créer une équipe */}

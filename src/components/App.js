@@ -51,7 +51,6 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
   const isClubManager = myClubRole === 'admin' || myClubRole === 'dirigeant'
   const canManageClub = isAdmin || isClubManager
   const [adminData, setAdminData] = useState([])
-  const [unconfirmedSignups, setUnconfirmedSignups] = useState([])
   const [ficheJoueur, setFicheJoueur] = useState(null)
   const [adminError, setAdminError] = useState(null)
   const [adminLoading, setAdminLoading] = useState(false)
@@ -126,7 +125,6 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
         { data: allEmails },
         { data: allTeams },
         { data: allTeamMembers },
-        { data: unconfirmed },
         { data: allManagedPlayers },
         { data: allClubMembers },
         { data: allClubInvites },
@@ -135,14 +133,12 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
         supabase.rpc('get_user_emails_for_admins'),
         supabase.from('teams').select('*').order('created_at'),
         supabase.from('team_members').select('user_id, team_id, role'),
-        supabase.rpc('get_unconfirmed_signups_for_admins'),
         supabase.from('managed_players').select('*'),
         supabase.from('club_members').select('*'),
         supabase.from('club_invites').select('*').order('created_at', { ascending: false }),
       ])
       if (errP) { setAdminError('Erreur lecture profils : ' + errP.message); setAdminLoading(false); return }
       setTeams(allTeams || [])
-      setUnconfirmedSignups(unconfirmed || [])
       // Scopé par la RLS : un admin plateforme voit tous les clubs, un admin/dirigeant
       // de club ne voit que les membres et invitations de son propre club.
       setClubMembers(allClubMembers || [])
@@ -748,12 +744,6 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
     }
   }
 
-  const resendConfirmation = async (email) => {
-    const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: window.location.origin } })
-    if (error) showToast('❌ ' + error.message)
-    else showToast('✉️ Email de confirmation renvoyé !')
-  }
-
   const createClub = async (name) => {
     const { data, error } = await supabase.from('clubs').insert({ name }).select().single()
     if (data) {
@@ -1295,10 +1285,10 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
           adminLoading={adminLoading} adminManagedPlayers={adminManagedPlayers} adminView={adminView} assignTeamClub={assignTeamClub} clubInvites={clubInvites} clubMembers={clubMembers} clubs={clubs} coachRosterData={coachRosterData}
           createClub={createClub} createClubInvite={createClubInvite} createTeam={createTeam} deleteClub={deleteClub} deleteManagedPlayer={deleteManagedPlayer} deleteTeam={deleteTeam}
           deleteUserAccount={deleteUserAccount} isAdmin={isAdmin} isClubManager={isClubManager} isMobile={isMobile} loadAdminOverview={loadAdminOverview} loadAdminTeamDetail={loadAdminTeamDetail} managedPlayerDraft={managedPlayerDraft}
-          managedPlayers={managedPlayers} myClubId={myClubId} myClubRole={myClubRole} openFiche={openFiche} renderProgrammeCatalog={renderProgrammeCatalog} resendConfirmation={resendConfirmation} selectedAdminTeam={selectedAdminTeam}
+          managedPlayers={managedPlayers} myClubId={myClubId} myClubRole={myClubRole} openFiche={openFiche} renderProgrammeCatalog={renderProgrammeCatalog} selectedAdminTeam={selectedAdminTeam}
           setAddingManagedPlayer={setAddingManagedPlayer} setAdminView={setAdminView} setEditingProg={setEditingProg} setEditingProgramId={setEditingProgramId} setManagedPlayerDraft={setManagedPlayerDraft}
           setPlayerRole={setPlayerRole} setProgDraft={setProgDraft} setSelectedAdminTeam={setSelectedAdminTeam} shareInviteLink={shareInviteLink} regenerateJoinCode={regenerateJoinCode} teams={teams}
-          togglePlayerTeam={togglePlayerTeam} unconfirmedSignups={unconfirmedSignups} uploadTeamPhoto={uploadTeamPhoto} uploadingTeamPhoto={uploadingTeamPhoto} />
+          togglePlayerTeam={togglePlayerTeam} uploadTeamPhoto={uploadTeamPhoto} uploadingTeamPhoto={uploadingTeamPhoto} />
       )}
 
       {/* ── PROFIL ── */}

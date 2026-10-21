@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../lib/constants'
+import Turnstile from './Turnstile'
 
 const CLUB_ROLE_LABELS = { admin: 'administrateur', dirigeant: 'dirigeant', coach: 'coach' }
 
@@ -28,6 +29,9 @@ export default function Auth({ teamJoinCode, clubInviteCode }) {
   const [poste2, setPoste2] = useState('')
   const [attemptedSubmit, setAttemptedSubmit] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
+  // Jeton anti-robot (Cloudflare Turnstile), à usage unique : nouveau widget après chaque tentative.
+  const [captchaToken, setCaptchaToken] = useState(null)
+  const [captchaKey, setCaptchaKey] = useState(0)
   // Informations du lien, lues par fonction (la page d'inscription ne lit aucune table) :
   // undefined = vérification en cours, null = lien invalide/expiré, objet = lien valide.
   const [teamInvite, setTeamInvite] = useState(teamJoinCode ? undefined : null)
@@ -100,10 +104,14 @@ export default function Auth({ teamJoinCode, clubInviteCode }) {
       setError("Merci d'accepter les CGU et la politique de confidentialité pour créer un compte.")
       return
     }
+    if (!captchaToken) {
+      setError('Merci de valider la vérification anti-robot ci-dessus.')
+      return
+    }
     setLoading(true)
     try {
       if (!registering) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } })
         if (error) throw error
       } else {
         const { error } = await supabase.auth.signUp({
@@ -111,6 +119,7 @@ export default function Auth({ teamJoinCode, clubInviteCode }) {
           password,
           options: {
             emailRedirectTo: signupRedirect,
+            captchaToken,
             data: { nom: nom.trim(), prenom: prenom.trim(), club: clubName, equipe: '', team_join_code: teamCodeValue, poste1: poste1.trim(), poste2: poste2.trim(), club_invite: clubInvite ? clubInviteCode : '' },
           },
         })
@@ -120,6 +129,8 @@ export default function Auth({ teamJoinCode, clubInviteCode }) {
     } catch (e) {
       setError(e.message)
     }
+    setCaptchaToken(null)
+    setCaptchaKey(k => k + 1)
     setLoading(false)
   }
 
@@ -262,6 +273,11 @@ export default function Auth({ teamJoinCode, clubInviteCode }) {
         )}
         {error && <div role="alert" style={{ background: C.red + '20', border: '1px solid ' + C.red + '40', borderRadius: 10, padding: '10px 14px', color: C.red, fontSize: 13, marginBottom: 14 }}>{error}</div>}
         {success && <div style={{ background: C.green + '20', border: '1px solid ' + C.green + '40', borderRadius: 10, padding: '10px 14px', color: C.green, fontSize: 13, marginBottom: 14 }}>{success}</div>}
+        {!checking && (
+          <div style={{ marginBottom: 12 }}>
+            <Turnstile key={captchaKey} action={registering ? 'inscription' : 'connexion'} onToken={setCaptchaToken} />
+          </div>
+        )}
         <button onClick={handleAuth} disabled={loading || checking}
           style={{ width: '100%', padding: 13, borderRadius: 10, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 16, background: C.accent, color: '#fff', opacity: loading ? 0.7 : 1 }}>
           {loading ? '...' : registering ? 'Créer mon compte' : 'Se connecter'}
