@@ -16,13 +16,27 @@ const MESSAGES = [
   { id: 'msg2', team_id: 't1', user_id: 'u1', content: 'Bien reçu', sender_prenom: 'Ralph', created_at: '2026-09-24T10:05:00Z' },
 ]
 
+// Fonctions simples (pas jest.fn) : la config CRA remet les mocks à zéro entre les tests.
+const mockRpcCalls = []
+const mockInserts = []
 jest.mock('../lib/supabase', () => {
-  const query = () => {
-    const q = { select: () => q, eq: () => q, in: () => q, order: () => q, limit: () => Promise.resolve({ data: MESSAGES }), then: undefined }
+  const query = (table) => {
+    const rows = table === 'team_messages' ? MESSAGES : []
+    const q = {
+      select: () => q, eq: () => q, in: () => q, order: () => q, delete: () => q,
+      limit: () => Promise.resolve({ data: rows }),
+      maybeSingle: () => Promise.resolve({ data: null }),
+      single: () => Promise.resolve({ data: { requested_at: '2026-10-22T10:00:00Z', reason: '' } }),
+      insert: (row) => { mockInserts.push({ table, row }); return q },
+      then: undefined,
+    }
     return q
   }
   const channel = { on: () => channel, subscribe: () => channel }
-  return { supabase: { from: () => query(), channel: () => channel, removeChannel: () => {} } }
+  return { supabase: {
+    from: (table) => query(table), channel: () => channel, removeChannel: () => {},
+    rpc: (name, args) => { mockRpcCalls.push({ name, args }); return Promise.resolve({ data: 'r1', error: null }) },
+  } }
 })
 
 
@@ -65,6 +79,22 @@ describe('ChatScreen', () => {
     expect(container.textContent).toContain('Bien reçu')
     expect(markChatRead).toHaveBeenCalledWith('t1')
     expect(buttonWithText('Mobambi').textContent).toContain('3')
+  })
+
+  test('signalement : seulement sur le message des autres, avec un motif, envoyé au staff', async () => {
+    mockRpcCalls.length = 0
+    const showToast = jest.fn()
+    await render(<ChatScreen {...baseProps} showToast={showToast} myTeams={teams} chatTeamId="t1" onSelectTeam={jest.fn()} />)
+    const reportButtons = [...container.querySelectorAll('button')].filter(b => b.getAttribute('aria-label') === 'Signaler ce message')
+    expect(reportButtons).toHaveLength(1) // le message de Kenji, pas le mien
+    await act(async () => { reportButtons[0].click() })
+    expect(container.textContent).toContain("L'auteur du message ne saura pas qui l'a signalé")
+    const reason = container.querySelector('textarea[aria-label="Motif du signalement"]')
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set
+    await act(async () => { setter.call(reason, 'Insulte'); reason.dispatchEvent(new Event('input', { bubbles: true })) })
+    await act(async () => { buttonWithText('Envoyer le signalement').click() })
+    expect(mockRpcCalls).toContainEqual({ name: 'report_message', args: { p_message_id: 'msg1', p_reason: 'Insulte' } })
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('signalé'))
   })
 })
 
@@ -126,6 +156,18 @@ describe('ProfilScreen', () => {
     expect(container.textContent).toContain("l'équipe U12 B")
     await act(async () => { buttonWithText('Générer le lien').click() })
     expect(createClubInvite).toHaveBeenCalledWith('c1', 'coach', null, 't1')
+  })
+
+  test('suppression du compte : demande confirmée puis enregistrée, annulable', async () => {
+    mockInserts.length = 0
+    await render(<ProfilScreen {...props} />)
+    await act(async () => { buttonWithText('Demander la suppression de mon compte').click() })
+    expect(container.textContent).toContain('définitivement effacés')
+    expect(mockInserts).toHaveLength(0)
+    await act(async () => { buttonWithText('Confirmer la demande').click() })
+    expect(mockInserts).toEqual([{ table: 'account_deletion_requests', row: { user_id: 'u1', reason: '' } }])
+    expect(container.textContent).toContain('Suppression demandée le')
+    expect(buttonWithText('Annuler ma demande')).toBeDefined()
   })
 
   test('profil incomplet (ex : inscription Google) : s’ouvre directement en édition avec un message d’accueil', async () => {

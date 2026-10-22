@@ -5,6 +5,7 @@ import BackofficeOverview from './BackofficeOverview'
 import BackofficeUsers from './BackofficeUsers'
 import BackofficeStats from './BackofficeStats'
 import BackofficeErrors from './BackofficeErrors'
+import BackofficeReports from './BackofficeReports'
 
 // Back-office (/backoffice) : pilotage de toute l'appli, réservé au super admin.
 // L'adresse ne protège rien : chaque donnée vient d'une fonction de la base qui vérifie le rôle.
@@ -12,6 +13,7 @@ const TABS = [
   { id: 'vue', label: "Vue d'ensemble" },
   { id: 'comptes', label: 'Comptes' },
   { id: 'stats', label: 'Statistiques' },
+  { id: 'signalements', label: 'Signalements' },
   { id: 'erreurs', label: 'Erreurs' },
 ]
 
@@ -71,6 +73,7 @@ export default function Backoffice({ user, onSignOut }) {
         {tab === 'vue' && <BackofficeOverview />}
         {tab === 'comptes' && <BackofficeUsers currentUserId={user.id} />}
         {tab === 'stats' && <BackofficeStats />}
+        {tab === 'signalements' && <BackofficeReports />}
         {tab === 'erreurs' && <BackofficeErrors />}
       </main>
     </div>

@@ -6,6 +6,7 @@ import Turnstile from '../Turnstile'
 
 const FILTERS = [
   { id: 'tous', label: 'Tous', test: () => true },
+  { id: 'suppression', label: 'Suppression demandée', test: u => !!u.deletionRequest },
   { id: 'non_confirmes', label: 'Email non confirmé', test: u => !u.email_confirmed_at },
   { id: 'sans_equipe', label: 'Sans équipe', test: u => u.equipes.length === 0 },
   { id: 'multi_clubs', label: 'Plusieurs clubs', test: u => new Set(u.equipes.map(e => e.club)).size > 1 },
@@ -31,7 +32,14 @@ export default function BackofficeUsers({ currentUserId }) {
   const [resendTarget, setResendTarget] = useState(null)
 
   useEffect(() => {
-    supabase.rpc('backoffice_users').then(({ data, error: e }) => { if (e) setError(e.message); else setUsers(data || []) })
+    Promise.all([
+      supabase.rpc('backoffice_users'),
+      supabase.from('account_deletion_requests').select('user_id, reason, requested_at'),
+    ]).then(([{ data, error: e }, { data: requests }]) => {
+      if (e) { setError(e.message); return }
+      const byUser = new Map((requests || []).map(r => [r.user_id, r]))
+      setUsers((data || []).map(u => ({ ...u, deletionRequest: byUser.get(u.user_id) || null })))
+    })
   }, [])
 
   const visible = useMemo(() => {
@@ -84,7 +92,9 @@ export default function BackofficeUsers({ currentUserId }) {
                 <div style={{ flex: '1 1 260px', minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 15 }}>
                     {displayName(u)} {u.is_super_admin && <Badge color={C.accent}>Super admin</Badge>}
+                    {u.deletionRequest && <> <Badge color={C.red}>Suppression demandée le {formatDate(u.deletionRequest.requested_at)}</Badge></>}
                   </div>
+                  {u.deletionRequest?.reason && <div style={{ fontSize: 13, marginTop: 2 }}><span style={{ color: C.muted }}>Raison : </span>{u.deletionRequest.reason}</div>}
                   <div style={{ fontSize: 13, color: C.muted, wordBreak: 'break-all' }}>{u.email}</div>
                   <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
                     Inscrit le {formatDate(u.created_at)} · {u.provider === 'google' ? 'Google' : 'Email'}

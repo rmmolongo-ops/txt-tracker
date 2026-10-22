@@ -3,11 +3,14 @@ import { supabase } from '../lib/supabase'
 import { C } from '../lib/constants'
 import Icon from './Icons'
 import SecureImg from './SecureImg'
+import MessageReports from './MessageReports'
 
 // Onglet Chat : tchat d'équipe en temps réel (Supabase Realtime), une conversation par équipe.
 export default function ChatScreen({ user, profil, isAdmin, isMobile, myTeams, chatTeamId, onSelectTeam, unreadCounts, markChatRead, showToast }) {
   const [chatMessages, setChatMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
+  const [reporting, setReporting] = useState(null)
+  const [reportReason, setReportReason] = useState('')
 
   useEffect(() => {
     if (!chatTeamId && myTeams.length > 0) onSelectTeam(myTeams[0].id)
@@ -51,18 +54,32 @@ export default function ChatScreen({ user, profil, isAdmin, isMobile, myTeams, c
     setChatMessages(prev => prev.filter(m => m.id !== id))
   }
 
+  // Signalement : le staff de l'équipe est prévenu, l'auteur du message ne sait pas qui l'a signalé.
+  const reportMessage = async (id) => {
+    const { error } = await supabase.rpc('report_message', { p_message_id: id, p_reason: reportReason })
+    setReporting(null); setReportReason('')
+    showToast(error ? '❌ ' + error.message : "✅ Message signalé au staff de l'équipe")
+  }
+
+  // Bandeau des signalements à traiter : ne s'affiche que pour le staff, quand il y en a.
+  const moderation = <MessageReports teams={myTeams} compact />
+
   if (myTeams.length === 0) {
     return (
-      <div style={{ border: '1px dashed ' + C.border, borderRadius: 14, padding: '32px 20px', textAlign: 'center', color: C.muted, fontSize: 14 }}>
-        <Icon name="chat" size={28} style={{ margin: '0 auto 12px' }} />
-        Rejoins une équipe pour accéder à son tchat
-      </div>
+      <>
+        {moderation}
+        <div style={{ border: '1px dashed ' + C.border, borderRadius: 14, padding: '32px 20px', textAlign: 'center', color: C.muted, fontSize: 14 }}>
+          <Icon name="chat" size={28} style={{ margin: '0 auto 12px' }} />
+          Rejoins une équipe pour accéder à son tchat
+        </div>
+      </>
     )
   }
   const activeTeamId = myTeams.some(t => t.id === chatTeamId) ? chatTeamId : myTeams[0].id
   const activeTeam = myTeams.find(t => t.id === activeTeamId)
   return (
     <div>
+      {moderation}
       {myTeams.length > 1 && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
           {myTeams.map(team => {
@@ -101,7 +118,23 @@ export default function ChatScreen({ user, profil, isAdmin, isMobile, myTeams, c
                 </div>
                 <div className="mono" style={{ fontSize: 11, color: C.muted, marginTop: 2, textAlign: mine ? 'right' : 'left' }}>
                   {new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                  {!mine && reporting !== m.id && (
+                    <button onClick={() => { setReporting(m.id); setReportReason('') }} aria-label="Signaler ce message"
+                      style={{ background: 'none', border: 'none', color: C.muted, fontSize: 11, cursor: 'pointer', padding: '0 0 0 8px', textDecoration: 'underline' }}>Signaler</button>
+                  )}
                 </div>
+                {reporting === m.id && (
+                  <div role="dialog" aria-label="Signaler ce message" style={{ marginTop: 6, background: C.card, border: '1px solid ' + C.gold + '60', borderRadius: 10, padding: 10 }}>
+                    <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, marginBottom: 8 }}>Le staff de l'équipe sera prévenu. L'auteur du message ne saura pas qui l'a signalé.</div>
+                    <textarea value={reportReason} onChange={e => setReportReason(e.target.value)} maxLength={500} rows={2} placeholder="Motif (facultatif)"
+                      aria-label="Motif du signalement"
+                      style={{ width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 8, padding: '6px 10px', color: C.text, fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 8 }} />
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={() => setReporting(null)} style={{ flex: 1, padding: 8, borderRadius: 8, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer' }}>Annuler</button>
+                      <button onClick={() => reportMessage(m.id)} style={{ flex: 1, padding: 8, borderRadius: 8, border: 'none', background: C.gold, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Envoyer le signalement</button>
+                    </div>
+                  </div>
+                )}
               </div>
               {(mine || isAdmin) && (
                 <button onClick={() => deleteChatMessage(m.id)}

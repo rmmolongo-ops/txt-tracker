@@ -35,6 +35,8 @@ jest.mock('../../lib/supabase', () => ({
       if (name === 'delete_user_as_admin') { mockDeleted.push(args.target_user_id); return Promise.resolve({ error: null }) }
       return Promise.resolve({ data: null })
     },
+    // Demandes de suppression de compte : Léo (u2) en a déposé une.
+    from: () => ({ select: () => Promise.resolve({ data: [{ user_id: 'u2', reason: 'Je quitte le club', requested_at: '2026-10-21T08:00:00Z' }] }) }),
     auth: { resend: (args) => { mockResends.push(args); return Promise.resolve({ error: null }) } },
   },
 }))
@@ -64,7 +66,15 @@ test('un compte qui n’est pas super admin voit « Accès refusé », sans aucu
 test('le super admin voit les sections du back-office', async () => {
   mockIsAdmin = true
   await render(<Backoffice user={{ id: 'moi', email: 'ralph@test.fr' }} onSignOut={jest.fn()} />)
-  ;["Vue d'ensemble", 'Comptes', 'Statistiques', 'Erreurs'].forEach(t => expect(buttonWithText(t)).toBeDefined())
+  ;["Vue d'ensemble", 'Comptes', 'Statistiques', 'Signalements', 'Erreurs'].forEach(t => expect(buttonWithText(t)).toBeDefined())
+})
+
+test('comptes : les demandes de suppression sont signalées et filtrables, avec la raison', async () => {
+  await render(<BackofficeUsers currentUserId="moi" />)
+  await act(async () => { buttonWithText('Suppression demandée (1)').click() })
+  expect(container.textContent).toContain('joueur@test.fr')
+  expect(container.textContent).not.toContain('coach@test.fr')
+  expect(container.textContent).toContain('Je quitte le club')
 })
 
 test('comptes : filtres non confirmés / plusieurs clubs, et pas de suppression de son propre compte', async () => {

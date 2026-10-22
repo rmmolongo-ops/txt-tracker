@@ -4,6 +4,7 @@ import { C, DEFAULT_PROFIL } from '../lib/constants'
 import Icon from './Icons'
 import { THEME_OPTIONS } from '../lib/theme'
 import SecureImg from './SecureImg'
+import AccountDeletionRequest from './AccountDeletionRequest'
 
 // Onglet Profil : photo, infos joueur (consultation / édition), équipes rejointes, installation de l'appli.
 export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs = [], availableTeams, myTeamIds, myTeamRoles = {}, isStandalone, handleInstall, isMobile, showToast, createClubInvite, theme = 'dark', onThemeChange = () => {} }) {
@@ -180,6 +181,7 @@ export default function ProfilScreen({ user, onSignOut, profil, setProfil, clubs
             style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid ' + C.border, cursor: 'pointer', fontWeight: 500, fontSize: 14, background: 'transparent', color: C.muted, marginTop: 10 }}>
             Déconnexion
           </button>
+          <AccountDeletionRequest user={user} showToast={showToast} />
         </div>
       ) : (
         <div style={{ maxWidth: isMobile ? '100%' : 480, margin: '0 auto' }}>
