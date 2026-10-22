@@ -8,6 +8,8 @@ import ProfilScreen from './ProfilScreen'
 import KpiScreen from './KpiScreen'
 import StatsScreen from './StatsScreen'
 import SeancesScreen from './SeancesScreen'
+import { toDateStr } from '../lib/stats'
+import { dayCodeOf } from '../lib/planning'
 
 const MESSAGES = [
   { id: 'msg1', team_id: 't1', user_id: 'u2', content: 'Entraînement à 18h', sender_prenom: 'Kenji', created_at: '2026-09-24T10:00:00Z' },
@@ -176,13 +178,36 @@ describe('StatsScreen', () => {
 })
 
 describe('SeancesScreen', () => {
-  test('sans programme d’équipe : programme perso de la semaine, validation d’une séance', async () => {
+  const team = { id: 't1', name: 'U15 A' }
+  const today = toDateStr(new Date())
+
+  test('rien de planifié : message d’attente, plus de programme codé en dur', async () => {
+    await render(<SeancesScreen myTeams={[team]} getProgramForDate={() => null} getProgramsForTeam={() => []} isSeanceDone={() => false} toggleSeance={jest.fn()} />)
+    expect(container.textContent).toContain('Rien de prévu pour le moment')
+    expect(container.textContent).not.toContain('Explosivité')
+  })
+
+  test('sans équipe : invite à en rejoindre une', async () => {
+    await render(<SeancesScreen myTeams={[]} getProgramForDate={() => null} getProgramsForTeam={() => []} isSeanceDone={() => false} toggleSeance={jest.fn()} />)
+    expect(container.textContent).toContain('Rejoins une équipe')
+  })
+
+  test('entraînement du calendrier du coach : affiché dans la semaine et validable pour l’équipe', async () => {
     const toggleSeance = jest.fn()
-    await render(<SeancesScreen myTeams={[]} getProgramForDate={() => null} getProgramsForTeam={() => []} isSeanceDone={() => false} toggleSeance={toggleSeance} />)
-    expect(container.textContent).toContain('LUN')
-    expect(container.textContent).toContain('Explosivité & Vitesse')
-    await act(async () => { container.querySelector('[style*="cursor: pointer"]').click() })
+    const events = [{ id: 'e1', team_id: 't1', date: today, type: 'entrainement', label: 'Jeu de passes', duration: '1h30', objectif: 'Conserver', blocs: [{ titre: 'Rondo', duree: '15 min', exercices: ['4 contre 2'] }] }]
+    await render(<SeancesScreen myTeams={[team]} events={events} getProgramForDate={() => null} getProgramsForTeam={() => []} isSeanceDone={() => false} toggleSeance={toggleSeance} />)
+    expect(container.textContent).toContain('Jeu de passes')
+    expect(container.textContent).toContain('Calendrier')
+    await act(async () => { container.querySelector('[role="button"]').click() })
+    expect(container.textContent).toContain('4 contre 2')
     await act(async () => { buttonWithText('Valider cette séance').click() })
-    expect(toggleSeance).toHaveBeenCalledWith('LUN')
+    expect(toggleSeance).toHaveBeenCalledWith(dayCodeOf(today), today, 't1')
+  })
+
+  test('match du calendrier : affiché pour information, sans bouton de validation', async () => {
+    const events = [{ id: 'm1', team_id: 't1', date: today, type: 'match', label: 'Match vs Clamart', blocs: [] }]
+    await render(<SeancesScreen myTeams={[team]} events={events} getProgramForDate={() => null} getProgramsForTeam={() => []} isSeanceDone={() => false} toggleSeance={jest.fn()} />)
+    expect(container.textContent).toContain('Match vs Clamart')
+    expect(container.querySelector('[role="button"]')).toBeNull()
   })
 })

@@ -49,40 +49,14 @@ export const KPI_CONFIG = [
   { id: 'sommeil', label: 'Qualité Sommeil', unit: '/10', lower: false, category: 'mental' },
 ]
 
-export const SESSIONS = [
-  { day: 'LUN', label: 'Explosivité & Vitesse', duration: '1h15', icon: '💥', color: '#f59e0b', objectif: 'Explosivité et vitesse', blocs: [
-    { titre: 'Séance collective simulée', duree: '30 min', exercices: ['Passes courtes en mouvement — pied droit / pied gauche', 'Réception et contrôle orienté vers l\'avant'] },
-    { titre: 'Sprints et accélérations', duree: '15 min', exercices: ['6 × 20m départ arrêté', '6 × 30m départ en mouvement', 'Récupération 45 sec entre chaque'] },
-    { titre: 'Conduite de balle rapide', duree: '30 min', exercices: ['Slalom entre plots sur 20m', 'Conduite gauche / droite en alternance', 'Accélération finale après le dernier plot'] },
-  ]},
-  { day: 'MAR', label: 'Élimination & Duel', duration: '1h', icon: '⚔️', color: '#ef4444', objectif: 'Élimination et duel', blocs: [
-    { titre: 'Technique individuelle', duree: '30 min', exercices: ['Travail de crochets intérieur / extérieur', 'Feintes de corps devant un plot fixe', 'Roulette et changements de direction'] },
-    { titre: 'Travail 1v1', duree: '15 min', exercices: ['Face à un plot ou simulation défenseur', 'Élimination côté gauche en priorité', 'Variante : élimination côté droit'] },
-    { titre: 'Dribbles haute intensité', duree: '15 min', exercices: ['Circuit de dribbles avec 6 plots', 'Vitesse d\'exécution progressive', 'Chrono sur chaque passage'] },
-  ]},
-  { day: 'MER', label: 'Agilité & Appuis', duration: '45min', icon: '🔄', color: '#3b82f6', objectif: 'Agilité et appuis', blocs: [
-    { titre: 'Exercices d\'agilité', duree: '20 min', exercices: ['Échelle de rythme : pas chassés, un pied / deux pieds', 'Sauts latéraux sur ligne', 'Changements de direction en T (5m × 5m)'] },
-    { titre: 'Renforcement bas du corps', duree: '15 min', exercices: ['Squats sans charge : 3 × 15', 'Fentes avant alternées : 3 × 10', 'Mollets : 3 × 20'] },
-    { titre: 'Technique individuelle', duree: '10 min', exercices: ['Jonglerie pied droit / pied gauche', 'Pieds uniquement — pas d\'épaule jusqu\'au 17 juin'] },
-  ]},
-  { day: 'JEU', label: 'Finition & Efficacité', duration: '1h', icon: '🎯', color: '#10b981', objectif: 'Finition et efficacité', blocs: [
-    { titre: 'Séance collective simulée', duree: '30 min', exercices: ['Passes et combinaisons à 2 ou 3 joueurs', 'Appels de balle et décrochages'] },
-    { titre: 'Répétition devant le but', duree: '20 min', exercices: ['Frappes en mouvement depuis 16m', 'Alternance pied droit / pied gauche', 'Centres rentrés côté gauche'] },
-    { titre: 'Placements et appels', duree: '10 min', exercices: ['Marche rapide sur terrain — visualiser les déplacements', 'Timing des appels en profondeur'] },
-  ]},
-  { day: 'VEN', label: 'Prise de Décision', duration: '1h', icon: '🧠', color: '#8b5cf6', objectif: 'Prise de décision rapide', blocs: [
-    { titre: 'Séance collective', duree: '20 min', exercices: ['Rondos à 4-5 joueurs si possible', 'Jeu à une touche — vitesse de décision'] },
-    { titre: 'Matchs à effectif réduit', duree: '20 min', exercices: ['2v2 ou 3v3 sans contact physique', 'Accent sur vitesse de passe et premier contrôle'] },
-    { titre: 'Passes et premier contrôle', duree: '20 min', exercices: ['Passes contre un mur : contrôle orienté vers l\'avant', 'Enchaînement contrôle + frappe en 2 touches'] },
-  ]},
-  { day: 'SAM', label: 'Performance', duration: '45min', icon: '🏆', color: '#f97316', objectif: 'Performance en compétition', blocs: [
-    { titre: 'Échauffement intense', duree: '20 min', exercices: ['Footing léger 10 min', 'Étirements dynamiques', 'Touches de balle légères'] },
-    { titre: 'Match ou simulation', duree: '25 min', exercices: ['Jeu libre à effectif réduit sans contact', 'OU analyse vidéo des déplacements de son poste'] },
-  ]},
-  { day: 'DIM', label: 'Récupération Active', duration: '30min', icon: '🧘', color: '#06b6d4', objectif: 'Récupération active', blocs: [
-    { titre: 'Récupération douce', duree: '30 min', exercices: ['Marche rapide ou vélo léger : 15 min', 'Étirements doux complets : 10 min', 'Mobilité épaule légère si autorisée : 5 min'] },
-  ]},
-]
+// Séance type d'un nouveau programme d'équipe, que le coach adapte (jours, contenu).
+export const newProgramSession = (day) => ({ day, label: 'Entraînement', duration: '1h10', icon: '⚽', color: '#3b82f6', objectif: '', blocs: [
+  { titre: 'Échauffement', duree: '15 min', exercices: [''] },
+  { titre: 'Corps de séance', duree: '45 min', exercices: [''] },
+  { titre: 'Retour au calme', duree: '10 min', exercices: [''] },
+]})
+export const DEFAULT_PROGRAM_SESSIONS = () => ['LUN', 'MER', 'VEN'].map(newProgramSession)
+export const DAY_LABELS = { LUN: 'Lundi', MAR: 'Mardi', MER: 'Mercredi', JEU: 'Jeudi', VEN: 'Vendredi', SAM: 'Samedi', DIM: 'Dimanche' }
 
 export const DEFAULT_PROFIL = { nom: '', prenom: '', surnom: 'TxT', club: '', division: '', poste1: '', poste2: '', photo_url: '', dashboard_kpis: null }
 export const DASHBOARD_KPIS_MAX = 4

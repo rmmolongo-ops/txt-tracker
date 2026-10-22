@@ -129,4 +129,23 @@ describe('DashboardJoueur', () => {
     expect(setSelectedKpi).toHaveBeenCalledWith('sprint30')
     expect(changeTab).toHaveBeenCalledWith('stats')
   })
+
+  test('rien de prévu : pas de pourcentage trompeur ni de séance codée en dur', async () => {
+    await render(<DashboardJoueur {...props} getWeekCompliance={() => null} />)
+    expect(container.textContent).toContain('—')
+    expect(container.textContent).toContain("Rien de prévu aujourd'hui")
+    expect(container.textContent).not.toContain('Explosivité')
+  })
+
+  test('entraînement du jour planifié par le coach : affiché et validable', async () => {
+    const today = new Date(); const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    const toggleSeance = jest.fn()
+    const events = [{ id: 'e1', team_id: 't1', date: dateStr, type: 'entrainement', label: 'Finition', duration: '1h', objectif: '', blocs: [] }]
+    await render(<DashboardJoueur {...props} availableTeams={[{ id: 't1', name: 'U15 A' }]} myTeamIds={new Set(['t1'])} events={events} toggleSeance={toggleSeance} />)
+    expect(container.textContent).toContain('Finition')
+    expect(container.textContent).toContain('0/1')
+    await act(async () => { container.querySelector('[role="button"]').click() })
+    await act(async () => { buttonWithText('Valider cette séance').click() })
+    expect(toggleSeance).toHaveBeenCalledWith(expect.any(String), dateStr, 't1')
+  })
 })

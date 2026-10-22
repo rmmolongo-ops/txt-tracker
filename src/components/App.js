@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase'
 import { getDeferredPrompt } from '../lib/installPrompt'
 import { toDateStr, latestKpisAll, activeAdminTeamId } from '../lib/stats'
 import { buildKpiCatalog, activeKpisForTeam, activeKpisForTeams, archivedKpisForTeam as archivedKpisFor, parseMesure, newKpiKey } from '../lib/kpis'
-import { C, TEAM_COLORS, KPI_CONFIG, SESSIONS, DEFAULT_PROFIL, LEADERSHIP_ROLES, GHOST_PREFIX, isGhostId, ghostRealId, seanceRowKey } from '../lib/constants'
+import { C, TEAM_COLORS, KPI_CONFIG, DEFAULT_PROGRAM_SESSIONS, DAY_ORDER, DAY_LABELS, newProgramSession, DEFAULT_PROFIL, LEADERSHIP_ROLES, GHOST_PREFIX, isGhostId, ghostRealId, seanceRowKey } from '../lib/constants'
+import { weekCompliance } from '../lib/planning'
 import FicheJoueur from './FicheJoueur'
 import Icon from './Icons'
 import ChatScreen from './ChatScreen'
@@ -90,6 +91,7 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
   const [libraryPickerFor, setLibraryPickerFor] = useState(null)
   const [viewDay, setViewDay] = useState(null)
   const [dailySessions, setDailySessions] = useState([])
+  const [teamEvents, setTeamEvents] = useState([])
   const [dailyPickerFor, setDailyPickerFor] = useState(null)
   const [teamSeances, setTeamSeances] = useState([])
   const [suiviSelected, setSuiviSelected] = useState({})
@@ -809,6 +811,19 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
     loadDailySessions(coachTeamId)
   }, [tab, coachTeamId])
 
+  // Calendrier des équipes du joueur (entraînements et matchs planifiés par le coach), rechargé à
+  // l'ouverture de l'accueil ou du programme. Huit semaines d'historique suffisent pour l'assiduité.
+  useEffect(() => {
+    if ((tab !== 'dashboard' && tab !== 'seances') || myTeamIds.size === 0) return
+    let cancelled = false
+    const since = new Date(); since.setDate(since.getDate() - 56)
+    supabase.from('team_daily_sessions')
+      .select('id, team_id, date, type, label, icon, color, duration, objectif, blocs, resultat, score_pour, score_contre, created_at')
+      .in('team_id', [...myTeamIds]).gte('date', toDateStr(since))
+      .then(({ data }) => { if (!cancelled && data) setTeamEvents(data) })
+    return () => { cancelled = true }
+  }, [tab, myTeamIds])
+
   const assignDailySession = async (teamId, dateStr, template) => {
     const payload = {
       team_id: teamId, date: dateStr, template_id: template.id,
@@ -918,6 +933,7 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
     if (!draft.name.trim()) { showToast('❌ Donne un nom au programme'); return }
     if (!draft.start_date || !draft.end_date) { showToast('❌ Renseigne les dates de début et de fin'); return }
     if (draft.end_date < draft.start_date) { showToast('❌ La date de fin doit être après la date de début'); return }
+    if (draft.sessions.length === 0) { showToast('❌ Ajoute au moins un jour d\'entraînement'); return }
     const overlap = programsCatalog.some(p => p.team_id === teamId && p.id !== programId && draft.start_date <= p.end_date && draft.end_date >= p.start_date)
     if (overlap) { showToast('❌ Ce programme chevauche un programme existant pour cette équipe'); return }
     const clean = {
@@ -975,19 +991,8 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
     const withConfig = myTeams.find(t => t.dashboard_kpis && t.dashboard_kpis.length > 0)
     return withConfig ? withConfig.dashboard_kpis : ['sprint30', 'jonglerie_g', 'precision', 'scan']
   }, [profil.dashboard_kpis, availableTeams, myTeamIds])
-  const isSeanceDone = useCallback((day, dateStr, teamId) => { const targetDate = dateStr || new Date().toISOString().split('T')[0]; const targetTeamId = teamId || null; return seances.some(s => s.jour === day && s.date === targetDate && s.team_id === targetTeamId) }, [seances])
-  const getWeekCompliance = useCallback(() => {
-    let done = 0, total = 0
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(); d.setDate(d.getDate() - i)
-      const dateStr = d.toISOString().split('T')[0]
-      for (const s of SESSIONS) {
-        total++
-        if (seances.some(x => x.jour === s.day && x.date === dateStr && x.team_id === null)) done++
-      }
-    }
-    return Math.round((done / total) * 100)
-  }, [seances])
+  const isSeanceDone = useCallback((day, dateStr, teamId) => { const targetDate = dateStr || toDateStr(new Date()); const targetTeamId = teamId || null; return seances.some(s => s.jour === day && s.date === targetDate && s.team_id === targetTeamId) }, [seances])
+  const getWeekCompliance = useCallback(() => weekCompliance({ teams: myTeams, seances, getProgramForDate, events: teamEvents }), [myTeams, seances, getProgramForDate, teamEvents])
   const todayStr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
 
   const leadershipTeams = useMemo(() => {
@@ -1047,7 +1052,7 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div style={{ fontWeight: 700, fontSize: 15 }}>Catalogue de programmes</div>
-            <button onClick={() => { setProgDraft({ name: '', start_date: '', end_date: '', sessions: JSON.parse(JSON.stringify(SESSIONS)) }); setEditingProgramId(null); setEditingProg(true) }}
+            <button onClick={() => { setProgDraft({ name: '', start_date: '', end_date: '', sessions: DEFAULT_PROGRAM_SESSIONS() }); setEditingProgramId(null); setEditingProg(true) }}
               style={{ padding: '9px 16px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
               + Nouveau programme
             </button>
@@ -1129,7 +1134,11 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
             <div key={s.day} style={{ background: C.card, borderRadius: 14, marginBottom: 12, border: '1px solid ' + C.border, overflow: 'hidden' }}>
               {/* En-tête du jour */}
               <div style={{ borderBottom: '1px solid ' + C.border, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span className="mono" style={{ width: 42, height: 42, borderRadius: 10, background: C.bg, border: '1px solid ' + C.border, color: C.muted, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{s.day}</span>
+                <select value={s.day} aria-label="Jour de la séance"
+                  onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].day = e.target.value; d.sessions.sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day)); setProgDraft(d) }}
+                  style={{ background: C.bg, border: '1px solid ' + C.border, borderRadius: 10, color: C.text, fontSize: 13, fontWeight: 600, padding: '10px 6px', flexShrink: 0, cursor: 'pointer' }}>
+                  {DAY_ORDER.filter(code => code === s.day || !progDraft.sessions.some(x => x.day === code)).map(code => <option key={code} value={code}>{DAY_LABELS[code]}</option>)}
+                </select>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <input value={s.label}
                     onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].label = e.target.value; setProgDraft(d) }}
@@ -1138,6 +1147,9 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
                 <input value={s.duration}
                   onChange={e => { const d = JSON.parse(JSON.stringify(progDraft)); d.sessions[si].duration = e.target.value; setProgDraft(d) }}
                   style={{ background: 'transparent', border: '1px solid ' + C.border, borderRadius: 6, color: C.muted, fontSize: 12, padding: '4px 8px', outline: 'none', width: 65, textAlign: 'center', fontWeight: 500 }} />
+                <button onClick={() => setProgDraft(d => ({ ...d, sessions: d.sessions.filter((_, i) => i !== si) }))}
+                  aria-label={`Retirer la séance du ${DAY_LABELS[s.day].toLowerCase()}`}
+                  style={{ padding: '6px 8px', background: 'transparent', color: C.red, border: '1px solid ' + C.red + '40', borderRadius: 8, display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}><Icon name="trash" size={14} /></button>
               </div>
 
               {/* Objectif + blocs */}
@@ -1172,6 +1184,16 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
               </div>
             </div>
           ))}
+
+          {progDraft.sessions.length < DAY_ORDER.length && (
+            <button onClick={() => setProgDraft(d => {
+              const free = DAY_ORDER.find(code => !d.sessions.some(x => x.day === code))
+              return { ...d, sessions: [...d.sessions, newProgramSession(free)].sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day)) }
+            })}
+              style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px dashed ' + C.border, background: 'transparent', color: C.accentGlow, fontSize: 14, fontWeight: 500, cursor: 'pointer', marginBottom: 12 }}>
+              + Ajouter un jour
+            </button>
+          )}
 
           {libraryPickerFor && (
             <div onClick={() => setLibraryPickerFor(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
@@ -1224,8 +1246,8 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
               setDailyPickerFor={setDailyPickerFor} setEquipeTab={setEquipeTab} setViewDay={setViewDay} updateDailySession={updateDailySession} viewDay={viewDay} />
           ) : (
             <DashboardJoueur
-              availableTeams={availableTeams} changeTab={changeTab} getDashboardKpiIds={getDashboardKpiIds} getLatest={getLatest} getProgramForDate={getProgramForDate}
-              getProgramsForTeam={getProgramsForTeam} getProgress={getProgress} getWeekCompliance={getWeekCompliance} inputValues={inputValues} isMobile={isMobile}
+              availableTeams={availableTeams} changeTab={changeTab} events={teamEvents} getDashboardKpiIds={getDashboardKpiIds} getLatest={getLatest} getProgramForDate={getProgramForDate}
+              getProgress={getProgress} getWeekCompliance={getWeekCompliance} inputValues={inputValues} isMobile={isMobile}
               isSeanceDone={isSeanceDone} myTeamIds={myTeamIds} saveDashboardKpis={saveDashboardKpis} saveMesure={saveMesure} setInputValues={setInputValues}
               setSelectedKpi={setSelectedKpi} toggleSeance={toggleSeance} kpis={myKpiUnion} />
           )}
@@ -1234,7 +1256,7 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
 
       {/* ── SEANCES ── */}
       {tab === 'seances' && (
-        <SeancesScreen myTeams={myTeams} getProgramForDate={getProgramForDate} getProgramsForTeam={getProgramsForTeam}
+        <SeancesScreen myTeams={myTeams} getProgramForDate={getProgramForDate} getProgramsForTeam={getProgramsForTeam} events={teamEvents}
           isSeanceDone={isSeanceDone} toggleSeance={toggleSeance} />
       )}
 

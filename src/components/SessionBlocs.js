@@ -5,8 +5,7 @@ import Icon from './Icons'
 export const renderSessionBlocs = (s, expanded, done, onToggle) => expanded && (
   <div style={{ background: C.card, padding: '0 16px 16px' }}>
     <div style={{ borderTop: '1px solid ' + C.border, padding: '12px 0', display: 'flex', alignItems: 'center', gap: 8, color: C.accentGlow }}>
-      <Icon name="target" size={16} />
-      <span style={{ fontSize: 13, fontWeight: 500 }}>Objectif : {s.objectif}</span>
+      {s.objectif && <><Icon name="target" size={16} /><span style={{ fontSize: 13, fontWeight: 500 }}>Objectif : {s.objectif}</span></>}
     </div>
     {s.blocs.map((bloc, bi) => (
       <div key={bi} style={{ marginBottom: 12 }}>

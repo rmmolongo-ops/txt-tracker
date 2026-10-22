@@ -1,24 +1,30 @@
-import { Fragment, useState } from 'react'
-import { C, KPI_CONFIG, SESSIONS, DASHBOARD_KPIS_MAX, DAY_MAP } from '../lib/constants'
+import { useState } from 'react'
+import { C, KPI_CONFIG, DASHBOARD_KPIS_MAX } from '../lib/constants'
 import { toDateStr } from '../lib/stats'
-import { renderSessionBlocs } from './SessionBlocs'
-import Icon from './Icons'
+import { plannedForDate, nextPlanned } from '../lib/planning'
+import PlanCard from './PlanCard'
 import SecureImg from './SecureImg'
 
-// Accueil, vue joueur : séance du jour, KPIs clés, régularité, saisie rapide.
+// Accueil, vue joueur : séance du jour (programme d'équipe ou calendrier du coach), KPIs clés, régularité, saisie rapide.
 export default function DashboardJoueur({
-  availableTeams, changeTab, getDashboardKpiIds, getLatest, getProgramForDate, getProgramsForTeam,
+  availableTeams, changeTab, events = [], getDashboardKpiIds, getLatest, getProgramForDate,
   getProgress, getWeekCompliance, inputValues, isMobile, isSeanceDone, myTeamIds,
   saveDashboardKpis, saveMesure, setInputValues, setSelectedKpi, toggleSeance, kpis = KPI_CONFIG,
 }) {
   const [expandedDayDashboard, setExpandedDayDashboard] = useState(null)
   const [editingDashboardKpis, setEditingDashboardKpis] = useState(false)
   const [dashboardKpisDraft, setDashboardKpisDraft] = useState([])
-  const todayDow = new Date().getDay()
 
   const handleSaveDashboardKpis = async (ids) => {
     if (await saveDashboardKpis(ids)) setEditingDashboardKpis(false)
   }
+
+  const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
+  const todayDateStr = toDateStr(new Date())
+  const todayEntries = plannedForDate({ teams: myTeams, dateStr: todayDateStr, getProgramForDate, events })
+  const todayTrainings = todayEntries.filter(e => e.kind !== 'match')
+  const todayDone = todayTrainings.filter(e => isSeanceDone(e.day, todayDateStr, e.team.id)).length
+  const compliance = getWeekCompliance()
 
   return (
   <>
@@ -26,60 +32,48 @@ export default function DashboardJoueur({
     <div>
       <div style={{ fontSize: 13, color: C.muted }}>Assiduité sur 7 jours</div>
       <div className="mono" style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>
-        <span style={{ color: C.green, fontWeight: 600 }}>{SESSIONS.filter(s => isSeanceDone(s.day)).length}</span> séance(s) validée(s) aujourd'hui
+        {todayTrainings.length === 0
+          ? 'Pas d’entraînement prévu aujourd’hui'
+          : <><span style={{ color: C.green, fontWeight: 600 }}>{todayDone}/{todayTrainings.length}</span> séance(s) validée(s) aujourd'hui</>}
       </div>
     </div>
-    <div role="img" aria-label={'Assiduité sur 7 jours : ' + getWeekCompliance() + ' %'} style={{ position: 'relative', width: 78, height: 78, flexShrink: 0 }}>
+    <div role="img" aria-label={compliance == null ? 'Assiduité sur 7 jours : aucun entraînement prévu' : 'Assiduité sur 7 jours : ' + compliance + ' %'} style={{ position: 'relative', width: 78, height: 78, flexShrink: 0 }}>
       <svg width="78" height="78" viewBox="0 0 78 78" style={{ display: 'block' }}>
         <circle cx="39" cy="39" r="33" fill="none" stroke={C.surface} strokeWidth="6" />
         <circle cx="39" cy="39" r="33" fill="none" stroke={C.accentGlow} strokeWidth="6" strokeLinecap="round"
-          strokeDasharray={2 * Math.PI * 33} strokeDashoffset={2 * Math.PI * 33 * (1 - Math.min(100, Math.max(0, getWeekCompliance())) / 100)}
+          strokeDasharray={2 * Math.PI * 33} strokeDashoffset={2 * Math.PI * 33 * (1 - Math.min(100, Math.max(0, compliance || 0)) / 100)}
           transform="rotate(-90 39 39)" style={{ transition: 'stroke-dashoffset 0.5s' }} />
       </svg>
-      <span className="mono" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 18, fontWeight: 600 }}>{getWeekCompliance()}%</span>
+      <span className="mono" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 18, fontWeight: 600 }}>{compliance == null ? '—' : compliance + '%'}</span>
     </div>
   </div>
 
   <div style={{ fontSize: 13, color: C.muted, marginBottom: 10, fontWeight: 500 }}>Programme du jour</div>
-  {(() => {
-    const myTeamsWithProgram = availableTeams.filter(t => myTeamIds.has(t.id) && getProgramsForTeam(t.id).length > 0)
-    const todayDayCode = Object.keys(DAY_MAP).find(k => DAY_MAP[k] === todayDow)
-    let todaySessions = SESSIONS.filter(s => s.day === todayDayCode)
-    let todayTeam = null
-    let toggleTeamId = null
-    if (myTeamsWithProgram.length === 1) {
-      const program = getProgramForDate(myTeamsWithProgram[0].id, toDateStr(new Date()))
-      const s = program?.sessions.find(x => x.day === todayDayCode)
-      if (s) { todaySessions = [s]; todayTeam = myTeamsWithProgram[0]; toggleTeamId = myTeamsWithProgram[0].id }
-      else todaySessions = []
-    }
-    if (todaySessions.length === 0) {
-      return <div style={{ border: '1px dashed ' + C.border, borderRadius: 14, padding: '20px 16px', textAlign: 'center', color: C.muted, fontSize: 14, marginBottom: 16 }}>Va dans « Programme » pour valider ton entraînement</div>
-    }
-    return todaySessions.map(s => {
-      const done = isSeanceDone(s.day, undefined, toggleTeamId); const expanded = expandedDayDashboard === s.day
-      return (
-        <div key={s.day} style={{ marginBottom: 10, borderRadius: 14, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '50' : expanded ? C.accent + '60' : C.border) }}>
-          <div onClick={() => setExpandedDayDashboard(expanded ? null : s.day)} role="button" tabIndex={0}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedDayDashboard(expanded ? null : s.day) } }}
-            style={{ background: done ? C.green + '14' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-            <div className="mono" style={{ width: 42, height: 42, borderRadius: 10, background: C.bg, border: '1px solid ' + (done ? C.green + '50' : C.border), color: done ? C.green : C.muted, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{done ? <Icon name="check" size={18} /> : s.day}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: 15 }}>{s.label}</div>
-              <div style={{ fontSize: 12, color: C.muted }}>{s.duration} · {todayTeam ? todayTeam.name : s.blocs.length + ' blocs'}</div>
-            </div>
-            <Icon name="chevron" size={18} style={{ color: C.muted, flexShrink: 0, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+  {todayEntries.length === 0 ? (() => {
+    const next = nextPlanned({ teams: myTeams, getProgramForDate, events })
+    return (
+      <div style={{ border: '1px dashed ' + C.border, borderRadius: 14, padding: '20px 16px', textAlign: 'center', color: C.muted, fontSize: 14, marginBottom: 16 }}>
+        Rien de prévu aujourd'hui
+        {next && (
+          <div style={{ fontSize: 13, marginTop: 6 }}>
+            Prochain rendez-vous : <span style={{ color: C.text, fontWeight: 500 }}>{next.s.label}</span>, {new Date(next.dateStr + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
           </div>
-          {renderSessionBlocs(s, expanded, done, () => toggleSeance(s.day, undefined, toggleTeamId))}
-        </div>
-      )
-    })
-  })()}
+        )}
+      </div>
+    )
+  })() : todayEntries.map(entry => {
+    const expanded = expandedDayDashboard === entry.key
+    return (
+      <PlanCard key={entry.key} entry={entry} expanded={expanded}
+        onExpand={() => setExpandedDayDashboard(expanded ? null : entry.key)}
+        done={isSeanceDone(entry.day, todayDateStr, entry.team.id)}
+        onToggle={() => toggleSeance(entry.day, todayDateStr, entry.team.id)} />
+    )
+  })}
 
   <div style={{ height: 8 }} />
   <div style={{ fontSize: 13, color: C.muted, marginBottom: 10, fontWeight: 500 }}>Mes équipes</div>
   {(() => {
-    const myTeams = availableTeams.filter(t => myTeamIds.has(t.id))
     if (myTeams.length === 0) return (
       <div style={{ background: C.card, borderRadius: 14, padding: 16, textAlign: 'center', color: C.muted, fontSize: 13, marginBottom: 16, border: '1px solid ' + C.border }}>
         Tu n'as pas encore rejoint d'équipe. Rends-toi dans l'onglet Profil pour en rejoindre une.

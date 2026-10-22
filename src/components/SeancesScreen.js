@@ -1,46 +1,36 @@
 import { useState } from 'react'
-import { C, SESSIONS, DAY_ORDER } from '../lib/constants'
+import { C, DAY_ORDER } from '../lib/constants'
 import { toDateStr, getMonday } from '../lib/stats'
-import { renderSessionBlocs } from './SessionBlocs'
-import Icon from './Icons'
+import { plannedForDate } from '../lib/planning'
+import PlanCard from './PlanCard'
 
-// Onglet Programme : semaine d'entraînement du joueur (programmes d'équipe et programme perso), validation des séances.
+// Onglet Programme : semaine du joueur (programmes d'équipe et calendrier du coach), validation des séances.
 
-export default function SeancesScreen({ myTeams, getProgramForDate, getProgramsForTeam, isSeanceDone, toggleSeance }) {
+export default function SeancesScreen({ myTeams, getProgramForDate, getProgramsForTeam, events = [], isSeanceDone, toggleSeance }) {
   const [expandedDay, setExpandedDay] = useState(null)
   const [seancesWeekOffset, setSeancesWeekOffset] = useState(0)
 
-  const myTeamsWithProgram = myTeams.filter(t => getProgramsForTeam(t.id).length > 0)
+  const myTeamIdSet = new Set(myTeams.map(t => t.id))
+  const allProgs = myTeams.flatMap(t => getProgramsForTeam(t.id))
+  const myEvents = events.filter(e => myTeamIdSet.has(e.team_id))
 
-  if (myTeamsWithProgram.length === 0) {
+  if (allProgs.length === 0 && myEvents.length === 0) {
     return (
-      <div>
-        <div style={{ fontSize: 13, color: C.muted, marginBottom: 12, fontWeight: 500 }}>Programme de la semaine</div>
-        {SESSIONS.map(s => {
-          const done = isSeanceDone(s.day); const expanded = expandedDay === s.day
-          return (
-            <div key={s.day} style={{ marginBottom: 10, borderRadius: 14, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '50' : expanded ? C.accent + '60' : C.border) }}>
-              <div onClick={() => setExpandedDay(expanded ? null : s.day)} role="button" tabIndex={0}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedDay(expanded ? null : s.day) } }}
-                style={{ background: done ? C.green + '14' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                <div className="mono" style={{ width: 42, height: 42, borderRadius: 10, background: C.bg, border: '1px solid ' + (done ? C.green + '50' : C.border), color: done ? C.green : C.muted, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{done ? <Icon name="check" size={18} /> : s.day}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{s.label}</div>
-                  <div style={{ fontSize: 12, color: C.muted }}>{s.duration} · {s.blocs.length} blocs</div>
-                </div>
-                <Icon name="chevron" size={18} style={{ color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }} />
-              </div>
-              {renderSessionBlocs(s, expanded, done, () => toggleSeance(s.day))}
-            </div>
-          )
-        })}
+      <div style={{ border: '1px dashed ' + C.border, borderRadius: 14, padding: '28px 20px', textAlign: 'center' }}>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>Rien de prévu pour le moment</div>
+        <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
+          {myTeams.length === 0
+            ? "Rejoins une équipe (onglet Profil) pour retrouver ici les entraînements et matchs de ton coach."
+            : "Les entraînements et matchs planifiés par ton coach apparaîtront ici, avec le détail des séances à valider."}
+        </div>
       </div>
     )
   }
 
-  const allProgs = myTeamsWithProgram.flatMap(t => getProgramsForTeam(t.id))
-  const minDate = allProgs.reduce((acc, p) => p.start_date < acc ? p.start_date : acc, allProgs[0].start_date)
-  const maxDate = allProgs.reduce((acc, p) => p.end_date > acc ? p.end_date : acc, allProgs[0].end_date)
+  const todayStr = toDateStr(new Date())
+  const dates = [todayStr, ...allProgs.flatMap(p => [p.start_date, p.end_date]), ...myEvents.map(e => e.date)]
+  const minDate = dates.reduce((a, b) => b < a ? b : a)
+  const maxDate = dates.reduce((a, b) => b > a ? b : a)
 
   const weekMonday = getMonday(new Date())
   weekMonday.setDate(weekMonday.getDate() + seancesWeekOffset * 7)
@@ -58,7 +48,7 @@ export default function SeancesScreen({ myTeams, getProgramForDate, getProgramsF
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <button onClick={() => canGoPrev && setSeancesWeekOffset(o => o - 1)} disabled={!canGoPrev}
+        <button onClick={() => canGoPrev && setSeancesWeekOffset(o => o - 1)} disabled={!canGoPrev} aria-label="Semaine précédente"
           style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid ' + C.border, background: C.card, color: canGoPrev ? C.text : C.border, fontSize: 16, cursor: canGoPrev ? 'pointer' : 'default' }}>‹</button>
         <div style={{ textAlign: 'center' }}>
           <div className="mono" style={{ fontSize: 13, fontWeight: 600 }}>
@@ -68,27 +58,19 @@ export default function SeancesScreen({ myTeams, getProgramForDate, getProgramsF
             <button onClick={() => setSeancesWeekOffset(0)} style={{ background: 'none', border: 'none', color: C.accent, fontSize: 11, cursor: 'pointer', padding: 0, marginTop: 2 }}>Revenir à aujourd'hui</button>
           )}
         </div>
-        <button onClick={() => canGoNext && setSeancesWeekOffset(o => o + 1)} disabled={!canGoNext}
+        <button onClick={() => canGoNext && setSeancesWeekOffset(o => o + 1)} disabled={!canGoNext} aria-label="Semaine suivante"
           style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid ' + C.border, background: C.card, color: canGoNext ? C.text : C.border, fontSize: 16, cursor: canGoNext ? 'pointer' : 'default' }}>›</button>
       </div>
 
-      {weekDates.map(({ day, date, dateStr }) => {
+      {weekDates.map(({ date, dateStr }) => {
         const dateLabel = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })
-        const entries = myTeamsWithProgram
-          .map(team => {
-            const program = getProgramForDate(team.id, dateStr)
-            const s = program?.sessions.find(x => x.day === day)
-            return s ? { team, program, s } : null
-          })
-          .filter(Boolean)
+        const entries = plannedForDate({ teams: myTeams, dateStr, getProgramForDate, events: myEvents })
 
         if (entries.length === 0) {
           return (
-            <div key={dateStr} style={{ marginBottom: 10, borderRadius: 14, border: '1px dashed ' + C.border, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, opacity: 0.6 }}>
-              <div>
-                <div style={{ fontWeight: 500, fontSize: 13, textTransform: 'capitalize' }}>{dateLabel}</div>
-                <div style={{ fontSize: 12, color: C.muted }}>Hors programme</div>
-              </div>
+            <div key={dateStr} style={{ marginBottom: 10, borderRadius: 14, border: '1px dashed ' + C.border, padding: '12px 16px', opacity: 0.6 }}>
+              <div style={{ fontWeight: 500, fontSize: 13, textTransform: 'capitalize' }}>{dateLabel}</div>
+              <div style={{ fontSize: 12, color: C.muted }}>Rien de prévu</div>
             </div>
           )
         }
@@ -96,29 +78,13 @@ export default function SeancesScreen({ myTeams, getProgramForDate, getProgramsF
         return (
           <div key={dateStr} style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 6, textTransform: 'capitalize' }}>{dateLabel}</div>
-            {entries.map(({ team, program, s }) => {
-              const cardKey = dateStr + '_' + team.id
-              const done = isSeanceDone(day, dateStr, team.id); const expanded = expandedDay === cardKey
+            {entries.map(entry => {
+              const expanded = expandedDay === entry.key
               return (
-                <div key={cardKey} style={{ marginBottom: 10, borderRadius: 14, overflow: 'hidden', border: '1px solid ' + (done ? C.green + '50' : expanded ? C.accent + '60' : C.border) }}>
-                  <div onClick={() => setExpandedDay(expanded ? null : cardKey)} role="button" tabIndex={0}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedDay(expanded ? null : cardKey) } }}
-                    style={{ background: done ? C.green + '14' : C.card, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                    <div className="mono" style={{ width: 42, height: 42, borderRadius: 10, background: C.bg, border: '1px solid ' + (done ? C.green + '50' : C.border), color: done ? C.green : C.muted, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>{done ? <Icon name="check" size={18} /> : s.day}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>{s.label}</div>
-                      <div style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                        <span>{s.duration}</span>
-                        <span aria-hidden="true">·</span>
-                        <span style={{ color: C.text, fontWeight: 500 }}>{team.name}</span>
-                        <span aria-hidden="true">·</span>
-                        <span>{program.name}</span>
-                      </div>
-                    </div>
-                    <Icon name="chevron" size={18} style={{ color: C.muted, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }} />
-                  </div>
-                  {renderSessionBlocs(s, expanded, done, () => toggleSeance(day, dateStr, team.id))}
-                </div>
+                <PlanCard key={entry.key} entry={entry} expanded={expanded}
+                  onExpand={() => setExpandedDay(expanded ? null : entry.key)}
+                  done={isSeanceDone(entry.day, dateStr, entry.team.id)}
+                  onToggle={() => toggleSeance(entry.day, dateStr, entry.team.id)} />
               )
             })}
           </div>
