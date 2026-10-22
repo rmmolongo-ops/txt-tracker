@@ -6,12 +6,13 @@ import { toDateStr, getMonday } from '../lib/stats'
 import Icon from './Icons'
 import SecureImg from './SecureImg'
 import PlayerInviteLink from './PlayerInviteLink'
+import TeamPhotoCard from './TeamPhotoCard'
 
 // Onglet Équipe, vue coach / admin : effectif, performances, suivi des séances, programmes.
 
 export default function EquipeCoachScreen({
   addManagedPlayer, addingManagedPlayer, adminData, coachRosterData, coachTeamId, deleteManagedPlayer,
-  entryValue, shareInviteLink, regenerateJoinCode, kpisForTeam, archivedKpisForTeam, saveTeamKpi, setTeamKpiArchived, equipeTab, equipeTeamId, getProgramForDate, getProgramsForTeam, isAdmin,
+  entryValue, shareInviteLink, regenerateJoinCode, uploadTeamPhoto, uploadingTeamPhoto, kpisForTeam, archivedKpisForTeam, saveTeamKpi, setTeamKpiArchived, equipeTab, equipeTeamId, getProgramForDate, getProgramsForTeam, isAdmin,
   isMobile, leadershipTeams, managedPlayerDraft, managedPlayers, myTeamRoles, openFiche,
   renderProgrammeCatalog, saveMesureForPlayer, setAddingManagedPlayer, setCoachTeamId, setEditingProg, setEditingProgramId,
   setEntryValue, setEquipeTab, setEquipeTeamId, setManagedPlayerDraft, setProgDraft, setSuiviSelected,
@@ -73,6 +74,9 @@ export default function EquipeCoachScreen({
           const managedLimitReached = !isAdmin && managedPlayers.length >= MANAGED_PLAYERS_FREE_LIMIT
           return (
             <>
+              {canManagePlayers && uploadTeamPhoto && (
+                <TeamPhotoCard team={equipeViewTeams.find(t => t.id === equipeTeamId)} uploading={uploadingTeamPhoto === equipeTeamId} onUpload={uploadTeamPhoto} />
+              )}
               {canManagePlayers && shareInviteLink && (
                 <PlayerInviteLink key={equipeTeamId} teamId={equipeTeamId} teamName={equipeViewTeams.find(t => t.id === equipeTeamId)?.name || ''} onShare={shareInviteLink} onRegenerate={regenerateJoinCode} />
               )}

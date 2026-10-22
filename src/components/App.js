@@ -662,9 +662,11 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
       if (uploadError) throw uploadError
       const { data: { publicUrl } } = supabase.storage.from('photos').getPublicUrl(path)
       const url = publicUrl + '?t=' + Date.now()
-      const { error: updateError } = await supabase.from('teams').update({ photo_url: url }).eq('id', teamId)
+      // Fonction dédiée : le staff d'équipe peut changer la photo sans pouvoir modifier la fiche équipe.
+      const { error: updateError } = await supabase.rpc('set_team_photo', { p_team_id: teamId, p_photo_url: url })
       if (updateError) throw updateError
       setTeams(prev => prev.map(t => t.id === teamId ? { ...t, photo_url: url } : t))
+      setAvailableTeams(prev => prev.map(t => t.id === teamId ? { ...t, photo_url: url } : t))
       setSelectedAdminTeam(prev => prev?.id === teamId ? { ...prev, photo_url: url } : prev)
       showToast('📷 Photo d\'équipe mise à jour !')
     } catch (e) { showToast('❌ Erreur : ' + e.message) }
@@ -1258,7 +1260,7 @@ export default function App({ user, onSignOut, teamJoinCode, clubInviteCode, the
 
       {/* ── ÉQUIPE (ADMIN / COACH) ── */}
       {tab === 'equipe' && (isAdmin || hasLeadership) && (
-        <EquipeCoachScreen shareInviteLink={shareInviteLink} regenerateJoinCode={regenerateJoinCode} kpisForTeam={kpisForTeam} archivedKpisForTeam={archivedKpisForTeam} saveTeamKpi={saveTeamKpi} setTeamKpiArchived={setTeamKpiArchived}
+        <EquipeCoachScreen uploadTeamPhoto={uploadTeamPhoto} uploadingTeamPhoto={uploadingTeamPhoto} shareInviteLink={shareInviteLink} regenerateJoinCode={regenerateJoinCode} kpisForTeam={kpisForTeam} archivedKpisForTeam={archivedKpisForTeam} saveTeamKpi={saveTeamKpi} setTeamKpiArchived={setTeamKpiArchived}
           addManagedPlayer={addManagedPlayer} addingManagedPlayer={addingManagedPlayer} adminData={adminData} coachRosterData={coachRosterData} coachTeamId={coachTeamId}
           deleteManagedPlayer={deleteManagedPlayer} entryValue={entryValue} equipeTab={equipeTab} equipeTeamId={equipeTeamId} getProgramForDate={getProgramForDate}
           getProgramsForTeam={getProgramsForTeam} isAdmin={isAdmin} isMobile={isMobile} leadershipTeams={leadershipTeams} managedPlayerDraft={managedPlayerDraft}
