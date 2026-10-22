@@ -2,19 +2,14 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { C } from '../lib/constants'
 import Turnstile from './Turnstile'
+import ForgotPassword from './ForgotPassword'
+import { PASSWORD_RULES as rules } from '../lib/password'
 
 const CLUB_ROLE_LABELS = { admin: 'administrateur', dirigeant: 'dirigeant', coach: 'coach' }
 
 const lockedBox = { width: '100%', background: C.surface, border: '1px solid ' + C.border, borderRadius: 10, padding: '10px 12px', color: C.text, fontSize: 14, boxSizing: 'border-box', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }
 
-const rules = [
-  { id: 'length', label: '8 caractères minimum', test: p => p.length >= 8 },
-  { id: 'upper', label: '1 majuscule', test: p => /[A-Z]/.test(p) },
-  { id: 'number', label: '1 chiffre', test: p => /[0-9]/.test(p) },
-  { id: 'special', label: '1 caractère spécial (!@#$...)', test: p => /[^A-Za-z0-9]/.test(p) },
-]
-
-export default function Auth({ teamJoinCode, clubInviteCode }) {
+export default function Auth({ teamJoinCode, clubInviteCode, linkError }) {
   const hasInvite = !!(teamJoinCode || clubInviteCode)
   const [mode, setMode] = useState(hasInvite ? 'register' : 'login')
   const [email, setEmail] = useState('')
@@ -26,6 +21,7 @@ export default function Auth({ teamJoinCode, clubInviteCode }) {
   // Après une inscription réussie, le formulaire laisse place à un écran de confirmation : un
   // second clic renverrait la demande, refusée par Supabase (une par minute et par adresse).
   const [signupDoneEmail, setSignupDoneEmail] = useState(null)
+  const [forgotMode, setForgotMode] = useState(false)
   const [nom, setNom] = useState('')
   const [prenom, setPrenom] = useState('')
   const [poste1, setPoste1] = useState('')
@@ -144,7 +140,11 @@ export default function Auth({ teamJoinCode, clubInviteCode }) {
         <h1 style={{ fontSize: 28, fontWeight: 600, color: C.text, letterSpacing: '-0.03em' }}>TxT Tracker</h1>
         <div style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>Talent × Travail × Temps</div>
       </div>
-      {signupDoneEmail ? (
+      {forgotMode ? (
+      <div style={{ background: C.card, borderRadius: 16, padding: 28, width: '100%', maxWidth: 380, border: '1px solid ' + C.border }}>
+        <ForgotPassword initialEmail={email} onBack={() => { setForgotMode(false); setError(null) }} />
+      </div>
+      ) : signupDoneEmail ? (
       <div role="status" style={{ background: C.card, borderRadius: 16, padding: 28, width: '100%', maxWidth: 380, border: '1px solid ' + C.border, textAlign: 'center' }}>
         <div style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 10 }}>Vérifie ta boîte mail</div>
         <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6, marginBottom: 20 }}>
@@ -163,6 +163,11 @@ export default function Auth({ teamJoinCode, clubInviteCode }) {
             </button>
           ))}
         </div>
+        )}
+        {linkError && (
+          <div role="alert" style={{ background: C.gold + '18', border: '1px solid ' + C.gold + '50', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: C.text, lineHeight: 1.5 }}>
+            {linkError === 'otp_expired' ? 'Ce lien a expiré ou a déjà été utilisé.' : "Ce lien n'est pas valide."} Pour un mot de passe oublié, refais une demande avec « Mot de passe oublié ? » ; pour une inscription, connecte-toi ou demande un nouveau lien.
+          </div>
         )}
         {!hasInvite && (
           <div style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.5 }}>
@@ -220,6 +225,11 @@ export default function Auth({ teamJoinCode, clubInviteCode }) {
               {showPassword ? 'Masquer' : 'Afficher'}
             </button>
           </div>
+          {!registering && (
+            <div style={{ textAlign: 'right', marginTop: 8 }}>
+              <button onClick={() => { setForgotMode(true); setError(null) }} style={{ background: 'none', border: 'none', color: C.accentGlow, fontSize: 13, cursor: 'pointer', padding: 0 }}>Mot de passe oublié ?</button>
+            </div>
+          )}
         </div>
         {registering && password.length > 0 && (
           <div style={{ background: C.surface, borderRadius: 10, padding: '10px 14px', marginBottom: 16 }}>
