@@ -55,6 +55,7 @@ export default function BackofficeErrors() {
       ) : (
         <button onClick={() => setConfirmClear(true)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid ' + C.border, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer' }}>Tout effacer</button>
       ))}>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>Les erreurs de plus de 90 jours sont effacées automatiquement chaque nuit.</div>
       {errors.length === 0 ? (
         <div style={{ background: C.card, border: '1px solid ' + C.border, borderRadius: 12, padding: 20, color: C.muted, fontSize: 14 }}>
           Aucune erreur enregistrée. Les plantages des utilisateurs connectés apparaîtront ici.
